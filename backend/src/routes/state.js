@@ -16,10 +16,12 @@ async function routes(fastify) {
 
   fastify.put('/api/state', async (request, reply) => {
     const snapshot = request.body || {};
-    // Prefer the If-Match header; fall back to a body field for convenience.
+    // Prefer the version carried in the body — unlike the conditional `If-Match`
+    // header, it survives proxies (e.g. a TLS front-end) that may drop or rewrite
+    // conditional request headers. Fall back to the header for older clients.
     const ifMatch = request.headers['if-match'];
     const expectedVersion =
-      ifMatch != null ? ifMatch : snapshot.version != null ? snapshot.version : null;
+      snapshot.version != null ? snapshot.version : ifMatch != null ? ifMatch : null;
 
     try {
       const { version } = writeState(snapshot, expectedVersion);

@@ -5,9 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>tdx // terminal todo</title>
 <link rel="stylesheet" href="styles.css" />
-<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" href="/icons/icon-192.png" />
 <meta name="theme-color" content="#0b0a07" />
-<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 </head>
 <body>
 <div class="crt-vignette"></div>
@@ -22,12 +21,10 @@
       <span class="mobile-only qbtn" style="padding:1px 7px;" @click="store.sidebarOpen=!store.sidebarOpen">≡</span>
       <span class="brand">tdx<b>_</b></span>
       <span class="sep">│</span>
-      <span><span class="spark">●</span> {{ clock }}</span>
-      <span class="sep">│</span>
       <span class="dim">{{ store.tasks.filter(t=>!t.done).length }} open · {{ store.tasks.filter(t=>!t.done && isOverdue(t)).length }} overdue</span>
       <div class="right">
-        <span class="qbtn" @click="enableNotifications" :title="notifOn ? 'reminders enabled' : 'enable reminder notifications'">{{ notifOn ? '◔ on' : '◔ notify' }}</span>
-        <span class="qbtn" @click="openPalette">⌘K commands</span>
+        <span>{{ clock }}</span>
+        <span class="sep">│</span>
         <span class="mut nowrap">{{ today }}</span>
       </div>
     </header>
@@ -45,7 +42,6 @@
       <div class="view-title" style="display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--line);background:var(--bg);">
         <span class="hi" style="font-family:var(--crt);font-size:18px;line-height:1;">{{ store.view.title }}</span>
         <span class="mut" style="font-size:11px;" v-if="store.currentQuery()">› {{ store.currentQuery() }}</span>
-        <span class="cursor"></span>
       </div>
       <task-list ref="list" :store="store"></task-list>
       <task-detail :store="store"></task-detail>
@@ -53,11 +49,12 @@
 
     <!-- status bar -->
     <footer class="statusbar">
-      <span><span class="blink">▋</span> READY</span>
+      <span><span class="spark">●</span> READY</span>
       <span class="sep">│</span>
       <span class="mut">{{ store.visibleRoots().length }} rows · sort:{{ store.sortBy }}</span>
       <div class="right">
-        <span class="mut">j/k move · x done · e edit · n new · / query</span>
+        <span class="qbtn" @click="helpOpen=true" title="keyboard shortcuts & query syntax">? help</span>
+        <span class="qbtn" @click="openPalette" title="command palette">⌘K</span>
         <span class="mut">v1.0</span>
       </div>
     </footer>
@@ -73,6 +70,7 @@
   <!-- modals -->
   <project-modal v-if="projectModal" :store="store" :model="projectModal" @close="projectModal=null"></project-modal>
   <save-query-modal v-if="saveModal" :store="store" :query="saveModal.query" @close="saveModal=null"></save-query-modal>
+  <help-modal v-if="helpOpen" @close="helpOpen=false"></help-modal>
 
   <!-- toasts -->
   <div class="toasts">
@@ -91,20 +89,10 @@
 <script src="js/query-bar.js"></script>
 <script src="js/command-palette.js"></script>
 <script src="js/modals.js"></script>
+<script src="js/help-modal.js"></script>
 <script>
 const { createApp } = Vue;
-const STORAGE_KEY = 'tdx_state_v2';   // offline read-through cache of the last good snapshot
-let stateVersion = 0;                  // optimistic-concurrency version from the server
-
-// VAPID public keys are base64url; the Push API wants a Uint8Array.
-function urlBase64ToUint8Array(base64String){
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(base64);
-  const arr = new Uint8Array(raw.length);
-  for(let i=0;i<raw.length;i++) arr[i] = raw.charCodeAt(i);
-  return arr;
-}
+let stateVersion = 0;   // optimistic-concurrency version from the server
 
 const app = createApp({
   data(){ return {
@@ -114,7 +102,8 @@ const app = createApp({
     saveModal: null,
     clock: '',
     selIndex: 0,
-    notifOn: false,
+    helpOpen: false,
+    loaded: false,   // true once we've successfully loaded server state; gates writes
   }; },
   computed: {
     today(){ return new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); }
@@ -127,51 +116,6 @@ const app = createApp({
       this.projectModal = { mode, parentId: parentId||null, project: project||null };
     },
     openSave(query){ this.saveModal = { query: query||'' }; },
-    // ---- notifications (Web Push) ----
-    async initPWA(){
-      if(!('serviceWorker' in navigator)) return;
-      try{ this._sw = await navigator.serviceWorker.register('/sw.js'); }
-      catch(e){ return; }
-      // If permission was already granted, make sure the server has our subscription.
-      if('Notification' in window && Notification.permission==='granted') this.subscribePush();
-    },
-    async enableNotifications(){
-      // Service workers + Push API are only allowed in a secure context
-      // (https:// or http://localhost). Over plain http to an IP/hostname the
-      // browser disables them entirely.
-      if(!window.isSecureContext){
-        this.store.toast('needs https — open via localhost or `tailscale serve`');
-        return;
-      }
-      if(!('serviceWorker' in navigator) || !('Notification' in window) || !('PushManager' in window)){
-        this.store.toast('push unsupported in this browser');
-        return;
-      }
-      try{
-        if(!this._sw) this._sw = await navigator.serviceWorker.register('/sw.js');
-      }catch(e){ this.store.toast('service worker failed to register'); return; }
-      const perm = await Notification.requestPermission();
-      if(perm!=='granted'){ this.store.toast('notifications denied'); return; }
-      await this.subscribePush();
-    },
-    async subscribePush(){
-      try{
-        const r = await fetch('/api/push/vapid-public-key');
-        const { key, configured } = await r.json();
-        if(!configured || !key){ this.store.toast('push not configured on server'); return; }
-        let sub = await this._sw.pushManager.getSubscription();
-        if(!sub){
-          sub = await this._sw.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(key),
-          });
-        }
-        await fetch('/api/push/subscribe', {
-          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(sub),
-        });
-        this.notifOn = true;
-      }catch(e){ this.store.toast('push subscribe failed'); }
-    },
     // ---- keyboard ----
     onKey(e){
       const tag=(e.target.tagName||'').toLowerCase();
@@ -179,24 +123,51 @@ const app = createApp({
       // ⌘K / Ctrl+K everywhere
       if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); this.paletteOpen=!this.paletteOpen; return; }
       if(e.key==='Escape'){
+        if(this.helpOpen){ this.helpOpen=false; return; }
         if(this.paletteOpen){ this.paletteOpen=false; return; }
         if(this.projectModal){ this.projectModal=null; return; }
         if(this.saveModal){ this.saveModal=null; return; }
         if(this.store.detailOpen){ this.store.detailOpen=false; return; }
       }
-      if(typing || this.paletteOpen || this.projectModal || this.saveModal) return;
-      const roots=this.store.visibleRoots();
+      // '?' opens the keyboard/syntax reference (shift+/ — handle before the bare
+      // '/' query-focus shortcut below).
+      if(e.key==='?' && !typing){ e.preventDefault(); this.helpOpen=true; return; }
+      if(typing || this.paletteOpen || this.projectModal || this.saveModal || this.helpOpen) return;
+
+      // the sidebar pane has its own navigation while focused
+      if(this.store.focusPane==='side'){ this.sidebarKey(e); return; }
+
+      // j/k walk the flattened visible rows, so subtasks are reachable too
+      const rows=this.store.visibleRows();
       const curId=this.store.selectedTaskId;
-      let idx=roots.findIndex(t=>t.id===curId);
+      let idx=rows.findIndex(t=>t.id===curId);
       switch(e.key){
         case 'j': case 'ArrowDown':
           e.preventDefault();
-          idx = idx<0 ? 0 : Math.min(roots.length-1, idx+1);
-          if(roots[idx]) this.store.selectedTaskId=roots[idx].id; break;
+          idx = idx<0 ? 0 : Math.min(rows.length-1, idx+1);
+          if(rows[idx]){ this.store.selectedTaskId=rows[idx].id; this.scrollSelIntoView(); } break;
         case 'k': case 'ArrowUp':
           e.preventDefault();
           idx = idx<0 ? 0 : Math.max(0, idx-1);
-          if(roots[idx]) this.store.selectedTaskId=roots[idx].id; break;
+          if(rows[idx]){ this.store.selectedTaskId=rows[idx].id; this.scrollSelIntoView(); } break;
+        case 'l': case 'ArrowRight': {
+          e.preventDefault();
+          const t=this.store.taskById(curId);
+          if(!t) break;
+          const subs=this.store.subtasks(t.id);
+          if(subs.length){
+            if(t.collapsed){ t.collapsed=false; }            // expand to reveal subtasks
+            else { this.store.selectedTaskId=subs[0].id; this.scrollSelIntoView(); } // enter first subtask
+          }
+          break;
+        }
+        case 'h': case 'ArrowLeft': {
+          e.preventDefault();
+          const t=this.store.taskById(curId);
+          if(t && t.parentId){ this.store.selectedTaskId=t.parentId; this.scrollSelIntoView(); break; } // up to parent
+          if(t && !t.collapsed && this.store.subtasks(t.id).length){ t.collapsed=true; break; }         // collapse root
+          this.enterSidebar(); break;                                                                   // leaf root → sidebar
+        }
         case 'x': case ' ':
           if(curId){ e.preventDefault(); const t=this.store.taskById(curId); if(t) this.store.toggleDone(t); } break;
         case 'e': case 'Enter':
@@ -209,6 +180,49 @@ const app = createApp({
           this.store.showCompleted=!this.store.showCompleted; break;
       }
     },
+    scrollSelIntoView(){
+      this.$nextTick(()=>{ const el=document.querySelector('.list-wrap .task.sel'); if(el) el.scrollIntoView({block:'nearest'}); });
+    },
+    // ---- sidebar keyboard navigation ----
+    enterSidebar(){
+      const items=this.store.sideItems();
+      if(!items.length) return;
+      // start on the currently active view if we can find it, else first item
+      let id=this.store.sideFocusId;
+      if(!items.some(i=>i.id===id)){
+        const v=this.store.view;
+        const cur=items.find(i =>
+          (v.kind==='project' && i.kind==='project' && i.id===v.id) ||
+          (v.kind==='query'   && i.kind!=='project' && i.id===v.id));
+        id=cur ? cur.id : items[0].id;
+      }
+      this.store.sideFocusId=id;
+      this.store.focusPane='side';
+      this.store.sidebarOpen=true;        // reveal on mobile
+      this.scrollSideIntoView();
+    },
+    exitSidebar(){ this.store.focusPane='list'; this.store.sidebarOpen=false; },
+    sidebarKey(e){
+      const items=this.store.sideItems();
+      if(!items.length){ this.exitSidebar(); return; }
+      let idx=items.findIndex(i=>i.id===this.store.sideFocusId);
+      if(idx<0) idx=0;
+      switch(e.key){
+        case 'j': case 'ArrowDown':
+          e.preventDefault(); idx=Math.min(items.length-1, idx+1);
+          this.store.sideFocusId=items[idx].id; this.scrollSideIntoView(); break;
+        case 'k': case 'ArrowUp':
+          e.preventDefault(); idx=Math.max(0, idx-1);
+          this.store.sideFocusId=items[idx].id; this.scrollSideIntoView(); break;
+        case 'Enter': case 'l': case 'ArrowRight': case ' ':
+          e.preventDefault(); this.store.openSideItem(items[idx]); this.exitSidebar(); break;
+        case 'h': case 'ArrowLeft': case 'Escape':
+          e.preventDefault(); this.exitSidebar(); break;
+      }
+    },
+    scrollSideIntoView(){
+      this.$nextTick(()=>{ const el=document.querySelector('.sidebar .nav-item.kfocus'); if(el) el.scrollIntoView({block:'nearest'}); });
+    },
     // ---- persistence (snapshot store over /api/state) ----
     // Replace the store's arrays in-place (keeps Vue reactivity refs intact).
     // _suppress stops the resulting change from scheduling a redundant PUT.
@@ -218,10 +232,16 @@ const app = createApp({
       if(s.tasks){ this.store.tasks.splice(0, this.store.tasks.length, ...s.tasks); }
       if(s.labels){ this.store.labels.splice(0, this.store.labels.length, ...s.labels); }
       if(s.savedQueries){ this.store.savedQueries.splice(0, this.store.savedQueries.length, ...s.savedQueries); }
+      // raise the id counter past every id we just loaded, so newly-created
+      // tasks/projects can't reuse an existing id (the t_101 collision bug).
+      this.store.reserveIds();
       this.$nextTick(()=>{ this._suppress = false; });
     },
     snapshot(){
+      // `version` travels in the body so the optimistic-concurrency check works
+      // even through proxies that strip the conditional If-Match header.
       return {
+        version: stateVersion,
         projects: JSON.parse(JSON.stringify(this.store.projects)),
         tasks: JSON.parse(JSON.stringify(this.store.tasks)),
         labels: JSON.parse(JSON.stringify(this.store.labels)),
@@ -229,14 +249,14 @@ const app = createApp({
       };
     },
     async persist(){
-      const snap = this.snapshot();
-      // write-through offline cache first, so a crash mid-PUT still leaves a good copy
-      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(snap)); }catch(e){}
+      // Never write before a successful load: a failed hydrate leaves the store
+      // holding sample/stale data, and pushing that would clobber the server.
+      if(!this.loaded) return;
       try{
         const res = await fetch('/api/state', {
           method:'PUT',
-          headers:{ 'Content-Type':'application/json', 'If-Match':String(stateVersion) },
-          body: JSON.stringify(snap),
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify(this.snapshot()),
         });
         if(res.status===409){
           // another device wrote first — take server state, drop our unsaved edits
@@ -247,7 +267,8 @@ const app = createApp({
           return;
         }
         if(res.ok){ const j = await res.json(); stateVersion = j.version; }
-      }catch(e){ /* offline: change is kept in the localStorage cache */ }
+        else { this.store.toast('save failed ('+res.status+')'); }
+      }catch(e){ this.store.toast('offline — change not saved'); }
     },
     async hydrate(){
       try{
@@ -256,14 +277,15 @@ const app = createApp({
           const s = await res.json();
           stateVersion = s.version || 0;
           this.applyState(s);
-          try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }catch(e){}
+          this.loaded = true;   // writes are now allowed
           return;
         }
-      }catch(e){ /* server unreachable — fall back to cache */ }
-      try{
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if(raw) this.applyState(JSON.parse(raw));
-      }catch(e){}
+        this.store.toast('load failed ('+res.status+') — read only');
+      }catch(e){
+        this.store.toast('offline — could not load (read only)');
+      }
+      // loaded stays false: the app shows whatever is in memory but won't save
+      // until a reload succeeds, so it can't overwrite good server state.
     }
   },
   async mounted(){
@@ -280,7 +302,12 @@ const app = createApp({
     window.addEventListener('pagehide', this._flush);
     this._onVis=()=>{ if(document.visibilityState==='hidden') this._flush(); };
     document.addEventListener('visibilitychange', this._onVis);
-    this.initPWA();
+    // Tear down any service worker left over from the notification-era build so
+    // it can't serve a stale cached shell.
+    if('serviceWorker' in navigator){
+      navigator.serviceWorker.getRegistrations()
+        .then(rs=>rs.forEach(r=>r.unregister())).catch(()=>{});
+    }
   },
   beforeUnmount(){
     document.removeEventListener('keydown', this.onKey);
@@ -300,6 +327,7 @@ app.component('query-bar', window.QueryBar);
 app.component('command-palette', window.CommandPalette);
 app.component('project-modal', window.ProjectModal);
 app.component('save-query-modal', window.SaveQueryModal);
+app.component('help-modal', window.HelpModal);
 app.mount('#app');
 </script>
 </body>

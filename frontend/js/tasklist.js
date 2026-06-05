@@ -70,7 +70,7 @@ window.TaskList = {
     <!-- quick add -->
     <div class="quickadd">
       <span class="prompt">+</span>
-      <input ref="qa" v-model="draft" :placeholder="addPlaceholder" @keydown.enter="commitAdd" @keydown.esc="draft=''" />
+      <input ref="qa" v-model="draft" :placeholder="addPlaceholder" @keydown.enter="commitAdd" @keydown.esc="escAdd" />
       <span class="mut" style="font-size:11px;">↵ add</span>
     </div>
 
@@ -151,7 +151,18 @@ window.TaskList = {
       const title = text.replace(/#(\S+)/g, (_,n)=>{ const l=this.store.addLabel(n); labels.push(l.id); return ''; }).replace(/\s+/g,' ').trim();
       return { title: title||text, labels };
     },
-    focusAdd(){ this.$refs.qa && this.$refs.qa.focus(); }
+    focusAdd(){ this.$refs.qa && this.$refs.qa.focus(); },
+    // Esc out of the quick-add box: clear it, blur, and drop the keyboard into
+    // the task list so j/k work immediately (selecting the first row if needed).
+    escAdd(){
+      this.draft = '';
+      if(this.$refs.qa) this.$refs.qa.blur();
+      this.store.focusPane = 'list';
+      if(!this.store.selectedTaskId){
+        const roots = this.store.visibleRoots();
+        if(roots.length) this.store.selectedTaskId = roots[0].id;
+      }
+    }
   },
   data(){ return { draft:'' }; }
 };

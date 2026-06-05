@@ -7,15 +7,15 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     restart: unless-stopped
-    # VAPID keys + TZ come from backend/.env (gitignored).
-    env_file:
-      - backend/.env
     environment:
       - PORT=3000
       - HOST=0.0.0.0
       - DB_PATH=/data/tdx.db
+      # Set to your local timezone so created/completed date stamps are local.
+      - TZ=America/New_York
     volumes:
       - ./data:/data            # SQLite file persists across rebuilds
     ports:
-      # Bind to localhost only; `tailscale serve` fronts this with HTTPS.
-      - "127.0.0.1:3000:3000"
+      # Published on all interfaces — reach it at http://<host-ip>:3000 over the
+      # LAN or tailnet. Restrict to "127.0.0.1:3000:3000" if you front it yourself.
+      - "3000:3000"

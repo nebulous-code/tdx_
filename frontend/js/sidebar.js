@@ -12,7 +12,7 @@ window.AppSidebar = {
       </div>
       <div v-for="sv in store.savedQueries" :key="sv.id"
            class="nav-item"
-           :class="{ active: store.view.kind==='query' && store.view.id===sv.id }"
+           :class="{ active: store.view.kind==='query' && store.view.id===sv.id, kfocus: store.focusPane==='side' && store.sideFocusId===sv.id }"
            @click="store.openQueryView(sv)"
            @contextmenu.prevent="maybeDelete(sv)">
         <span class="glyph" :style="{color: glyphColor(sv)}">{{ sv.glyph }}</span>
@@ -39,7 +39,7 @@ window.AppSidebar = {
       <div class="side-head"><span>labels</span><span class="ln"></span></div>
       <div v-for="l in store.labels" :key="l.id"
            class="nav-item"
-           :class="{ active: isLabelView(l) }"
+           :class="{ active: isLabelView(l), kfocus: store.focusPane==='side' && store.sideFocusId===l.id }"
            @click="openLabel(l)">
         <span class="glyph mut">#</span>
         <span class="label">{{ l.name }}</span>
@@ -55,9 +55,7 @@ window.AppSidebar = {
     glyphColor(sv){ return sv.system ? '' : 'var(--amber)'; },
     isLabelView(l){ return this.store.view.kind==='query' && this.store.view.query==='label:'+l.name+' status:open'; },
     labelCount(l){ return this.store.queryCount('label:'+l.name+' status:open'); },
-    openLabel(l){
-      this.store.setView({ kind:'query', id:'label_'+l.id, title:'#'+l.name, query:'label:'+l.name+' status:open' });
-    },
+    openLabel(l){ this.store.openLabelView(l); },
     maybeDelete(sv){
       if(sv.system) return;
       if(confirm('Delete saved view "'+sv.name+'"?')) this.store.deleteQuery(sv);
@@ -72,7 +70,7 @@ window.TreeRow = {
   template: `
   <div class="tree-row">
     <div class="nav-item"
-         :class="{ active: store.view.kind==='project' && store.view.id===project.id }"
+         :class="{ active: store.view.kind==='project' && store.view.id===project.id, kfocus: store.focusPane==='side' && store.sideFocusId===project.id }"
          :style="{ paddingLeft: (12 + depth*14) + 'px' }"
          @click="store.openProjectView(project)"
          @contextmenu.prevent="$emit('edit', project)">

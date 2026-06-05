@@ -94,7 +94,12 @@ function readState() {
 // anything absent from the snapshot is gone.
 function writeState(snapshot, expectedVersion) {
   const current = getVersion();
-  if (expectedVersion != null && Number(expectedVersion) !== current) {
+  // Strict optimistic concurrency: the client MUST supply a version that matches
+  // the server's. A missing/non-numeric version is treated as a conflict, never
+  // as "force write" — otherwise a stale tab (or a proxy that strips the version)
+  // could silently clobber another device's changes.
+  const expected = Number(expectedVersion);
+  if (!Number.isFinite(expected) || expected !== current) {
     throw new ConflictError(readState());
   }
 

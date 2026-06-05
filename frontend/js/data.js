@@ -125,6 +125,8 @@
     sortBy: 'due',           // due | created | title | project
     builderOpen: false,
     sidebarOpen: false,      // mobile
+    focusPane: 'list',       // 'list' | 'side' — which pane the keyboard drives
+    sideFocusId: null,       // id of the keyboard-focused sidebar item
     toasts: [],
   });
 
@@ -172,6 +174,19 @@
     return list;
   };
 
+  // Flattened, ordered list of every on-screen task row (each visible root then,
+  // unless collapsed, its subtasks depth-first) — matches what TaskList renders,
+  // so j/k keyboard nav steps through subtasks too instead of skipping them.
+  store.visibleRows = () => {
+    const out = [];
+    const walk = (t) => {
+      out.push(t);
+      if(!t.collapsed) store.subtasks(t.id).forEach(walk);
+    };
+    store.visibleRoots().forEach(walk);
+    return out;
+  };
+
   // ---- mutations ----
   store.toast = (msg) => {
     const id = uid('toast'); store.toasts.push({ id, msg });
@@ -186,6 +201,29 @@
   };
   store.openProjectView = (p) => {
     store.setView({ kind:'project', id:p.id, title:p.name, query:'' });
+  };
+  store.openLabelView = (l) => {
+    store.setView({ kind:'query', id:'label_'+l.id, title:'#'+l.name, query:'label:'+l.name+' status:open' });
+  };
+
+  // Flat, ordered list of every navigable sidebar row (views, then the project
+  // tree respecting collapse, then labels) — used for keyboard navigation.
+  store.sideItems = () => {
+    const items = [];
+    store.savedQueries.forEach(sv => items.push({ kind:'query', id:sv.id, ref:sv }));
+    const walk = (p) => {
+      items.push({ kind:'project', id:p.id, ref:p });
+      if(!p.collapsed) store.childProjects(p.id).forEach(walk);
+    };
+    store.projects.filter(p=>!p.parentId).forEach(walk);
+    store.labels.forEach(l => items.push({ kind:'label', id:l.id, ref:l }));
+    return items;
+  };
+  store.openSideItem = (it) => {
+    if(!it) return;
+    if(it.kind==='query') store.openQueryView(it.ref);
+    else if(it.kind==='project') store.openProjectView(it.ref);
+    else if(it.kind==='label') store.openLabelView(it.ref);
   };
 
   store.addTask = (partial) => {
@@ -267,6 +305,24 @@
     if(lab) return lab;
     lab = { id: uid('l'), name: name.replace(/^#/,'') };
     store.labels.push(lab); return lab;
+  };
+
+  // After loading state from the server, raise the id counter above every id
+  // already present. uid() generates 'prefix_N' ids from a single shared counter
+  // that resets to 100 on each page load; without this, the first task created
+  // in a fresh session would reuse an id (e.g. t_101) that already exists in the
+  // loaded data — causing two tasks to share an id and "swap" in the UI.
+  // (Seed ids like 't1'/'p_inbox' have no trailing '_N' and are correctly ignored.)
+  store.reserveIds = () => {
+    let max = _id;
+    const scan = (arr) => {
+      for(const o of (arr||[])){
+        const m = /_(\d+)$/.exec(o && o.id);
+        if(m){ const n = +m[1]; if(n>max) max = n; }
+      }
+    };
+    scan(store.tasks); scan(store.projects); scan(store.labels); scan(store.savedQueries);
+    _id = max;
   };
 
   window.store = store;

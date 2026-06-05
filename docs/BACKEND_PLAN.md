@@ -11,6 +11,20 @@ the end.
 
 ## 0. Phase 1 — as built (June 2026)
 
+> **Update (June 2026): Web Push removed.** Notifications required an HTTPS secure
+> context (service workers), which forced access through Tailscale HTTPS URLs and
+> proved unreliable. To serve over a plain `http://host:port` instead, the push
+> stack was stripped: `push.js`, `scheduler.js`, `routes/push.js`, `sw.js`,
+> `manifest.webmanifest`, the `web-push` dep, the "◔ notify" button, and all VAPID
+> config are gone. Reminders are still stored and displayed as timestamps; they just
+> don't fire notifications. The bullets below about Web Push / the scheduler are kept
+> for history. Two correctness fixes shipped alongside: (1) the `uid()` counter is now
+> raised past all loaded ids on every load (`store.reserveIds()`), fixing newly-created
+> tasks colliding with existing `t_NNN` ids; (2) optimistic concurrency is now
+> **strict** — the version travels in the request body (proxy-safe) and a
+> missing/stale version is always a `409`, never a force-write, and the client only
+> writes after a successful load.
+
 Phase 1 is **implemented** and differs from the original §3–§9 proposal below in a
 few deliberate ways (decided after reading the prototype's actual mutation surface —
 most edits write reactive fields directly, bypassing store methods). The plan text
