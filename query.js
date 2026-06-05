@@ -1,0 +1,176 @@
+/* ============================================================
+   query.js  —  parse a query string + evaluate against a task.
+   Attached to window.Q.
+   ------------------------------------------------------------
+   Grammar (space-separated terms, implicit AND):
+     project:work            (matches project OR any of its subprojects)
+     label:urgent            (comma list = OR -> label:urgent,bug)
+     status:open|done|overdue|today
+     due:today|tomorrow|overdue|week|none|set|<7d|>7d|=0d|<=3d
+     reminder:today|none|set|overdue
+     recurring:true|false
+     is:subtask|task|recurring
+     has:subtasks
+     -term                   (negate any term)
+     "free text"  or bareword -> title contains
+   Helpers also build the string from a structured object (builder).
+   ============================================================ */
+(function () {
+  const today = () => Rec.startOfDay(new Date());
+
+  // tokenize respecting quotes
+  function tokenize(str){
+    const out = []; const re = /"([^"]*)"|(\S+)/g; let m;
+    while((m = re.exec(str))) out.push(m[1] !== undefined ? '"'+m[1]+'"' : m[2]);
+    return out;
+  }
+
+  function parse(str){
+    const terms = [];
+    if(!str || !str.trim()) return { terms, ok:true };
+    for(let tok of tokenize(str)){
+      let neg = false;
+      if(tok.startsWith('-') && tok.length>1 && tok.indexOf(':')>0){ neg = true; tok = tok.slice(1); }
+      const qi = tok.indexOf(':');
+      if(qi>0 && !tok.startsWith('"')){
+        const field = tok.slice(0,qi).toLowerCase();
+        const value = tok.slice(qi+1).toLowerCase();
+        terms.push({ field, value, neg });
+      } else {
+        terms.push({ field:'text', value: tok.replace(/^"|"$/g,'').toLowerCase(), neg });
+      }
+    }
+    return { terms, ok:true };
+  }
+
+  // resolve a project token (id or slug of name) -> set of project ids incl. subprojects
+  function resolveProjects(value, ctx){
+    const projects = ctx.projects || [];
+    const match = projects.filter(p =>
+      p.id === value ||
+      slug(p.name) === slug(value) ||
+      slug(p.name).includes(slug(value))
+    );
+    const ids = new Set();
+    const addWithChildren = (pid) => {
+      ids.add(pid);
+      projects.filter(p=>p.parentId===pid).forEach(c=>addWithChildren(c.id));
+    };
+    match.forEach(p=>addWithChildren(p.id));
+    return ids;
+  }
+  function slug(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,''); }
+
+  function dueDelta(task){ // days from today to due (negative = overdue). null if no due.
+    if(!task.due) return null;
+    return Rec.daysBetween(today(), Rec.parseYMD(task.due));
+  }
+  function remDelta(task){
+    if(!task.reminder) return null;
+    return Rec.daysBetween(today(), Rec.parseYMD(task.reminder));
+  }
+
+  function cmpDate(delta, op){ // op like "<7d", "<=3d", ">0d", "=0d"
+    const mm = op.match(/^(<=|>=|<|>|=)(-?\d+)d$/);
+    if(!mm || delta===null) return false;
+    const o = mm[1], n = +mm[2];
+    switch(o){ case '<': return delta<n; case '>': return delta>n;
+      case '<=': return delta<=n; case '>=': return delta>=n; case '=': return delta===n; }
+    return false;
+  }
+
+  function evalTerm(task, t, ctx){
+    const labelsOf = (task.labels||[]);
+    let res = false;
+    switch(t.field){
+      case 'text':
+        res = (task.title||'').toLowerCase().includes(t.value) ||
+              (task.notes||'').toLowerCase().includes(t.value);
+        break;
+      case 'project': {
+        const ids = resolveProjects(t.value, ctx);
+        res = ids.has(task.projectId);
+        break;
+      }
+      case 'label': {
+        const wants = t.value.split(',').map(slug);
+        res = labelsOf.some(lid => {
+          const lab = (ctx.labels||[]).find(l=>l.id===lid);
+          return lab && wants.includes(slug(lab.name));
+        });
+        break;
+      }
+      case 'status': {
+        const d = dueDelta(task);
+        if(t.value==='done') res = !!task.done;
+        else if(t.value==='open') res = !task.done;
+        else if(t.value==='overdue') res = !task.done && d!==null && d<0;
+        else if(t.value==='today') res = !task.done && d===0;
+        break;
+      }
+      case 'due': {
+        const d = dueDelta(task);
+        if(t.value==='none') res = d===null;
+        else if(t.value==='set') res = d!==null;
+        else if(t.value==='today') res = d===0;
+        else if(t.value==='tomorrow') res = d===1;
+        else if(t.value==='overdue') res = d!==null && d<0;
+        else if(t.value==='week') res = d!==null && d>=0 && d<=7;
+        else if(t.value==='month') res = d!==null && d>=0 && d<=31;
+        else res = cmpDate(d, t.value);
+        break;
+      }
+      case 'reminder': {
+        const d = remDelta(task);
+        if(t.value==='none') res = d===null;
+        else if(t.value==='set') res = d!==null;
+        else if(t.value==='today') res = d===0;
+        else if(t.value==='overdue') res = d!==null && d<0;
+        else res = cmpDate(d, t.value);
+        break;
+      }
+      case 'recurring':
+        res = t.value==='true' ? !!task.recurrence : !task.recurrence;
+        break;
+      case 'is':
+        if(t.value==='subtask') res = !!task.parentId;
+        else if(t.value==='task') res = !task.parentId;
+        else if(t.value==='recurring') res = !!task.recurrence;
+        else if(t.value==='done') res = !!task.done;
+        else if(t.value==='open') res = !task.done;
+        break;
+      case 'has':
+        if(t.value==='subtasks') res = (ctx.tasks||[]).some(x=>x.parentId===task.id);
+        else if(t.value==='label') res = labelsOf.length>0;
+        else if(t.value==='due') res = !!task.due;
+        break;
+      default:
+        // unknown field -> treat as text match on "field:value"
+        res = (task.title||'').toLowerCase().includes(t.field+':'+t.value);
+    }
+    return t.neg ? !res : res;
+  }
+
+  function evaluate(task, query, ctx){
+    const q = typeof query==='string' ? parse(query) : query;
+    if(!q.terms.length) return true;
+    return q.terms.every(t => evalTerm(task, t, ctx));
+  }
+
+  // run query over the task list -> matching tasks (flat)
+  function run(query, ctx){
+    return (ctx.tasks||[]).filter(t => evaluate(t, query, ctx));
+  }
+
+  // ---- builder helpers: structured <-> string ---------------
+  // We keep builder state as an array of {field,value,neg}; string is the join.
+  function termToString(t){
+    const body = t.field==='text'
+      ? (/\s/.test(t.value) ? '"'+t.value+'"' : t.value)
+      : t.field+':'+t.value;
+    return (t.neg?'-':'')+body;
+  }
+  function build(terms){ return terms.map(termToString).join(' '); }
+
+  window.Q = { parse, evaluate, run, build, termToString, tokenize, slug, dueDelta };
+})();

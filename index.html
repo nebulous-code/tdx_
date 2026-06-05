@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>tdx // terminal todo</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="crt-vignette"></div>
+<div class="crt-scanlines"></div>
+<div class="crt-flicker"></div>
+
+<div id="app">
+  <div class="shell" :class="{ 'detail-open': store.detailOpen }">
+
+    <!-- top bar -->
+    <header class="topbar">
+      <span class="mobile-only qbtn" style="padding:1px 7px;" @click="store.sidebarOpen=!store.sidebarOpen">≡</span>
+      <span class="brand">tdx<b>_</b></span>
+      <span class="sep">│</span>
+      <span><span class="spark">●</span> {{ clock }}</span>
+      <span class="sep">│</span>
+      <span class="dim">{{ store.tasks.filter(t=>!t.done).length }} open · {{ store.tasks.filter(t=>!t.done && isOverdue(t)).length }} overdue</span>
+      <div class="right">
+        <span class="qbtn" @click="openPalette">⌘K commands</span>
+        <span class="mut nowrap">{{ today }}</span>
+      </div>
+    </header>
+
+    <!-- sidebar -->
+    <app-sidebar :store="store"
+      @new-query="openSave(store.view.query||'')"
+      @new-project="openProjectModal('new', $event)"
+      @edit-project="openProjectModal('edit', null, $event)"></app-sidebar>
+    <div class="scrim" :class="{ show: store.sidebarOpen }" @click="store.sidebarOpen=false"></div>
+
+    <!-- main -->
+    <main class="main">
+      <query-bar ref="qbar" :store="store" @save-query="openSave"></query-bar>
+      <div class="view-title" style="display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--line);background:var(--bg);">
+        <span class="hi" style="font-family:var(--crt);font-size:18px;line-height:1;">{{ store.view.title }}</span>
+        <span class="mut" style="font-size:11px;" v-if="store.currentQuery()">› {{ store.currentQuery() }}</span>
+        <span class="cursor"></span>
+      </div>
+      <task-list ref="list" :store="store"></task-list>
+      <task-detail :store="store"></task-detail>
+    </main>
+
+    <!-- status bar -->
+    <footer class="statusbar">
+      <span><span class="blink">▋</span> READY</span>
+      <span class="sep">│</span>
+      <span class="mut">{{ store.visibleRoots().length }} rows · sort:{{ store.sortBy }}</span>
+      <div class="right">
+        <span class="mut">j/k move · x done · e edit · n new · / query</span>
+        <span class="mut">v1.0</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- command palette -->
+  <command-palette :store="store" :open="paletteOpen"
+    @close="paletteOpen=false"
+    @new-task="newTask"
+    @new-project="openProjectModal('new', $event)"
+    @save-query="openSave"></command-palette>
+
+  <!-- modals -->
+  <project-modal v-if="projectModal" :store="store" :model="projectModal" @close="projectModal=null"></project-modal>
+  <save-query-modal v-if="saveModal" :store="store" :query="saveModal.query" @close="saveModal=null"></save-query-modal>
+
+  <!-- toasts -->
+  <div class="toasts">
+    <div v-for="t in store.toasts" :key="t.id" class="toast">{{ t.msg }}</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+<script src="recurrence.js"></script>
+<script src="query.js"></script>
+<script src="data.js"></script>
+<script src="sidebar.js"></script>
+<script src="tasklist.js"></script>
+<script src="recurrence-builder.js"></script>
+<script src="task-detail.js"></script>
+<script src="query-bar.js"></script>
+<script src="command-palette.js"></script>
+<script src="modals.js"></script>
+<script>
+const { createApp } = Vue;
+const STORAGE_KEY = 'tdx_state_v2';
+
+const app = createApp({
+  data(){ return {
+    store: window.store,
+    paletteOpen: false,
+    projectModal: null,
+    saveModal: null,
+    clock: '',
+    selIndex: 0,
+  }; },
+  computed: {
+    today(){ return new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); }
+  },
+  methods: {
+    isOverdue(t){ return t.due && Rec.daysBetween(Rec.startOfDay(new Date()), Rec.parseYMD(t.due))<0; },
+    openPalette(){ this.paletteOpen=true; },
+    newTask(){ this.$nextTick(()=>{ this.$refs.list && this.$refs.list.focusAdd(); }); },
+    openProjectModal(mode, parentId, project){
+      this.projectModal = { mode, parentId: parentId||null, project: project||null };
+    },
+    openSave(query){ this.saveModal = { query: query||'' }; },
+    // ---- keyboard ----
+    onKey(e){
+      const tag=(e.target.tagName||'').toLowerCase();
+      const typing = tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable;
+      // ⌘K / Ctrl+K everywhere
+      if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); this.paletteOpen=!this.paletteOpen; return; }
+      if(e.key==='Escape'){
+        if(this.paletteOpen){ this.paletteOpen=false; return; }
+        if(this.projectModal){ this.projectModal=null; return; }
+        if(this.saveModal){ this.saveModal=null; return; }
+        if(this.store.detailOpen){ this.store.detailOpen=false; return; }
+      }
+      if(typing || this.paletteOpen || this.projectModal || this.saveModal) return;
+      const roots=this.store.visibleRoots();
+      const curId=this.store.selectedTaskId;
+      let idx=roots.findIndex(t=>t.id===curId);
+      switch(e.key){
+        case 'j': case 'ArrowDown':
+          e.preventDefault();
+          idx = idx<0 ? 0 : Math.min(roots.length-1, idx+1);
+          if(roots[idx]) this.store.selectedTaskId=roots[idx].id; break;
+        case 'k': case 'ArrowUp':
+          e.preventDefault();
+          idx = idx<0 ? 0 : Math.max(0, idx-1);
+          if(roots[idx]) this.store.selectedTaskId=roots[idx].id; break;
+        case 'x': case ' ':
+          if(curId){ e.preventDefault(); const t=this.store.taskById(curId); if(t) this.store.toggleDone(t); } break;
+        case 'e': case 'Enter':
+          if(curId){ e.preventDefault(); this.store.detailOpen=true; } break;
+        case 'n':
+          e.preventDefault(); this.newTask(); break;
+        case '/':
+          e.preventDefault(); this.$refs.qbar && this.$refs.qbar.focus(); break;
+        case 'c':
+          this.store.showCompleted=!this.store.showCompleted; break;
+      }
+    },
+    // ---- persistence ----
+    persist(){
+      try{
+        const snap = {
+          projects: JSON.parse(JSON.stringify(this.store.projects)),
+          tasks: JSON.parse(JSON.stringify(this.store.tasks)),
+          labels: JSON.parse(JSON.stringify(this.store.labels)),
+          savedQueries: JSON.parse(JSON.stringify(this.store.savedQueries)),
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
+      }catch(e){}
+    },
+    hydrate(){
+      try{
+        const raw=localStorage.getItem(STORAGE_KEY);
+        if(!raw) return;
+        const s=JSON.parse(raw);
+        if(s.projects){ this.store.projects.splice(0, this.store.projects.length, ...s.projects); }
+        if(s.tasks){ this.store.tasks.splice(0, this.store.tasks.length, ...s.tasks); }
+        if(s.labels){ this.store.labels.splice(0, this.store.labels.length, ...s.labels); }
+        if(s.savedQueries){ this.store.savedQueries.splice(0, this.store.savedQueries.length, ...s.savedQueries); }
+      }catch(e){}
+    }
+  },
+  mounted(){
+    this.hydrate();
+    document.addEventListener('keydown', this.onKey);
+    const tick=()=>{ this.clock=new Date().toLocaleTimeString('en-GB',{hour12:false}); };
+    tick(); this._timer=setInterval(tick,1000);
+    // persist on change (debounced)
+    this.$watch(()=>JSON.stringify([this.store.tasks,this.store.projects,this.store.labels,this.store.savedQueries]),
+      ()=>{ clearTimeout(this._save); this._save=setTimeout(this.persist,300); });
+  },
+  beforeUnmount(){ document.removeEventListener('keydown', this.onKey); clearInterval(this._timer); }
+});
+
+app.component('app-sidebar', window.AppSidebar);
+app.component('tree-row', window.TreeRow);
+app.component('task-list', window.TaskList);
+app.component('task-row', window.TaskRow);
+app.component('recurrence-builder', window.RecurrenceBuilder);
+app.component('task-detail', window.TaskDetail);
+app.component('query-bar', window.QueryBar);
+app.component('command-palette', window.CommandPalette);
+app.component('project-modal', window.ProjectModal);
+app.component('save-query-modal', window.SaveQueryModal);
+app.mount('#app');
+</script>
+</body>
+</html>
