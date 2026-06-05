@@ -17,6 +17,7 @@ window.AppSidebar = {
            @contextmenu.prevent="maybeDelete(sv)">
         <span class="glyph" :style="{color: glyphColor(sv)}">{{ sv.glyph }}</span>
         <span class="label">{{ sv.name }}</span>
+        <span class="add" title="Edit view (e)" @click.stop="$emit('edit-query', sv)">›</span>
         <span class="count">{{ store.queryCount(sv.query) }}</span>
       </div>
     </div>
@@ -52,7 +53,7 @@ window.AppSidebar = {
     roots(){ return this.store.projects.filter(p=>!p.parentId); }
   },
   methods: {
-    glyphColor(sv){ return sv.system ? '' : 'var(--amber)'; },
+    glyphColor(sv){ return sv.color ? sv.color : (sv.system ? '' : 'var(--amber)'); },
     isLabelView(l){ return this.store.view.kind==='query' && this.store.view.query==='label:'+l.name+' status:open'; },
     labelCount(l){ return this.store.queryCount('label:'+l.name+' status:open'); },
     openLabel(l){ this.store.openLabelView(l); },
@@ -78,6 +79,7 @@ window.TreeRow = {
       <span v-else class="twist"> </span>
       <span class="glyph" :style="{ color: project.color }">{{ project.glyph }}</span>
       <span class="label">{{ project.name }}</span>
+      <span class="add" title="Edit project (e)" @click.stop="$emit('edit', project)">›</span>
       <span class="add" title="Add subproject" @click.stop="$emit('new-sub', project.id)">+</span>
       <span class="count">{{ store.projectCount(project.id) }}</span>
     </div>

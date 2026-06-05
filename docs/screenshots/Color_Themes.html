@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>tdx_ // color themes</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=VT323&display=swap" />
+<link rel="stylesheet" href="themes.css" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  :root {
+    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --crt:  'VT323', var(--mono);
+    --pg:    #0a0a0b;   /* neutral page */
+    --pg-1:  #0f0f11;   /* neutral card chrome */
+    --pg-line: #232327;
+    --pg-mut:  #6b6b72;
+    --pg-dim:  #9a9aa2;
+  }
+  body {
+    background: var(--pg);
+    color: var(--pg-dim);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: 30px clamp(16px, 4vw, 48px) 64px;
+  }
+
+  /* page masthead */
+  .masthead { max-width: 1320px; margin: 0 auto 26px; }
+  .masthead .wm {
+    font-family: var(--crt); font-size: 40px; line-height: 1;
+    color: #e8e7e2; letter-spacing: .5px;
+  }
+  .masthead .wm b { color: #ffb000; }
+  .masthead .sub { color: var(--pg-mut); margin-top: 8px; max-width: 70ch; }
+  .masthead .sub b { color: var(--pg-dim); font-weight: 500; }
+  .masthead .meta {
+    margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px 14px;
+    font-size: 11px; color: var(--pg-mut); align-items: center;
+  }
+  .masthead .meta .ln { flex: 1; min-width: 30px; height: 1px; background: var(--pg-line); }
+
+  /* card grid */
+  .grid {
+    max-width: 1320px; margin: 0 auto;
+    display: grid; gap: 22px;
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  }
+  @media (max-width: 480px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--pg-1);
+    border: 1px solid var(--pg-line);
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .card-head {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 12px 14px 11px;
+    border-bottom: 1px solid var(--pg-line);
+  }
+  .card-head .name {
+    font-family: var(--crt); font-size: 23px; line-height: 1;
+    color: var(--amber-hi); text-shadow: var(--glow);
+  }
+  .card-head .type {
+    font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase;
+    color: var(--pg-mut);
+  }
+  .card-head .badge {
+    margin-left: auto; font-size: 9px; letter-spacing: 1px; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 2px; white-space: nowrap;
+    border: 1px solid var(--amber-mut); color: var(--amber-dim);
+  }
+  .card-head .badge.req { border-color: var(--amber); color: var(--amber-hi); text-shadow: var(--glow-soft); }
+
+  /* the live screen — themed via data-theme on .card */
+  .screen {
+    position: relative;
+    background: var(--bg);
+    color: var(--amber-dim);
+    text-shadow: var(--glow-soft);
+    padding: 0;
+    overflow: hidden;
+  }
+  /* CRT scanlines + vignette per screen */
+  .screen::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 5;
+    background:
+      radial-gradient(120% 130% at 50% 40%, transparent 60%, rgba(0,0,0,.5) 100%),
+      repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0, rgba(0,0,0,0) 2px, rgba(0,0,0,.16) 3px, rgba(0,0,0,.16) 3px);
+    mix-blend-mode: multiply;
+  }
+
+  .s-top {
+    display: flex; align-items: center; gap: 9px;
+    padding: 7px 12px; background: var(--bg-1);
+    border-bottom: 1px solid var(--line);
+    font-size: 11px; color: var(--amber-mut);
+  }
+  .s-top .brand { font-family: var(--crt); font-size: 17px; line-height: 1; color: var(--amber); text-shadow: var(--glow); }
+  .s-top .brand b { color: var(--amber-hi); }
+  .s-top .sep { color: var(--line-2); }
+  .s-top .spark { color: var(--green); }
+  .s-top .right { margin-left: auto; color: var(--amber-dim); }
+
+  .s-title {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--bg);
+  }
+  .s-title .t { font-family: var(--crt); font-size: 18px; line-height: 1; color: var(--amber-hi); }
+  .s-title .q { font-size: 11px; color: var(--amber-mut); }
+  .blink::after { content: '▋'; color: var(--amber); animation: blink 1.1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* chip row */
+  .s-chips { display: flex; flex-wrap: wrap; gap: 5px; padding: 9px 12px; border-bottom: 1px solid var(--line); background: var(--bg); }
+  .chip {
+    border: 1px solid var(--line-2); background: var(--bg-1); color: var(--amber-dim);
+    padding: 2px 8px; border-radius: 10px; font-size: 10.5px; white-space: nowrap;
+  }
+  .chip.on { background: var(--amber); color: var(--on-accent); border-color: var(--amber); font-weight: 500; }
+
+  /* task rows */
+  .task {
+    display: flex; align-items: flex-start; gap: 9px;
+    padding: 6px 12px; border-bottom: 1px solid rgba(128,128,128,.08);
+    position: relative;
+  }
+  .task.sel { background: var(--bg-2); }
+  .task.sel::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px; background: var(--amber); box-shadow: var(--glow); }
+  .cbx {
+    flex: 0 0 auto; width: 15px; height: 15px; margin-top: 1px;
+    border: 1px solid var(--amber-mut); border-radius: 2px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--amber); font-size: 11px; line-height: 1; text-shadow: none;
+  }
+  .cbx.on { background: var(--amber); color: var(--on-accent); border-color: var(--amber); }
+  .tmain { flex: 1; min-width: 0; }
+  .ttitle { color: var(--amber-hi); }
+  .task.done .ttitle { color: var(--amber-mut); text-decoration: line-through; opacity: .7; }
+  .tmeta { display: flex; flex-wrap: wrap; gap: 3px 9px; margin-top: 3px; font-size: 10.5px; text-shadow: none; }
+  .m { display: inline-flex; align-items: center; gap: 4px; color: var(--amber-mut); white-space: nowrap; }
+  .m.today { color: var(--amber); text-shadow: var(--glow-soft); }
+  .m.over { color: var(--red); }
+  .m.rec { color: var(--cyan); }
+  .tag { color: var(--amber-dim); border: 1px solid var(--line-2); border-radius: 9px; padding: 0 6px; font-size: 9.5px; }
+  .pdot { width: 7px; height: 7px; border-radius: 2px; display: inline-block; }
+
+  /* quick add + buttons */
+  .s-add { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--bg-1); }
+  .s-add .p { color: var(--green); font-weight: 700; }
+  .s-add .ph { color: var(--amber-mut); }
+  .s-foot { display: flex; gap: 8px; padding: 9px 12px; background: var(--bg-1); }
+  .btn { border: 1px solid var(--line-2); background: var(--bg-2); color: var(--amber-dim); padding: 4px 12px; border-radius: 2px; font-family: var(--mono); font-size: 11px; text-shadow: none; }
+  .btn.primary { background: var(--amber); color: var(--on-accent); border-color: var(--amber); font-weight: 500; }
+
+  /* swatch ramp */
+  .ramp { display: flex; gap: 0; border-top: 1px solid var(--pg-line); }
+  .sw { flex: 1; height: 30px; position: relative; }
+  .ramp .lbl {
+    display: flex; justify-content: space-between; padding: 7px 12px 11px;
+    font-size: 9px; letter-spacing: .5px; color: var(--pg-mut);
+  }
+  .ramp-wrap { background: var(--pg-1); }
+  .dots { display: flex; gap: 6px; padding: 10px 12px 4px; align-items: center; }
+  .dot { width: 16px; height: 16px; border-radius: 3px; border: 1px solid rgba(255,255,255,.07); }
+  .dots .gap { flex: 1; }
+  .dots .stxt { font-size: 9px; color: var(--pg-mut); letter-spacing: .5px; }
+
+  .legend { max-width: 1320px; margin: 30px auto 0; padding-top: 18px; border-top: 1px solid var(--pg-line); font-size: 11px; color: var(--pg-mut); }
+  .legend b { color: var(--pg-dim); font-weight: 500; }
+  .legend code { color: #ffb000; background: #161618; border: 1px solid var(--pg-line); padding: 1px 5px; border-radius: 2px; font-size: 10.5px; }
+  .legend .keys { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .legend .keys code { color: var(--pg-dim); }
+</style>
+</head>
+<body>
+
+<div class="masthead">
+  <div class="wm">tdx<b>_</b> // color themes</div>
+  <div class="sub">Six preselected phosphor palettes for the terminal to-do. Each one re-skins the entire UI by re-declaring the token set — same chrome, same density, different glow. <b>Neon terminal green is in.</b></div>
+  <div class="meta"><span>6 palettes</span><span class="ln"></span><span>monochrome accent + semantic green / red / cyan</span><span class="ln"></span><span>drop-in via themes.css</span></div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="legend">
+  <b>How it wires up.</b> Set <code>data-theme="green"</code> on a root element (e.g. <code>&lt;html&gt;</code>) and every <code>var(--…)</code> token cascades to the new palette — no markup changes. No attribute falls back to amber. Semantic colors (success / overdue / recurrence) are tuned per theme so they never collide with the accent.
+  <div class="keys">
+    <code>amber</code><code>matrix</code><code>ice</code><code>paper</code><code>plasma</code><code>magenta</code>
+  </div>
+</div>
+
+<script>
+  const THEMES = [
+    { key:'amber',   name:'amber',   type:'P3 · amber phosphor',   badge:'current',   accent:'#ffb000', cats:['#5b8cff','#c78bff'] },
+    { key:'matrix',  name:'matrix',  type:'neon · terminal green',  badge:'requested', req:true, accent:'#22ff66', cats:['#3fd7d7','#c78bff'] },
+    { key:'ice',     name:'ice',     type:'VFD · cyan phosphor',   accent:'#3fe0e0', cats:['#ff9f43','#c78bff'] },
+    { key:'paper',   name:'paper',   type:'P4 · white phosphor',   accent:'#e9e7df', cats:['#5b8cff','#46d369'] },
+    { key:'plasma',  name:'plasma',  type:'gas plasma · ember',    accent:'#ff6a4d', cats:['#3fd7d7','#b6c948'] },
+    { key:'magenta', name:'magenta', type:'synthwave · magenta',   accent:'#ff5fb4', cats:['#3fd7d7','#b6c948'] },
+  ];
+
+  function screenHTML(t){
+    const [c1,c2] = t.cats;
+    return `
+    <div class="s-top">
+      <span class="brand">tdx<b>_</b></span>
+      <span class="sep">│</span>
+      <span><span class="spark">●</span> 09:41:07</span>
+      <span class="sep">│</span>
+      <span class="right">12 open · 2 overdue</span>
+    </div>
+    <div class="s-title"><span class="t">today</span><span class="q">› due:today</span><span class="blink"></span></div>
+    <div class="s-chips">
+      <span class="chip on">status:open</span>
+      <span class="chip">due:today</span>
+      <span class="chip">#deep</span>
+      <span class="chip">project:tdx</span>
+    </div>
+
+    <div class="task sel">
+      <span class="cbx"></span>
+      <div class="tmain">
+        <div class="ttitle">Wire ⌘K command palette</div>
+        <div class="tmeta">
+          <span class="m"><span class="pdot" style="background:${c1}"></span>tdx</span>
+          <span class="m today">☉ today</span>
+          <span class="m rec">↻ every week</span>
+          <span class="tag">#deep</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="task">
+      <span class="cbx"></span>
+      <div class="tmain">
+        <div class="ttitle">Saved queries → smart views</div>
+        <div class="tmeta">
+          <span class="m"><span class="pdot" style="background:${c1}"></span>tdx</span>
+          <span class="m over">! overdue 1d</span>
+          <span class="tag">#urgent</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="task">
+      <span class="cbx"></span>
+      <div class="tmain">
+        <div class="ttitle">Live recurrence preview</div>
+        <div class="tmeta">
+          <span class="m"><span class="pdot" style="background:${c2}"></span>infra</span>
+          <span class="m">◷ jun 9</span>
+          <span class="m">⊟ 1/3</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="task done">
+      <span class="cbx on">✓</span>
+      <div class="tmain">
+        <div class="ttitle">Persist queries to localStorage</div>
+        <div class="tmeta"><span class="m"><span class="pdot" style="background:${c1}"></span>tdx</span></div>
+      </div>
+    </div>
+
+    <div class="s-add"><span class="p">+</span><span class="ph">add task… <span style="opacity:.7">#label due:fri ↻weekly</span></span></div>
+    <div class="s-foot"><span class="btn primary">save view</span><span class="btn">cancel</span></div>
+    `;
+  }
+
+  function rampHTML(){
+    const steps = ['--bg','--bg-2','--amber-faint','--amber-mut','--amber-dim','--amber','--amber-hi'];
+    const bars = steps.map(v=>`<div class="sw" style="background:var(${v})"></div>`).join('');
+    return `
+    <div class="ramp-wrap">
+      <div class="ramp">${bars}</div>
+      <div class="dots">
+        <span class="stxt" style="margin-right:6px">semantic</span>
+        <span class="dot" style="background:var(--green)" title="success"></span>
+        <span class="dot" style="background:var(--red)" title="overdue"></span>
+        <span class="dot" style="background:var(--cyan)" title="recurrence"></span>
+        <span class="gap"></span>
+        <span class="stxt">accent ramp ↑</span>
+      </div>
+      <div class="ramp lbl"><span>bg → faint → accent → hi</span></div>
+    </div>`;
+  }
+
+  const grid = document.getElementById('grid');
+  grid.innerHTML = THEMES.map(t => `
+    <section class="card" data-theme="${t.key}">
+      <div class="card-head">
+        <span class="name">${t.name}</span>
+        <span class="type">${t.type}</span>
+        ${t.badge ? `<span class="badge ${t.req?'req':''}">${t.badge}</span>` : ''}
+      </div>
+      <div class="screen">${screenHTML(t)}</div>
+      ${rampHTML()}
+    </section>
+  `).join('');
+</script>
+</body>
+</html>

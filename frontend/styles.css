@@ -113,6 +113,13 @@ input[type="number"]::-webkit-inner-spin-button { opacity: .6; }
   height: 100vh;
 }
 .shell.detail-open { grid-template-columns: var(--sidebar-w) 1fr; }
+/* nav toggled off (n): collapse the sidebar column. Desktop only — on mobile the
+   sidebar is an overlay driven by sidebarOpen, so leave it alone there. */
+@media (min-width: 861px) {
+  .shell.nav-collapsed { grid-template-columns: 0 1fr; }
+  .shell.nav-collapsed.detail-open { grid-template-columns: 0 1fr; }
+  .shell.nav-collapsed .sidebar { display: none; }
+}
 
 /* top status bar (boot line) */
 .topbar {
@@ -194,6 +201,11 @@ input[type="number"]::-webkit-inner-spin-button { opacity: .6; }
   cursor: pointer; user-select: none;
 }
 .nav-item .twist:hover { color: var(--amber); }
+/* inline add/edit affordances (+ and ›): always visible so touch users can tap */
+.nav-item .add {
+  color: var(--amber-mut); cursor: pointer; padding: 0 2px; font-weight: 700;
+}
+.nav-item .add:hover { color: var(--amber-hi); text-shadow: var(--glow); }
 
 /* project tree depth */
 .tree-row { position: relative; }

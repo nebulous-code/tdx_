@@ -16,7 +16,7 @@
 <div id="app">
   <!-- auth gate: the whole app shell only renders once authenticated -->
   <login-screen v-if="!store.currentUser" @authed="onAuthed"></login-screen>
-  <div v-else class="shell" :class="{ 'detail-open': store.detailOpen }">
+  <div v-else class="shell" :class="{ 'detail-open': store.detailOpen, 'nav-collapsed': store.navCollapsed }">
 
     <!-- top bar -->
     <header class="topbar">
@@ -36,6 +36,7 @@
     <!-- sidebar -->
     <app-sidebar :store="store"
       @new-query="openSave(store.view.query||'')"
+      @edit-query="openViewEdit"
       @new-project="openProjectModal('new', $event)"
       @edit-project="openProjectModal('edit', null, $event)"></app-sidebar>
     <div class="scrim" :class="{ show: store.sidebarOpen }" @click="store.sidebarOpen=false"></div>
@@ -73,7 +74,7 @@
 
   <!-- modals -->
   <project-modal v-if="projectModal" :store="store" :model="projectModal" @close="projectModal=null"></project-modal>
-  <save-query-modal v-if="saveModal" :store="store" :query="saveModal.query" @close="saveModal=null"></save-query-modal>
+  <save-query-modal v-if="saveModal" :store="store" :model="saveModal" @close="saveModal=null"></save-query-modal>
   <help-modal v-if="helpOpen" @close="helpOpen=false"></help-modal>
   <account-screen v-if="accountOpen" :store="store"
     @close="accountOpen=false" @saved="onAccountSaved" @logout="onLogout"></account-screen>
@@ -126,7 +127,8 @@ const app = createApp({
     openProjectModal(mode, parentId, project){
       this.projectModal = { mode, parentId: parentId||null, project: project||null };
     },
-    openSave(query){ this.saveModal = { query: query||'' }; },
+    openSave(query){ this.saveModal = { mode:'new', query: query||'' }; },
+    openViewEdit(sv){ this.saveModal = { mode:'edit', view: sv }; },
     openAccount(){ this.accountOpen = true; },
     // ---- keyboard ----
     onKey(e){
@@ -156,6 +158,8 @@ const app = createApp({
       // filter builder: F collapses the panel, f focuses into it (from any window)
       if(e.key==='F'){ e.preventDefault(); this.toggleBuilder(); return; }
       if(e.key==='f'){ e.preventDefault(); this.toggleFilterFocus(); return; }
+      // n toggles the sidebar nav column (parallel to f/F for the filter)
+      if(e.key==='n'){ e.preventDefault(); this.toggleNav(); return; }
 
       // each pane has its own navigation while focused
       if(this.store.focusPane==='side'){ this.sidebarKey(e); return; }
@@ -196,7 +200,7 @@ const app = createApp({
           if(curId){ e.preventDefault(); const t=this.store.taskById(curId); if(t) this.store.toggleDone(t); } break;
         case 'e': case 'Enter':
           if(curId){ e.preventDefault(); this.store.detailOpen=true; } break;
-        case 'n': case 'i':
+        case 'i':
           e.preventDefault(); this.newTask(); break;
         case '/':
           e.preventDefault(); this.$refs.qbar && this.$refs.qbar.focus(); break;
@@ -226,6 +230,13 @@ const app = createApp({
       this.scrollSideIntoView();
     },
     exitSidebar(){ this.store.focusPane='list'; this.store.sidebarOpen=false; },
+    // show/hide the whole sidebar nav column; if we hide it while focused there,
+    // drop keyboard focus back to the task list
+    toggleNav(){
+      this.store.navCollapsed = !this.store.navCollapsed;
+      this.store.sidebarOpen = !this.store.navCollapsed;   // mirror on mobile slide-in
+      if(this.store.navCollapsed && this.store.focusPane==='side') this.exitSidebar();
+    },
     // ---- filter builder keyboard navigation ----
     enterFilter(){
       this.store.builderOpen=true;
@@ -273,6 +284,13 @@ const app = createApp({
           this.store.sideFocusId=items[idx].id; this.scrollSideIntoView(); break;
         case 'Enter': case 'l': case 'ArrowRight': case ' ':
           e.preventDefault(); this.store.openSideItem(items[idx]); this.exitSidebar(); break;
+        case 'e': {
+          e.preventDefault();
+          const it=items[idx];
+          if(it.kind==='project') this.openProjectModal('edit', null, it.ref);
+          else if(it.kind==='query') this.openViewEdit(it.ref);
+          break;   // labels not editable yet
+        }
         case 'h': case 'ArrowLeft': case 'Escape':
           e.preventDefault(); this.exitSidebar(); break;
       }
@@ -398,6 +416,9 @@ const app = createApp({
     // flush a pending save when the page is hidden/closed (e.g. completing a
     // recurring task then immediately closing — don't lose the spawned occurrence)
     this._flush=()=>{ if(this._save){ clearTimeout(this._save); this._save=null; this.persist(); } };
+    // explicit "save now" (e.g. the detail drawer's Save button): cancel the
+    // debounce and persist immediately.
+    this.store.saveNow=()=>{ if(this._save){ clearTimeout(this._save); this._save=null; } this.persist(); };
     window.addEventListener('pagehide', this._flush);
     this._onVis=()=>{ if(document.visibilityState==='hidden') this._flush(); };
     document.addEventListener('visibilitychange', this._onVis);

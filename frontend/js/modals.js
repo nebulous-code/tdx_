@@ -77,12 +77,12 @@ window.ProjectModal = {
 };
 
 window.SaveQueryModal = {
-  props: ['store','query'],
+  props: ['store','model'],   // model: {mode:'new'|'edit', query, view}
   emits: ['close'],
   template: `
   <div class="overlay" @click.self="$emit('close')">
     <div class="modal">
-      <div class="modal-head">save query as smart view</div>
+      <div class="modal-head">{{ model.mode==='edit' ? 'edit view' : 'save query as smart view' }}</div>
       <div class="modal-body">
         <div class="field">
           <label>name</label>
@@ -90,28 +90,69 @@ window.SaveQueryModal = {
         </div>
         <div class="field">
           <label>query</label>
-          <input class="input cy" v-model="q" />
+          <input class="input cy" v-model="q" @keydown.enter="save" />
+        </div>
+        <div class="field">
+          <label>color</label>
+          <div class="swatches">
+            <span v-for="c in store.COLORS" :key="c" class="swatch" :class="{on: color===c}"
+                  :style="{ background:c, color:c }" @click="color=c"></span>
+          </div>
+        </div>
+        <div class="field">
+          <label>icon <span class="mut">— preview <span :style="{color:color}">{{ glyph }}</span></span></label>
+          <div class="glyphgrid">
+            <span v-for="g in store.GLYPHS" :key="g" class="glyphpick" :class="{on: glyph===g}"
+                  :style="glyph===g?{color:color}:{}" @click="glyph=g">{{ g }}</span>
+          </div>
         </div>
         <div class="field">
           <span class="mut" style="font-size:11px;">matches {{ count }} task(s) right now · pinned to sidebar views</span>
         </div>
       </div>
       <div class="modal-foot">
+        <button v-if="model.mode==='edit' && !(model.view && model.view.system)" class="btn danger" style="margin-right:auto;" @click="remove">delete</button>
         <button class="btn" @click="$emit('close')">cancel</button>
-        <button class="btn primary" @click="save">★ save view</button>
+        <button class="btn primary" @click="save">{{ model.mode==='edit' ? 'save' : '★ save view' }}</button>
       </div>
     </div>
   </div>
   `,
-  data(){ return { name:'', q:this.query||'' }; },
+  data(){
+    const v=this.model.view;
+    return {
+      name: v ? v.name : '',
+      q: v ? v.query : (this.model.query||''),
+      color: v ? (v.color || this.store.COLORS[0]) : this.store.COLORS[0],
+      glyph: v ? v.glyph : '◆',
+    };
+  },
   computed: { count(){ try { return this.store.queryCount(this.q); } catch(e){ return 0; } } },
   mounted(){ this.$nextTick(()=>this.$refs.name&&this.$refs.name.focus()); },
   methods: {
     save(){
       const nm=this.name.trim(); if(!nm){ this.$refs.name.focus(); return; }
-      this.store.saveQuery(nm, this.q.trim());
-      this.store.toast('★ saved view "'+nm+'"');
+      const qq=this.q.trim();
+      if(this.model.mode==='edit'){
+        const v=this.model.view;
+        v.name=nm; v.query=qq; v.glyph=this.glyph; v.color=this.color;
+        // refresh the active view's title if we just edited it
+        if(this.store.view.kind==='query' && this.store.view.id===v.id) this.store.openQueryView(v);
+        this.store.toast('✓ view saved');
+      } else {
+        this.store.saveQuery(nm, qq, this.glyph, this.color);
+        this.store.toast('★ saved view "'+nm+'"');
+      }
       this.$emit('close');
+    },
+    remove(){
+      const v=this.model.view; if(!v || v.system) return;
+      if(confirm('Delete saved view "'+v.name+'"?')){
+        this.store.deleteQuery(v);
+        if(this.store.view.kind==='query' && this.store.view.id===v.id)
+          this.store.setView({ kind:'query', id:'sv_today', title:'Today', query:'status:open due:today' });
+        this.$emit('close');
+      }
     }
   }
 };

@@ -124,7 +124,8 @@
     showCompleted: false,
     sortBy: 'due',           // due | created | title | project
     builderOpen: false,
-    sidebarOpen: false,      // mobile
+    sidebarOpen: false,      // mobile slide-in
+    navCollapsed: false,     // desktop: hide the sidebar column (toggled with n)
     focusPane: 'list',       // 'list' | 'side' | 'filter' — which window the keyboard drives
     sideFocusId: null,       // id of the keyboard-focused sidebar item
     toasts: [],
@@ -345,8 +346,8 @@
     if(i>=0) store.projects.splice(i,1);
   };
 
-  store.saveQuery = (name, query) => {
-    const sv = { id: uid('sv'), name, glyph:'◆', query, system:false };
+  store.saveQuery = (name, query, glyph, color) => {
+    const sv = { id: uid('sv'), name, glyph: glyph || '◆', color: color || COLORS[0], query, system:false };
     store.savedQueries.push(sv);
     store.openQueryView(sv);
     return sv;

@@ -81,6 +81,7 @@ window.TaskDetail = {
     </div>
 
     <div v-if="task" class="d-actions">
+      <button class="btn primary" @click="save">✓ save</button>
       <button class="btn" @click="duplicate">⧉ duplicate</button>
       <button class="btn danger" style="margin-left:auto;" @click="del">🗑 delete</button>
     </div>
@@ -104,6 +105,12 @@ window.TaskDetail = {
   },
   methods: {
     close(){ this.store.detailOpen=false; },
+    save(){
+      if(this.$refs.title) this.$refs.title.blur();
+      if(this.store.saveNow) this.store.saveNow();   // flush the debounced write now
+      this.store.toast('✓ saved');
+      this.store.detailOpen=false;
+    },
     indent(p){ return p.parentId ? '  ↳ ' : ''; },
     toggleLabel(id){
       const i=this.task.labels.indexOf(id);
