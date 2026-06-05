@@ -122,6 +122,9 @@ const app = createApp({
       const typing = tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable;
       // ⌘K / Ctrl+K everywhere
       if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); this.paletteOpen=!this.paletteOpen; return; }
+      // let browser combos (ctrl+f find, ctrl+l address bar, etc.) through; our
+      // shortcuts are bare keys or shift-combos only
+      if(e.ctrlKey||e.metaKey||e.altKey) return;
       if(e.key==='Escape'){
         if(this.helpOpen){ this.helpOpen=false; return; }
         if(this.paletteOpen){ this.paletteOpen=false; return; }
@@ -134,8 +137,13 @@ const app = createApp({
       if(e.key==='?' && !typing){ e.preventDefault(); this.helpOpen=true; return; }
       if(typing || this.paletteOpen || this.projectModal || this.saveModal || this.helpOpen) return;
 
-      // the sidebar pane has its own navigation while focused
+      // filter builder: F collapses the panel, f focuses into it (from any window)
+      if(e.key==='F'){ e.preventDefault(); this.toggleBuilder(); return; }
+      if(e.key==='f'){ e.preventDefault(); this.toggleFilterFocus(); return; }
+
+      // each pane has its own navigation while focused
       if(this.store.focusPane==='side'){ this.sidebarKey(e); return; }
+      if(this.store.focusPane==='filter'){ this.filterKey(e); return; }
 
       // j/k walk the flattened visible rows, so subtasks are reachable too
       const rows=this.store.visibleRows();
@@ -172,7 +180,7 @@ const app = createApp({
           if(curId){ e.preventDefault(); const t=this.store.taskById(curId); if(t) this.store.toggleDone(t); } break;
         case 'e': case 'Enter':
           if(curId){ e.preventDefault(); this.store.detailOpen=true; } break;
-        case 'n':
+        case 'n': case 'i':
           e.preventDefault(); this.newTask(); break;
         case '/':
           e.preventDefault(); this.$refs.qbar && this.$refs.qbar.focus(); break;
@@ -202,6 +210,39 @@ const app = createApp({
       this.scrollSideIntoView();
     },
     exitSidebar(){ this.store.focusPane='list'; this.store.sidebarOpen=false; },
+    // ---- filter builder keyboard navigation ----
+    enterFilter(){
+      this.store.builderOpen=true;
+      this.store.focusPane='filter';
+      this.$nextTick(()=>{ const qb=this.$refs.qbar; if(qb && qb.finit) qb.finit(); });
+    },
+    exitFilter(){
+      this.store.focusPane='list';
+      if(!this.store.selectedTaskId){ const r=this.store.visibleRoots(); if(r.length) this.store.selectedTaskId=r[0].id; }
+    },
+    toggleFilterFocus(){ if(this.store.focusPane==='filter') this.exitFilter(); else this.enterFilter(); },
+    toggleBuilder(){
+      this.store.builderOpen=!this.store.builderOpen;
+      if(!this.store.builderOpen && this.store.focusPane==='filter') this.exitFilter();
+    },
+    filterKey(e){
+      const qb=this.$refs.qbar;
+      switch(e.key){
+        case 'h': case 'l': case 'j': case 'k':
+        case 'ArrowLeft': case 'ArrowRight': case 'ArrowUp': case 'ArrowDown':
+          e.preventDefault(); qb && qb.fmove(e.key); break;
+        case ' ': case 'Enter':
+          e.preventDefault(); qb && qb.ftoggleFocused(); break;
+        case 'i':
+          e.preventDefault(); qb && qb.focus(); break;   // into the query editor
+        case 's':
+          e.preventDefault(); qb && qb.save(); break;     // save as smart view
+        case 'x':
+          e.preventDefault(); qb && qb.clearQuery(); break; // clear the query
+        case 'Escape':
+          e.preventDefault(); this.exitFilter(); break;
+      }
+    },
     sidebarKey(e){
       const items=this.store.sideItems();
       if(!items.length){ this.exitSidebar(); return; }

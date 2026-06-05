@@ -8,9 +8,9 @@ window.QueryBar = {
       <input class="qinput" ref="q" v-model="queryString" spellcheck="false"
              placeholder="query… e.g.  label:urgent due:<7d status:open"
              @keydown.enter="run" @keydown.esc="blur" />
-      <span class="qbtn" :class="{on: store.builderOpen}" @click="store.builderOpen=!store.builderOpen" title="Visual builder">⊞ build</span>
-      <span class="qbtn" @click="$emit('save-query', queryString)" title="Save as smart view">★ save</span>
-      <span v-if="isCustom" class="qbtn" @click="clearQuery" title="Clear">✕</span>
+      <span class="qbtn" :class="{on: store.builderOpen}" @click="store.builderOpen=!store.builderOpen" title="Filter builder (f · F to collapse)">⊞<span><u>f</u>ilter</span></span>
+      <span v-if="store.focusPane==='filter'" class="qbtn" @click="save" title="Save as smart view (s)">★<span><u>s</u>ave</span></span>
+      <span v-if="store.focusPane==='filter'" class="qbtn" @click="clearQuery" title="Clear (x)"><u>x</u></span>
     </div>
 
     <div v-if="store.builderOpen" class="builder">
@@ -18,28 +18,28 @@ window.QueryBar = {
         <div class="bg-label">status</div>
         <div class="chips">
           <span v-for="s in ['open','done','overdue','today']" :key="s" class="chip"
-                :class="{on: has('status',s)}" @click="toggleExclusive('status',s)">{{ s }}</span>
+                :class="{on: has('status',s), kfocus: isFocused('status',s)}" @click="toggleExclusive('status',s)">{{ s }}</span>
         </div>
       </div>
       <div class="bgroup">
         <div class="bg-label">due</div>
         <div class="chips">
           <span v-for="dd in dueOpts" :key="dd.v" class="chip"
-                :class="{on: has('due',dd.v)}" @click="toggleExclusive('due',dd.v)">{{ dd.t }}</span>
+                :class="{on: has('due',dd.v), kfocus: isFocused('due',dd.v)}" @click="toggleExclusive('due',dd.v)">{{ dd.t }}</span>
         </div>
       </div>
       <div class="bgroup">
         <div class="bg-label">labels</div>
         <div class="chips">
           <span v-for="l in store.labels" :key="l.id" class="chip"
-                :class="{on: has('label',l.name)}" @click="toggle('label',l.name)">#{{ l.name }}</span>
+                :class="{on: has('label',l.name), kfocus: isFocused('label',l.name)}" @click="toggle('label',l.name)">#{{ l.name }}</span>
         </div>
       </div>
       <div class="bgroup">
         <div class="bg-label">project</div>
         <div class="chips">
           <span v-for="p in store.projects" :key="p.id" class="chip"
-                :class="{on: has('project',p.name)}" @click="toggleExclusive('project',p.name)">
+                :class="{on: has('project',p.name), kfocus: isFocused('project',p.name)}" @click="toggleExclusive('project',p.name)">
             <span :style="{color:p.color}">{{ p.glyph }}</span> {{ p.name }}
           </span>
         </div>
@@ -47,15 +47,11 @@ window.QueryBar = {
       <div class="bgroup">
         <div class="bg-label">flags</div>
         <div class="chips">
-          <span class="chip" :class="{on: has('recurring','true')}" @click="toggleExclusive('recurring','true')">↻ recurring</span>
-          <span class="chip" :class="{on: has('reminder','set')}" @click="toggle('reminder','set')">◔ has reminder</span>
-          <span class="chip" :class="{on: has('has','subtasks')}" @click="toggle('has','subtasks')">⊟ has subtasks</span>
-          <span class="chip" :class="{on: has('is','subtask')}" @click="toggle('is','subtask')">└ is subtask</span>
+          <span class="chip" :class="{on: has('recurring','true'), kfocus: isFocused('flags','true')}" @click="toggleExclusive('recurring','true')">↻ recurring</span>
+          <span class="chip" :class="{on: has('reminder','set'), kfocus: isFocused('flags','set')}" @click="toggle('reminder','set')">◔ has reminder</span>
+          <span class="chip" :class="{on: has('has','subtasks'), kfocus: isFocused('flags','subtasks')}" @click="toggle('has','subtasks')">⊟ has subtasks</span>
+          <span class="chip" :class="{on: has('is','subtask'), kfocus: isFocused('flags','subtask')}" @click="toggle('is','subtask')">└ is subtask</span>
         </div>
-      </div>
-      <div class="bgroup" style="margin-left:auto;justify-content:flex-end;">
-        <div class="bg-label">&nbsp;</div>
-        <div class="chips"><span class="chip" @click="clearQuery">⌫ clear all</span></div>
       </div>
     </div>
   </div>
@@ -65,11 +61,29 @@ window.QueryBar = {
       dueOpts:[
         {v:'today',t:'today'},{v:'tomorrow',t:'tomorrow'},{v:'overdue',t:'overdue'},
         {v:'week',t:'≤7d'},{v:'<3d',t:'<3d'},{v:'none',t:'no date'},{v:'set',t:'has date'}
-      ]
+      ],
+      focusGroup:null,   // keyboard-focused builder group key
+      focusValue:null,   // keyboard-focused chip value within that group
     };
   },
   computed: {
     isCustom(){ return this.store.view.kind==='query' && this.store.view.id==='custom'; },
+    // structured groups (matching the rendered chips) for keyboard navigation;
+    // each chip carries its field + value + whether it's exclusive (one-per-field)
+    navGroups(){
+      return [
+        { key:'status',  chips:['open','done','overdue','today'].map(v=>({field:'status',value:v,exclusive:true})) },
+        { key:'due',     chips:this.dueOpts.map(o=>({field:'due',value:o.v,exclusive:true})) },
+        { key:'label',   chips:this.store.labels.map(l=>({field:'label',value:l.name,exclusive:false})) },
+        { key:'project', chips:this.store.projects.map(p=>({field:'project',value:p.name,exclusive:true})) },
+        { key:'flags',   chips:[
+          {field:'recurring',value:'true',exclusive:true},
+          {field:'reminder',value:'set',exclusive:false},
+          {field:'has',value:'subtasks',exclusive:false},
+          {field:'is',value:'subtask',exclusive:false},
+        ] },
+      ];
+    },
     queryString: {
       get(){
         const v=this.store.view;
@@ -101,8 +115,43 @@ window.QueryBar = {
       this.setTerms(terms);
     },
     clearQuery(){ this.queryString=''; },
+    save(){ this.$emit('save-query', this.queryString); },
     run(){ this.$refs.q && this.$refs.q.blur(); },
     blur(){ this.$refs.q && this.$refs.q.blur(); },
-    focus(){ this.$refs.q && (this.$refs.q.focus(), this.$refs.q.select()); }
+    focus(){ this.$refs.q && (this.$refs.q.focus(), this.$refs.q.select()); },
+    // ---- keyboard navigation of the builder (driven from index.html onKey) ----
+    isFocused(group,value){
+      return this.store.focusPane==='filter' && this.focusGroup===group && this.focusValue===value;
+    },
+    nonEmptyGroups(){ return this.navGroups.filter(g=>g.chips.length); },
+    currentChip(){
+      const g=this.navGroups.find(g=>g.key===this.focusGroup);
+      return g ? (g.chips.find(c=>c.value===this.focusValue)||null) : null;
+    },
+    finit(){   // place focus on the first available chip
+      const groups=this.nonEmptyGroups();
+      if(!groups.length){ this.focusGroup=null; this.focusValue=null; return; }
+      this.focusGroup=groups[0].key; this.focusValue=groups[0].chips[0].value;
+      this.scrollChipIntoView();
+    },
+    fmove(key){   // h/l switch group, j/k move within the group
+      const groups=this.nonEmptyGroups();
+      if(!groups.length) return;
+      let gi=groups.findIndex(g=>g.key===this.focusGroup); if(gi<0) gi=0;
+      let ci=groups[gi].chips.findIndex(c=>c.value===this.focusValue); if(ci<0) ci=0;
+      if(key==='h'||key==='ArrowLeft'){ gi=Math.max(0,gi-1); ci=0; }
+      else if(key==='l'||key==='ArrowRight'){ gi=Math.min(groups.length-1,gi+1); ci=0; }
+      else if(key==='k'||key==='ArrowUp'){ ci=Math.max(0,ci-1); }
+      else if(key==='j'||key==='ArrowDown'){ ci=Math.min(groups[gi].chips.length-1,ci+1); }
+      this.focusGroup=groups[gi].key; this.focusValue=groups[gi].chips[ci].value;
+      this.scrollChipIntoView();
+    },
+    ftoggleFocused(){
+      const c=this.currentChip(); if(!c) return;
+      if(c.exclusive) this.toggleExclusive(c.field,c.value); else this.toggle(c.field,c.value);
+    },
+    scrollChipIntoView(){
+      this.$nextTick(()=>{ const el=document.querySelector('.builder .chip.kfocus'); if(el) el.scrollIntoView({block:'nearest',inline:'nearest'}); });
+    }
   }
 };

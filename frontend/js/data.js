@@ -125,7 +125,7 @@
     sortBy: 'due',           // due | created | title | project
     builderOpen: false,
     sidebarOpen: false,      // mobile
-    focusPane: 'list',       // 'list' | 'side' — which pane the keyboard drives
+    focusPane: 'list',       // 'list' | 'side' | 'filter' — which window the keyboard drives
     sideFocusId: null,       // id of the keyboard-focused sidebar item
     toasts: [],
   });
@@ -186,6 +186,61 @@
     store.visibleRoots().forEach(walk);
     return out;
   };
+
+  // When a task is created from within a view, seed it with the attributes the
+  // view filters on, so it stays visible. We apply Status, Due, Labels and
+  // Project deterministically; Flags (recurring/reminder/is/has) and free text
+  // are ignored (see store.viewWarn). For dates we pick the day closest to today
+  // that satisfies the view's due/status terms — reusing the query engine itself.
+  const APPLIED_FIELDS = new Set(['project','label','status','due']);
+  store.viewDefaults = () => {
+    const out = { labels: [] };
+    const terms = Q.parse(store.currentQuery()).terms;
+    const ctx = store.ctx();
+
+    // project: assign the first matching project (id or name slug)
+    const pt = terms.find(t => t.field==='project' && !t.neg);
+    if(pt){
+      const p = store.projects.find(p => p.id===pt.value || Q.slug(p.name)===Q.slug(pt.value));
+      if(p) out.projectId = p.id;
+    }
+
+    // labels: every non-negated label term, comma-lists expanded (OR -> apply all)
+    terms.filter(t => t.field==='label' && !t.neg).forEach(t => {
+      t.value.split(',').forEach(name => {
+        const lab = store.labels.find(l => Q.slug(l.name)===Q.slug(name));
+        if(lab && !out.labels.includes(lab.id)) out.labels.push(lab.id);
+      });
+    });
+
+    // status:done -> create the task already done
+    if(terms.some(t => t.field==='status' && t.value==='done' && !t.neg)) out.done = true;
+
+    // due: closest-to-today date satisfying every due/status term. due:none means
+    // "no due date", which an undated task already satisfies, so leave due unset.
+    const dateTerms = terms.filter(t => t.field==='due' || t.field==='status');
+    const hasDateConstraint = dateTerms.some(t =>
+      t.field==='due' || t.value==='today' || t.value==='overdue');
+    const wantsNoDue = terms.some(t => t.field==='due' && t.value==='none' && !t.neg);
+    if(hasDateConstraint && !wantsNoDue){
+      const base = Rec.startOfDay(new Date());
+      const offsets = [0];
+      for(let i=1; i<=400; i++){ offsets.push(-i); offsets.push(i); }
+      for(const delta of offsets){
+        const cand = { due: Rec.ymd(Rec.addDays(base, delta)), done: !!out.done,
+          parentId:null, recurrence:null, labels:[], title:'', notes:'' };
+        if(dateTerms.every(t => Q.evaluate(cand, { terms:[t], ok:true }, ctx))){
+          out.due = cand.due; break;
+        }
+      }
+    }
+    return out;
+  };
+
+  // True when the current view filters on parameters we can't apply to a new task
+  // (Flags or free text) — drives the quick-add warning indicator.
+  store.viewWarn = () =>
+    Q.parse(store.currentQuery()).terms.some(t => !APPLIED_FIELDS.has(t.field));
 
   // ---- mutations ----
   store.toast = (msg) => {

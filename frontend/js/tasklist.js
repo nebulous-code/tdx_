@@ -69,7 +69,7 @@ window.TaskList = {
   <div class="main-inner" style="display:flex;flex-direction:column;flex:1;min-height:0;">
     <!-- quick add -->
     <div class="quickadd">
-      <span class="prompt">+</span>
+      <span class="prompt" :class="{ warn }" :data-tip="warnTip">{{ warn ? '⚠' : '+' }}</span>
       <input ref="qa" v-model="draft" :placeholder="addPlaceholder" @keydown.enter="commitAdd" @keydown.esc="escAdd" />
       <span class="mut" style="font-size:11px;">↵ add</span>
     </div>
@@ -111,7 +111,9 @@ window.TaskList = {
     },
     // show matched root tasks; if a subtask matches but parent doesn't, surface parent too
     rootTasks(){ return this.store.visibleRoots(); },
-    doneCount(){ return this.matched.filter(t=>t.done && !t.parentId).length; }
+    doneCount(){ return this.matched.filter(t=>t.done && !t.parentId).length; },
+    // current view filters on params we can't apply to a new task (flags / free text)
+    warn(){ return this.store.viewWarn(); }
   },
   methods: {
     sortList(list){
@@ -141,7 +143,14 @@ window.TaskList = {
       const text = this.draft.trim();
       if(!text) return;
       const { title, labels } = this.parseQuickAdd(text);
-      const t = this.store.addTask({ title, labels });
+      // inherit the current view's filters (status/due/labels/project) so the new
+      // task stays visible; merge any #tags typed in the box with the view's labels
+      const def = this.store.viewDefaults();
+      const merged = [...new Set([...(def.labels||[]), ...labels])];
+      const t = this.store.addTask({
+        title, labels: merged,
+        projectId: def.projectId, due: def.due, done: def.done,
+      });
       this.draft = '';
       this.store.selectedTaskId = t.id;
       this.store.toast('+ task added');
@@ -164,5 +173,8 @@ window.TaskList = {
       }
     }
   },
-  data(){ return { draft:'' }; }
+  data(){ return {
+    draft:'',
+    warnTip: "This filter has parameters that can't be applied to new tasks. New tasks may fall out of this query.",
+  }; }
 };
