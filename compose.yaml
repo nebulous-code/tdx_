@@ -1,0 +1,21 @@
+name: tdx
+
+services:
+  tdx:
+    image: tdx-app:latest
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    # VAPID keys + TZ come from backend/.env (gitignored).
+    env_file:
+      - backend/.env
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      - DB_PATH=/data/tdx.db
+    volumes:
+      - ./data:/data            # SQLite file persists across rebuilds
+    ports:
+      # Bind to localhost only; `tailscale serve` fronts this with HTTPS.
+      - "127.0.0.1:3000:3000"

@@ -50,13 +50,15 @@ window.TaskRow = {
     select(){ this.store.selectedTaskId = this.task.id; this.store.detailOpen = true; },
     labelName(id){ const l=this.store.labelById(id); return l?l.name:'?'; },
     relLabel(ymd){
-      const d = Rec.daysBetween(Rec.startOfDay(new Date()), Rec.parseYMD(ymd));
-      if(d===0) return 'today';
-      if(d===1) return 'tomorrow';
-      if(d===-1) return 'yesterday';
+      const date = (ymd||'').slice(0,10); // accept 'YYYY-MM-DD' or 'YYYY-MM-DDTHH:MM'
+      const time = ymd && ymd.length>10 ? ' '+ymd.slice(11,16) : ''; // ' HH:MM'
+      const d = Rec.daysBetween(Rec.startOfDay(new Date()), Rec.parseYMD(date));
+      if(d===0) return 'today'+time;
+      if(d===1) return 'tomorrow'+time;
+      if(d===-1) return 'yesterday'+time;
       if(d<0) return Math.abs(d)+'d ago';
-      if(d<=7) return 'in '+d+'d';
-      return ymd.slice(5); // MM-DD
+      if(d<=7) return 'in '+d+'d'+time;
+      return date.slice(5)+time; // MM-DD
     }
   }
 };

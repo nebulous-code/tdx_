@@ -9,6 +9,42 @@ the end.
 
 ---
 
+## 0. Phase 1 — as built (June 2026)
+
+Phase 1 is **implemented** and differs from the original §3–§9 proposal below in a
+few deliberate ways (decided after reading the prototype's actual mutation surface —
+most edits write reactive fields directly, bypassing store methods). The plan text
+below is kept for context; **this section is the source of truth for what was built.**
+
+- **Snapshot transport, relational storage.** The client keeps its existing debounced
+  full-state watch and just swaps `localStorage` for `GET`/`PUT /api/state`. Only
+  `frontend/index.html`'s `persist()`/`hydrate()` changed — no per-record REST, no
+  per-component rewiring. The server mirrors each snapshot into normalized SQLite
+  tables (so the scheduler can query due reminders and future multi-user is a clean
+  `ALTER TABLE`).
+- **Optimistic concurrency** via a `meta.version` counter. `PUT` sends `If-Match`;
+  a stale write gets `409` + current server state; the client resyncs and toasts
+  "synced from another device". (No auto-merge — single user.)
+- **Hard-delete**, not soft-delete (absence from a snapshot = deletion). Soft-delete
+  was only needed for offline sync, which is deferred.
+- **Recurrence spawning stays client-side** (`data.js#toggleDone`); the spawned task
+  reaches the server in the next snapshot PUT. No server-side `toggle` endpoint, no
+  isomorphic engine work. A `pagehide`/`visibilitychange` flush in `index.html`
+  closes the "complete then immediately close" gap.
+- **Reminders are timestamps** (`'YYYY-MM-DDTHH:MM'`). `reminder` input is now
+  `datetime-local`; `shiftReminder` preserves time-of-day across recurrences;
+  reminder query filters stay day-grained (`remDelta`/`relLabel` slice to the date).
+- **Web Push**: `reminders_sent(task_id, reminder_at)` is the server-only re-arm key;
+  a 60s scheduler tick sends pushes for due reminders. An "◔ notify" button in the
+  topbar requests permission + subscribes (iOS needs the gesture + installed PWA).
+- **Single container** serves the API and the static `frontend/` from one origin.
+
+See `backend/` for the code and the repo `README.md` for run/deploy steps. Still
+front-of-mind for later: server-side `toggle`/isomorphic engines (only if multi-device
+toggle correctness matters), Phase-2 offline outbox, and multi-user (§ below).
+
+---
+
 ## 1. Constraints & what shapes the design
 
 | Fact | Consequence |
@@ -291,11 +327,15 @@ firing reminders. 7 makes it durable. 8 only if you need offline writes.
 ## 11. Decisions for you
 
 - **App login at all, or rely purely on the tailnet?** (I'd start with tailnet-only.)
+  - I will probably want a additional users long term for my family but single tennant is fine
 - **Offline writes now or later?** (I'd defer Phase 2 until you feel the pain.)
+  - Sure offline defer is fine
 - **Reminder granularity:** keep date-only, or move `reminder` to a full timestamp
   (so "remind at 9:00am") now that delivery is real? (Timestamp is a small change
   and much more useful.)
+    - Yeah if we could get timestamp notifications that'd be nice
 - **Node backend confirmed?** It's the recommendation specifically to reuse the
   recurrence/query engines; say the word if you'd rather a different language and
   I'll plan the reimplementation cost.
+    - NOt familiar with node but I see no issue with it.
 ```

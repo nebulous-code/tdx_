@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>tdx // terminal todo</title>
 <link rel="stylesheet" href="styles.css" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="theme-color" content="#0b0a07" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 </head>
 <body>
 <div class="crt-vignette"></div>
@@ -23,6 +26,7 @@
       <span class="sep">│</span>
       <span class="dim">{{ store.tasks.filter(t=>!t.done).length }} open · {{ store.tasks.filter(t=>!t.done && isOverdue(t)).length }} overdue</span>
       <div class="right">
+        <span class="qbtn" @click="enableNotifications" :title="notifOn ? 'reminders enabled' : 'enable reminder notifications'">{{ notifOn ? '◔ on' : '◔ notify' }}</span>
         <span class="qbtn" @click="openPalette">⌘K commands</span>
         <span class="mut nowrap">{{ today }}</span>
       </div>
@@ -76,7 +80,7 @@
   </div>
 </div>
 
-<script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+<script src="js/vue.global.prod.js"></script>
 <script src="js/recurrence.js"></script>
 <script src="js/query.js"></script>
 <script src="js/data.js"></script>
@@ -89,7 +93,18 @@
 <script src="js/modals.js"></script>
 <script>
 const { createApp } = Vue;
-const STORAGE_KEY = 'tdx_state_v2';
+const STORAGE_KEY = 'tdx_state_v2';   // offline read-through cache of the last good snapshot
+let stateVersion = 0;                  // optimistic-concurrency version from the server
+
+// VAPID public keys are base64url; the Push API wants a Uint8Array.
+function urlBase64ToUint8Array(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
 
 const app = createApp({
   data(){ return {
@@ -99,6 +114,7 @@ const app = createApp({
     saveModal: null,
     clock: '',
     selIndex: 0,
+    notifOn: false,
   }; },
   computed: {
     today(){ return new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); }
@@ -111,6 +127,51 @@ const app = createApp({
       this.projectModal = { mode, parentId: parentId||null, project: project||null };
     },
     openSave(query){ this.saveModal = { query: query||'' }; },
+    // ---- notifications (Web Push) ----
+    async initPWA(){
+      if(!('serviceWorker' in navigator)) return;
+      try{ this._sw = await navigator.serviceWorker.register('/sw.js'); }
+      catch(e){ return; }
+      // If permission was already granted, make sure the server has our subscription.
+      if('Notification' in window && Notification.permission==='granted') this.subscribePush();
+    },
+    async enableNotifications(){
+      // Service workers + Push API are only allowed in a secure context
+      // (https:// or http://localhost). Over plain http to an IP/hostname the
+      // browser disables them entirely.
+      if(!window.isSecureContext){
+        this.store.toast('needs https — open via localhost or `tailscale serve`');
+        return;
+      }
+      if(!('serviceWorker' in navigator) || !('Notification' in window) || !('PushManager' in window)){
+        this.store.toast('push unsupported in this browser');
+        return;
+      }
+      try{
+        if(!this._sw) this._sw = await navigator.serviceWorker.register('/sw.js');
+      }catch(e){ this.store.toast('service worker failed to register'); return; }
+      const perm = await Notification.requestPermission();
+      if(perm!=='granted'){ this.store.toast('notifications denied'); return; }
+      await this.subscribePush();
+    },
+    async subscribePush(){
+      try{
+        const r = await fetch('/api/push/vapid-public-key');
+        const { key, configured } = await r.json();
+        if(!configured || !key){ this.store.toast('push not configured on server'); return; }
+        let sub = await this._sw.pushManager.getSubscription();
+        if(!sub){
+          sub = await this._sw.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(key),
+          });
+        }
+        await fetch('/api/push/subscribe', {
+          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(sub),
+        });
+        this.notifOn = true;
+      }catch(e){ this.store.toast('push subscribe failed'); }
+    },
     // ---- keyboard ----
     onKey(e){
       const tag=(e.target.tagName||'').toLowerCase();
@@ -148,40 +209,85 @@ const app = createApp({
           this.store.showCompleted=!this.store.showCompleted; break;
       }
     },
-    // ---- persistence ----
-    persist(){
-      try{
-        const snap = {
-          projects: JSON.parse(JSON.stringify(this.store.projects)),
-          tasks: JSON.parse(JSON.stringify(this.store.tasks)),
-          labels: JSON.parse(JSON.stringify(this.store.labels)),
-          savedQueries: JSON.parse(JSON.stringify(this.store.savedQueries)),
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
-      }catch(e){}
+    // ---- persistence (snapshot store over /api/state) ----
+    // Replace the store's arrays in-place (keeps Vue reactivity refs intact).
+    // _suppress stops the resulting change from scheduling a redundant PUT.
+    applyState(s){
+      this._suppress = true;
+      if(s.projects){ this.store.projects.splice(0, this.store.projects.length, ...s.projects); }
+      if(s.tasks){ this.store.tasks.splice(0, this.store.tasks.length, ...s.tasks); }
+      if(s.labels){ this.store.labels.splice(0, this.store.labels.length, ...s.labels); }
+      if(s.savedQueries){ this.store.savedQueries.splice(0, this.store.savedQueries.length, ...s.savedQueries); }
+      this.$nextTick(()=>{ this._suppress = false; });
     },
-    hydrate(){
+    snapshot(){
+      return {
+        projects: JSON.parse(JSON.stringify(this.store.projects)),
+        tasks: JSON.parse(JSON.stringify(this.store.tasks)),
+        labels: JSON.parse(JSON.stringify(this.store.labels)),
+        savedQueries: JSON.parse(JSON.stringify(this.store.savedQueries)),
+      };
+    },
+    async persist(){
+      const snap = this.snapshot();
+      // write-through offline cache first, so a crash mid-PUT still leaves a good copy
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(snap)); }catch(e){}
       try{
-        const raw=localStorage.getItem(STORAGE_KEY);
-        if(!raw) return;
-        const s=JSON.parse(raw);
-        if(s.projects){ this.store.projects.splice(0, this.store.projects.length, ...s.projects); }
-        if(s.tasks){ this.store.tasks.splice(0, this.store.tasks.length, ...s.tasks); }
-        if(s.labels){ this.store.labels.splice(0, this.store.labels.length, ...s.labels); }
-        if(s.savedQueries){ this.store.savedQueries.splice(0, this.store.savedQueries.length, ...s.savedQueries); }
+        const res = await fetch('/api/state', {
+          method:'PUT',
+          headers:{ 'Content-Type':'application/json', 'If-Match':String(stateVersion) },
+          body: JSON.stringify(snap),
+        });
+        if(res.status===409){
+          // another device wrote first — take server state, drop our unsaved edits
+          const server = await res.json();
+          stateVersion = server.version || 0;
+          this.applyState(server);
+          this.store.toast('↻ synced from another device');
+          return;
+        }
+        if(res.ok){ const j = await res.json(); stateVersion = j.version; }
+      }catch(e){ /* offline: change is kept in the localStorage cache */ }
+    },
+    async hydrate(){
+      try{
+        const res = await fetch('/api/state');
+        if(res.ok){
+          const s = await res.json();
+          stateVersion = s.version || 0;
+          this.applyState(s);
+          try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }catch(e){}
+          return;
+        }
+      }catch(e){ /* server unreachable — fall back to cache */ }
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(raw) this.applyState(JSON.parse(raw));
       }catch(e){}
     }
   },
-  mounted(){
-    this.hydrate();
+  async mounted(){
+    await this.hydrate();   // load state BEFORE watching, so the initial load doesn't trigger a PUT
     document.addEventListener('keydown', this.onKey);
     const tick=()=>{ this.clock=new Date().toLocaleTimeString('en-GB',{hour12:false}); };
     tick(); this._timer=setInterval(tick,1000);
-    // persist on change (debounced)
+    // persist on change (debounced); skip while we're applying server state
     this.$watch(()=>JSON.stringify([this.store.tasks,this.store.projects,this.store.labels,this.store.savedQueries]),
-      ()=>{ clearTimeout(this._save); this._save=setTimeout(this.persist,300); });
+      ()=>{ if(this._suppress) return; clearTimeout(this._save); this._save=setTimeout(this.persist,300); });
+    // flush a pending save when the page is hidden/closed (e.g. completing a
+    // recurring task then immediately closing — don't lose the spawned occurrence)
+    this._flush=()=>{ if(this._save){ clearTimeout(this._save); this._save=null; this.persist(); } };
+    window.addEventListener('pagehide', this._flush);
+    this._onVis=()=>{ if(document.visibilityState==='hidden') this._flush(); };
+    document.addEventListener('visibilitychange', this._onVis);
+    this.initPWA();
   },
-  beforeUnmount(){ document.removeEventListener('keydown', this.onKey); clearInterval(this._timer); }
+  beforeUnmount(){
+    document.removeEventListener('keydown', this.onKey);
+    clearInterval(this._timer);
+    window.removeEventListener('pagehide', this._flush);
+    document.removeEventListener('visibilitychange', this._onVis);
+  }
 });
 
 app.component('app-sidebar', window.AppSidebar);

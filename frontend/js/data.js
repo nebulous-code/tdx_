@@ -219,8 +219,12 @@
   };
   function shiftReminder(t, nextDue){
     if(!t.reminder || !t.due) return null;
-    const gap = Rec.daysBetween(Rec.parseYMD(t.due), Rec.parseYMD(t.reminder));
-    return Rec.ymd(Rec.addDays(nextDue, gap));
+    // reminder is a 'YYYY-MM-DDTHH:MM' timestamp; preserve its time-of-day and
+    // its day-offset from the due date across the recurrence.
+    const remDate = t.reminder.slice(0,10);
+    const time = t.reminder.length>10 ? t.reminder.slice(10) : ''; // 'THH:MM'
+    const gap = Rec.daysBetween(Rec.parseYMD(t.due), Rec.parseYMD(remDate));
+    return Rec.ymd(Rec.addDays(nextDue, gap)) + time;
   }
 
   store.deleteTask = (t) => {

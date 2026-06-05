@@ -1,0 +1,20 @@
+{
+  "name": "tdx-backend",
+  "version": "1.0.0",
+  "description": "Self-hosted backend for the tdx_ terminal todo app (snapshot store + Web Push reminders).",
+  "private": true,
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "gen-vapid": "web-push generate-vapid-keys"
+  },
+  "dependencies": {
+    "@fastify/static": "^7.0.4",
+    "better-sqlite3": "^11.3.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^4.28.1",
+    "web-push": "^3.6.7"
+  }
+}

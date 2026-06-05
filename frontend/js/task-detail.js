@@ -37,7 +37,7 @@ window.TaskDetail = {
         </div>
         <div class="field">
           <label>reminder</label>
-          <input class="input" type="date" v-model="task.reminder" />
+          <input class="input" type="datetime-local" v-model="task.reminder" />
         </div>
       </div>
       <div class="field" v-if="task.due" style="margin-top:-6px;">

@@ -67,7 +67,8 @@
   }
   function remDelta(task){
     if(!task.reminder) return null;
-    return Rec.daysBetween(today(), Rec.parseYMD(task.reminder));
+    // reminder may be a 'YYYY-MM-DDTHH:MM' timestamp; query filters are day-grained.
+    return Rec.daysBetween(today(), Rec.parseYMD(task.reminder.slice(0,10)));
   }
 
   function cmpDate(delta, op){ // op like "<7d", "<=3d", ">0d", "=0d"
