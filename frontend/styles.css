@@ -506,3 +506,48 @@ input[type="number"]::-webkit-inner-spin-button { opacity: .6; }
   .mobile-only { display: inline-flex; }
   :root { --detail-w: 100%; }
 }
+
+/* ---- auth: login screen + account popup ----------------------------- */
+.login-wrap {
+  position: fixed; inset: 0; z-index: 9000;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg); padding: 24px;
+}
+.login-box {
+  width: min(360px, 92vw);
+  background: var(--bg-1); border: 1px solid var(--amber-mut); border-radius: var(--radius);
+  box-shadow: 0 24px 60px rgba(0,0,0,.6), var(--glow); padding: 26px 24px;
+}
+.login-brand { font-family: var(--crt); font-size: 34px; line-height: 1; color: var(--amber); text-shadow: var(--glow); }
+.login-brand b { color: var(--amber-hi); }
+.login-sub { color: var(--amber-mut); font-size: 11px; letter-spacing: .5px; margin: 4px 0 20px; }
+.login-field { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.login-label { flex: 0 0 42px; font-size: 11px; color: var(--amber-mut); text-transform: uppercase; letter-spacing: 1px; }
+.login-field input {
+  flex: 1; background: var(--bg-3); border: 1px solid var(--line-2); outline: none;
+  color: var(--amber-hi); font-family: var(--mono); font-size: 13px; padding: 6px 8px;
+  border-radius: var(--radius); caret-color: var(--amber);
+}
+.login-field input:focus { border-color: var(--amber-mut); }
+.login-error { color: var(--red); font-size: 12px; margin: 2px 0 12px; min-height: 1em; }
+.login-go { width: 100%; justify-content: center; margin-top: 6px; }
+
+/* close-X used by the account + help modals (top-right of the head) */
+.acct-x { cursor: pointer; color: var(--amber-mut); padding: 0 4px; }
+.acct-x:hover { color: var(--amber-hi); }
+
+.account-modal .acct-row {
+  display: flex; align-items: center; gap: 10px; padding: 5px 8px;
+  border-radius: var(--radius); cursor: text;
+}
+.account-modal .acct-row.kfocus { box-shadow: inset 0 0 0 1px var(--amber-mut); background: var(--bg-2); }
+.account-modal .acct-label { flex: 0 0 72px; font-size: 11px; color: var(--amber-mut); text-transform: uppercase; letter-spacing: 1px; }
+.account-modal .acct-row input {
+  flex: 1; background: var(--bg-3); border: 1px solid var(--line-2); outline: none;
+  color: var(--amber-hi); font-family: var(--mono); font-size: 13px; padding: 5px 8px;
+  border-radius: var(--radius); caret-color: var(--amber);
+}
+.account-modal .acct-row input:focus { border-color: var(--amber-mut); }
+.account-modal .acct-sep { margin: 14px 0 8px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--amber-mut); border-top: 1px solid var(--line); padding-top: 10px; }
+.account-modal .acct-error { color: var(--red); font-size: 12px; margin-top: 10px; min-height: 1em; }
+.account-modal .btn.kfocus { box-shadow: 0 0 0 1px var(--amber-hi), var(--glow-soft); border-color: var(--amber-hi); }

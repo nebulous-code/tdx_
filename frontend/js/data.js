@@ -128,6 +128,7 @@
     focusPane: 'list',       // 'list' | 'side' | 'filter' — which window the keyboard drives
     sideFocusId: null,       // id of the keyboard-focused sidebar item
     toasts: [],
+    currentUser: null,       // { id, username, email } once authenticated; null = logged out
   });
 
   // ---- derived helpers (plain functions; components call them) ----

@@ -9,9 +9,19 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const Fastify = require('fastify');
 const fastifyStatic = require('@fastify/static');
+const fastifyCookie = require('@fastify/cookie');
 
-require('./db'); // opens DB, runs migrations, seeds first-run defaults
+require('./db'); // opens DB, runs migrations
+const { authenticate } = require('./auth');
 const stateRoutes = require('./routes/state');
+const authRoutes = require('./routes/auth');
+
+// Cookie signing needs a stable secret; without it sessions can't be trusted.
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET) {
+  console.error('FATAL: SESSION_SECRET is not set (see .env / compose.yaml).');
+  process.exit(1);
+}
 
 const PORT = Number(process.env.PORT || 3000);
 // Inside Docker we must listen on 0.0.0.0 to be reachable via the published
@@ -24,8 +34,14 @@ const FRONTEND_DIR = path.join(__dirname, '..', '..', 'frontend');
 async function main() {
   const fastify = Fastify({ logger: true, bodyLimit: 5 * 1024 * 1024 });
 
+  // Cookie support (signed session cookie). Registered first so routes can use it.
+  await fastify.register(fastifyCookie, { secret: SESSION_SECRET });
+  // `authenticate` preHandler used to guard protected routes.
+  fastify.decorate('authenticate', authenticate);
+
   // API routes (registered before static; the specific /api/* paths take
   // precedence over the static wildcard).
+  await fastify.register(authRoutes);
   await fastify.register(stateRoutes);
 
   // Static frontend. `index: 'index.html'` serves the app at '/'.

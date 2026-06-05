@@ -14,18 +14,22 @@
 <div class="crt-flicker"></div>
 
 <div id="app">
-  <div class="shell" :class="{ 'detail-open': store.detailOpen }">
+  <!-- auth gate: the whole app shell only renders once authenticated -->
+  <login-screen v-if="!store.currentUser" @authed="onAuthed"></login-screen>
+  <div v-else class="shell" :class="{ 'detail-open': store.detailOpen }">
 
     <!-- top bar -->
     <header class="topbar">
       <span class="mobile-only qbtn" style="padding:1px 7px;" @click="store.sidebarOpen=!store.sidebarOpen">≡</span>
       <span class="brand">tdx<b>_</b></span>
       <span class="sep">│</span>
-      <span class="dim">{{ store.tasks.filter(t=>!t.done).length }} open · {{ store.tasks.filter(t=>!t.done && isOverdue(t)).length }} overdue</span>
+      <span class="mut nowrap">{{ clock }} {{ today }}</span>
       <div class="right">
-        <span>{{ clock }}</span>
+        <span class="dim">{{ openCount }} open</span>
         <span class="sep">│</span>
-        <span class="mut nowrap">{{ today }}</span>
+        <span class="dim">{{ overdueCount }} overdue</span>
+        <span class="sep">│</span>
+        <span class="qbtn" @click="openAccount" title="account (@)">{{ store.currentUser && store.currentUser.username }}</span>
       </div>
     </header>
 
@@ -71,6 +75,8 @@
   <project-modal v-if="projectModal" :store="store" :model="projectModal" @close="projectModal=null"></project-modal>
   <save-query-modal v-if="saveModal" :store="store" :query="saveModal.query" @close="saveModal=null"></save-query-modal>
   <help-modal v-if="helpOpen" @close="helpOpen=false"></help-modal>
+  <account-screen v-if="accountOpen" :store="store"
+    @close="accountOpen=false" @saved="onAccountSaved" @logout="onLogout"></account-screen>
 
   <!-- toasts -->
   <div class="toasts">
@@ -90,6 +96,8 @@
 <script src="js/command-palette.js"></script>
 <script src="js/modals.js"></script>
 <script src="js/help-modal.js"></script>
+<script src="js/login-screen.js"></script>
+<script src="js/account-screen.js"></script>
 <script>
 const { createApp } = Vue;
 let stateVersion = 0;   // optimistic-concurrency version from the server
@@ -103,10 +111,13 @@ const app = createApp({
     clock: '',
     selIndex: 0,
     helpOpen: false,
+    accountOpen: false,
     loaded: false,   // true once we've successfully loaded server state; gates writes
   }; },
   computed: {
-    today(){ return new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); }
+    today(){ return new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'2-digit'}); },
+    openCount(){ return this.store.tasks.filter(t=>!t.done).length; },
+    overdueCount(){ return this.store.tasks.filter(t=>!t.done && this.isOverdue(t)).length; }
   },
   methods: {
     isOverdue(t){ return t.due && Rec.daysBetween(Rec.startOfDay(new Date()), Rec.parseYMD(t.due))<0; },
@@ -116,8 +127,11 @@ const app = createApp({
       this.projectModal = { mode, parentId: parentId||null, project: project||null };
     },
     openSave(query){ this.saveModal = { query: query||'' }; },
+    openAccount(){ this.accountOpen = true; },
     // ---- keyboard ----
     onKey(e){
+      // the account popup is a takeover: it owns the keyboard while open
+      if(this.accountOpen) return;
       const tag=(e.target.tagName||'').toLowerCase();
       const typing = tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable;
       // ⌘K / Ctrl+K everywhere
@@ -135,6 +149,8 @@ const app = createApp({
       // '?' opens the keyboard/syntax reference (shift+/ — handle before the bare
       // '/' query-focus shortcut below).
       if(e.key==='?' && !typing){ e.preventDefault(); this.helpOpen=true; return; }
+      // '@' (shift+2) opens the account screen
+      if(e.key==='@' && !typing){ e.preventDefault(); this.openAccount(); return; }
       if(typing || this.paletteOpen || this.projectModal || this.saveModal || this.helpOpen) return;
 
       // filter builder: F collapses the panel, f focuses into it (from any window)
@@ -296,9 +312,11 @@ const app = createApp({
       try{
         const res = await fetch('/api/state', {
           method:'PUT',
+          credentials:'include',
           headers:{ 'Content-Type':'application/json' },
           body: JSON.stringify(this.snapshot()),
         });
+        if(res.status===401){ this.handleAuthExpired(); return; }
         if(res.status===409){
           // another device wrote first — take server state, drop our unsaved edits
           const server = await res.json();
@@ -313,7 +331,8 @@ const app = createApp({
     },
     async hydrate(){
       try{
-        const res = await fetch('/api/state');
+        const res = await fetch('/api/state', { credentials:'include' });
+        if(res.status===401){ this.handleAuthExpired(); return; }
         if(res.ok){
           const s = await res.json();
           stateVersion = s.version || 0;
@@ -327,16 +346,55 @@ const app = createApp({
       }
       // loaded stays false: the app shows whatever is in memory but won't save
       // until a reload succeeds, so it can't overwrite good server state.
+    },
+    // ---- auth / session lifecycle ----
+    async checkSession(){
+      try{
+        const res = await fetch('/api/auth/me', { credentials:'include' });
+        if(res.ok){ this.store.currentUser = await res.json(); await this.startSession(); }
+        else { this.store.currentUser = null; }
+      }catch(e){
+        this.store.currentUser = null;
+        this.store.toast('offline — could not reach the server');
+      }
+    },
+    async onAuthed(user){ this.store.currentUser = user; await this.startSession(); },
+    // Attach the keyboard + change-watcher (once) and load this user's state.
+    async startSession(){
+      if(!this._keysAttached){ document.addEventListener('keydown', this.onKey); this._keysAttached = true; }
+      if(!this._watchAttached){
+        this.$watch(()=>JSON.stringify([this.store.tasks,this.store.projects,this.store.labels,this.store.savedQueries]),
+          ()=>{ if(this._suppress) return; clearTimeout(this._save); this._save=setTimeout(this.persist,300); });
+        this._watchAttached = true;
+      }
+      await this.hydrate();
+    },
+    clearLocalState(){
+      this.store.tasks.splice(0); this.store.projects.splice(0);
+      this.store.labels.splice(0); this.store.savedQueries.splice(0);
+    },
+    onAccountSaved(user){ this.store.currentUser = user; },
+    async onLogout(){
+      this.loaded = false;
+      this.accountOpen = false;
+      if(this._keysAttached){ document.removeEventListener('keydown', this.onKey); this._keysAttached = false; }
+      this.clearLocalState();
+      this.store.currentUser = null;     // flips back to the login screen
+    },
+    // 401 mid-session (expired / revoked): drop to the login screen.
+    handleAuthExpired(){
+      if(!this.store.currentUser && !this.loaded) return;
+      this.loaded = false;
+      this.accountOpen = false;
+      if(this._keysAttached){ document.removeEventListener('keydown', this.onKey); this._keysAttached = false; }
+      this.clearLocalState();
+      this.store.currentUser = null;
+      this.store.toast('session expired — please sign in');
     }
   },
   async mounted(){
-    await this.hydrate();   // load state BEFORE watching, so the initial load doesn't trigger a PUT
-    document.addEventListener('keydown', this.onKey);
     const tick=()=>{ this.clock=new Date().toLocaleTimeString('en-GB',{hour12:false}); };
     tick(); this._timer=setInterval(tick,1000);
-    // persist on change (debounced); skip while we're applying server state
-    this.$watch(()=>JSON.stringify([this.store.tasks,this.store.projects,this.store.labels,this.store.savedQueries]),
-      ()=>{ if(this._suppress) return; clearTimeout(this._save); this._save=setTimeout(this.persist,300); });
     // flush a pending save when the page is hidden/closed (e.g. completing a
     // recurring task then immediately closing — don't lose the spawned occurrence)
     this._flush=()=>{ if(this._save){ clearTimeout(this._save); this._save=null; this.persist(); } };
@@ -349,6 +407,10 @@ const app = createApp({
       navigator.serviceWorker.getRegistrations()
         .then(rs=>rs.forEach(r=>r.unregister())).catch(()=>{});
     }
+    // Decide login vs app: /api/auth/me. On success startSession() attaches the
+    // keyboard + watcher and hydrates; otherwise the login screen shows and the
+    // global keydown stays detached (app shortcuts off on login).
+    await this.checkSession();
   },
   beforeUnmount(){
     document.removeEventListener('keydown', this.onKey);
@@ -369,6 +431,8 @@ app.component('command-palette', window.CommandPalette);
 app.component('project-modal', window.ProjectModal);
 app.component('save-query-modal', window.SaveQueryModal);
 app.component('help-modal', window.HelpModal);
+app.component('login-screen', window.LoginScreen);
+app.component('account-screen', window.AccountScreen);
 app.mount('#app');
 </script>
 </body>

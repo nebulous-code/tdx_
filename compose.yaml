@@ -13,6 +13,9 @@ services:
       - DB_PATH=/data/tdx.db
       # Set to your local timezone so created/completed date stamps are local.
       - TZ=America/New_York
+      # Cookie-signing secret, substituted from the repo-root .env (gitignored).
+      # Compose errors out if it's unset, so deploys can't run without it.
+      - SESSION_SECRET=${SESSION_SECRET:?set SESSION_SECRET in the repo-root .env}
     volumes:
       - ./data:/data            # SQLite file persists across rebuilds
     ports:

@@ -37,7 +37,10 @@ window.HelpModal = {
   template: `
   <div class="overlay" @click.self="$emit('close')">
     <div class="modal" style="max-width:640px;width:92vw;max-height:76vh;display:flex;flex-direction:column;">
-      <div class="modal-head" style="flex:0 0 auto;">quick reference</div>
+      <div class="modal-head" style="flex:0 0 auto;display:flex;align-items:center;">
+        <span style="flex:1;">quick reference</span>
+        <span class="acct-x" @click="$emit('close')" title="close (esc)">✕</span>
+      </div>
       <div class="modal-body" style="flex:1 1 auto;min-height:0;overflow-y:auto;display:grid;grid-template-columns:1fr 1fr;gap:18px;">
         <div>
           <div class="mut" style="font-size:11px;margin-bottom:8px;letter-spacing:.5px;">KEYBOARD</div>
@@ -54,9 +57,6 @@ window.HelpModal = {
           </div>
           <div class="mut" style="font-size:11px;margin-top:10px;">terms combine with AND · save a query as a smart view from ⌘K or the query bar.</div>
         </div>
-      </div>
-      <div class="modal-foot" style="flex:0 0 auto;">
-        <button class="btn primary" @click="$emit('close')">close</button>
       </div>
     </div>
   </div>

@@ -10,11 +10,11 @@
 const { readState, writeState, ConflictError } = require('../state');
 
 async function routes(fastify) {
-  fastify.get('/api/state', async () => {
-    return readState();
+  fastify.get('/api/state', { preHandler: fastify.authenticate }, async (request) => {
+    return readState(request.user.id);
   });
 
-  fastify.put('/api/state', async (request, reply) => {
+  fastify.put('/api/state', { preHandler: fastify.authenticate }, async (request, reply) => {
     const snapshot = request.body || {};
     // Prefer the version carried in the body — unlike the conditional `If-Match`
     // header, it survives proxies (e.g. a TLS front-end) that may drop or rewrite
@@ -24,7 +24,7 @@ async function routes(fastify) {
       snapshot.version != null ? snapshot.version : ifMatch != null ? ifMatch : null;
 
     try {
-      const { version } = writeState(snapshot, expectedVersion);
+      const { version } = writeState(request.user.id, snapshot, expectedVersion);
       return { version };
     } catch (err) {
       if (err instanceof ConflictError) {

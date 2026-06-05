@@ -12,6 +12,9 @@ RUN cd backend && npm install --omit=dev
 # App code + the static frontend (served by Fastify).
 COPY backend ./backend
 COPY frontend ./frontend
+# User-management CLI (run via `docker compose exec --workdir /app tdx node tools/...`).
+# These require ../backend/src/* so Node resolves deps from backend/node_modules.
+COPY tools ./tools
 
 WORKDIR /app/backend
 EXPOSE 3000

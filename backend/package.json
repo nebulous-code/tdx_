@@ -10,7 +10,9 @@
     "dev": "node --watch src/server.js"
   },
   "dependencies": {
+    "@fastify/cookie": "^9.4.0",
     "@fastify/static": "^7.0.4",
+    "@node-rs/argon2": "^2.0.2",
     "better-sqlite3": "^11.3.0",
     "dotenv": "^16.4.5",
     "fastify": "^4.28.1"

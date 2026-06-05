@@ -52,33 +52,33 @@ function runMigrations() {
   }
 }
 
-// ---- first-run seed -------------------------------------------------------
-// If there are no projects yet, create a single `inbox` project (the default
-// dumping ground / quick-add target) plus the built-in system smart-views.
-// No demo tasks.
-function seedIfEmpty() {
-  const count = db.prepare('SELECT COUNT(*) AS n FROM projects').get().n;
-  if (count > 0) return;
-
+// ---- per-user seed --------------------------------------------------------
+// Multi-tenant: each user gets their own default inbox project + the built-in
+// system smart-views. Called by tools/add-user.js when a NEW user is created
+// (the very first user instead adopts the pre-auth '__unowned__' rows). No demo
+// tasks. Seed ids (p_inbox, sv_*) are safe to repeat across users because the
+// primary key is composite (user_id, id).
+function seedUserDefaults(userId) {
   const seed = db.transaction(() => {
     db.prepare(
-      'INSERT INTO projects (id, parent_id, name, color, glyph, collapsed) VALUES (?, ?, ?, ?, ?, 0)'
-    ).run('p_inbox', null, 'inbox', '#ffb000', '⌂');
+      'INSERT INTO projects (user_id, id, parent_id, name, color, glyph, collapsed) VALUES (?, ?, ?, ?, ?, ?, 0)'
+    ).run(userId, 'p_inbox', null, 'inbox', '#ffb000', '⌂');
 
     const sv = db.prepare(
-      'INSERT INTO saved_queries (id, name, glyph, query, system) VALUES (?, ?, ?, ?, 1)'
+      'INSERT INTO saved_queries (user_id, id, name, glyph, query, system) VALUES (?, ?, ?, ?, ?, 1)'
     );
-    sv.run('sv_today',   'Today',     '☉', 'status:open due:today');
-    sv.run('sv_overdue', 'Overdue',   '!', 'status:overdue');
-    sv.run('sv_week',    'This week', '☰', 'status:open due:week');
-    sv.run('sv_rec',     'Recurring', '↻', 'recurring:true status:open');
-    sv.run('sv_nodate',  'No date',   '∅', 'due:none status:open');
+    sv.run(userId, 'sv_today',   'Today',     '☉', 'status:open due:today');
+    sv.run(userId, 'sv_overdue', 'Overdue',   '!', 'status:overdue');
+    sv.run(userId, 'sv_week',    'This week', '☰', 'status:open due:week');
+    sv.run(userId, 'sv_rec',     'Recurring', '↻', 'recurring:true status:open');
+    sv.run(userId, 'sv_nodate',  'No date',   '∅', 'due:none status:open');
   });
   seed();
-  console.log('[db] seeded first-run defaults (inbox + system views)');
 }
 
 runMigrations();
-seedIfEmpty();
 
+// Default export stays the better-sqlite3 handle (every caller does
+// `require('./db')`); helpers ride along as properties.
 module.exports = db;
+module.exports.seedUserDefaults = seedUserDefaults;
