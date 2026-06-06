@@ -13,7 +13,7 @@ window.AppSidebar = {
       </div>
       <div v-show="!store.navSections.query" v-for="sv in store.savedQueries" :key="sv.id"
            class="nav-item"
-           :class="{ active: store.view.kind==='query' && store.view.id===sv.id, kfocus: store.focusPane==='side' && store.sideFocusId===sv.id }"
+           :class="{ active: store.view.kind==='query' && store.view.id===sv.id, kfocus: store.focusPane==='side' && store.sideFocusId===sv.id, moving: store.moveId===sv.id }"
            @click="store.openQueryView(sv)"
            @contextmenu.prevent="$emit('edit-query', sv)">
         <span class="glyph" :style="{color: glyphColor(sv)}">{{ sv.glyph }}</span>
@@ -76,7 +76,7 @@ window.TreeRow = {
   template: `
   <div class="tree-row">
     <div class="nav-item"
-         :class="{ active: store.view.kind==='project' && store.view.id===project.id, kfocus: store.focusPane==='side' && store.sideFocusId===project.id }"
+         :class="{ active: store.view.kind==='project' && store.view.id===project.id, kfocus: store.focusPane==='side' && store.sideFocusId===project.id, moving: store.moveId===project.id }"
          :style="{ paddingLeft: (12 + depth*14) + 'px' }"
          @click="store.openProjectView(project)"
          @contextmenu.prevent="$emit('edit', project)">

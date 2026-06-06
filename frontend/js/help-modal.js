@@ -31,6 +31,7 @@ window.HelpModal = {
         { k:'enter/space', d:'open the focused item · toggle a section header' },
         { k:'e',           d:'edit the focused view / project / label' },
         { k:'a  /  A',     d:'add sub-project (under focus) / top-level project' },
+        { k:'m',           d:'move mode — j/k reorder the view/project · esc to drop' },
         { k:'x',           d:'delete the focused view' },
         { k:'tab',         d:'collapse / expand the section' },
         { k:'esc',         d:'back to the task list' },

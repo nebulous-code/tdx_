@@ -277,6 +277,7 @@ const app = createApp({
     // ---- sidebar keyboard navigation ----
     enterSidebar(){
       this.store.navCollapsed=false;   // h/← always reveals the nav before entering
+      this.store.moveId=null;          // never enter the nav already in move mode
       const items=this.store.sideItems();
       if(!items.length) return;
       // start on the currently active view if we can find it, else first item
@@ -293,7 +294,7 @@ const app = createApp({
       this.store.sidebarOpen=true;        // reveal on mobile
       this.scrollSideIntoView();
     },
-    exitSidebar(){ this.store.focusPane='list'; this.store.sidebarOpen=false; },
+    exitSidebar(){ this.store.focusPane='list'; this.store.sidebarOpen=false; this.store.moveId=null; },
     // show/hide the whole sidebar nav column; if we hide it while focused there,
     // drop keyboard focus back to the task list
     toggleNav(){
@@ -345,6 +346,24 @@ const app = createApp({
       if(!items.length){ this.exitSidebar(); return; }
       let idx=items.findIndex(i=>i.id===this.store.sideFocusId);
       if(idx<0) idx=0;
+
+      // move mode: j/k reorder the held item; m/enter/esc drop it
+      if(this.store.moveId){
+        const moved=items.find(i=>i.id===this.store.moveId);
+        const reorder=(dir)=>{
+          if(!moved) return;
+          if(moved.kind==='query') this.store.moveView(moved.ref, dir);
+          else if(moved.kind==='project') this.store.moveProject(moved.ref, dir);
+          this.scrollSideIntoView();
+        };
+        switch(e.key){
+          case 'j': case 'ArrowDown': e.preventDefault(); reorder(1); break;
+          case 'k': case 'ArrowUp':   e.preventDefault(); reorder(-1); break;
+          case 'm': case 'Enter': case 'Escape': e.preventDefault(); this.store.moveId=null; this.store.toast('✓ order saved'); break;
+        }
+        return;
+      }
+
       switch(e.key){
         case 'j': case 'ArrowDown':
           e.preventDefault(); idx=Math.min(items.length-1, idx+1);
@@ -388,6 +407,15 @@ const app = createApp({
         }
         case 'A':     // add a top-level project
           e.preventDefault(); this.openProjectModal('new', null); break;
+        case 'm': {   // enter move mode on the focused view / project
+          e.preventDefault();
+          const it=items[idx];
+          if(it && (it.kind==='query' || it.kind==='project')){
+            this.store.sideFocusId=it.id; this.store.moveId=it.id;
+            this.store.toast('↕ move mode · j/k reorder · esc to drop');
+          }
+          break;
+        }
         case 'Tab': {  // collapse / expand the focused item's section
           e.preventDefault();
           const it=items[idx];

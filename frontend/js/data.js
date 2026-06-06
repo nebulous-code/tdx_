@@ -129,6 +129,7 @@
     navSections: { query:false, project:false, label:false },  // collapsed sidebar sections (Tab)
     focusPane: 'list',       // 'list' | 'side' | 'filter' — which window the keyboard drives
     sideFocusId: null,       // id of the keyboard-focused sidebar item
+    moveId: null,            // id of the sidebar item being reordered (m = move mode)
     toasts: [],
     currentUser: null,       // { id, username, email } once authenticated; null = logged out
   });
@@ -286,6 +287,22 @@
     items.push({ kind:'head', section:'label', id:'head_label' });
     if(!ns.label) store.sortedLabels().forEach(l => items.push({ kind:'label', id:l.id, ref:l }));
     return items;
+  };
+  // Reorder helpers (m = move mode). Array order persists through the snapshot
+  // round-trip (writeState re-inserts in order, readState returns insertion order).
+  store.moveView = (sv, dir) => {            // dir: -1 up, +1 down
+    const arr = store.savedQueries;
+    const i = arr.indexOf(sv), j = i + dir;
+    if(i<0 || j<0 || j>=arr.length) return;
+    arr.splice(i,1); arr.splice(j,0,sv);
+  };
+  store.moveProject = (p, dir) => {          // swap with the prev/next sibling (same parent)
+    const arr = store.projects;
+    const sibs = arr.filter(x=>x.parentId===p.parentId);
+    const target = sibs[sibs.indexOf(p) + dir];
+    if(!target) return;
+    const ia = arr.indexOf(p), ib = arr.indexOf(target);
+    const tmp = arr[ia]; arr[ia] = arr[ib]; arr[ib] = tmp;
   };
   store.openSideItem = (it) => {
     if(!it) return;
