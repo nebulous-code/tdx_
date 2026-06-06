@@ -59,7 +59,7 @@
     <footer class="statusbar">
       <span><span class="spark">●</span> READY</span>
       <span class="sep">│</span>
-      <span class="mut">{{ store.visibleRoots().length }} rows · sort:{{ store.sortBy }}</span>
+      <span class="mut">{{ store.visibleRoots().length }} rows</span>
       <div class="right">
         <span class="qbtn" @click="helpOpen=true" title="keyboard shortcuts & query syntax">? help</span>
         <span class="qbtn" @click="openPalette" title="command palette">⌘K</span>
@@ -202,7 +202,7 @@ const app = createApp({
         if(this.projectModal){ this.projectModal=null; return; }
         if(this.saveModal){ this.saveModal=null; return; }
         if(this.labelModal){ this.labelModal=null; return; }
-        if(this.store.detailOpen){ this.store.detailOpen=false; return; }
+        if(this.store.detailOpen){ const a=document.activeElement; if(a && a.blur) a.blur(); this.store.detailOpen=false; return; }
       }
       // '?' opens the keyboard/syntax reference (shift+/ — handle before the bare
       // '/' query-focus shortcut below).
@@ -267,6 +267,10 @@ const app = createApp({
           e.preventDefault(); this.newTask(); break;
         case '/':
           e.preventDefault(); this.$refs.qbar && this.$refs.qbar.focus(); break;
+        case 's':
+          e.preventDefault(); this.$refs.list && this.$refs.list.cycleSort(); break;
+        case '^':
+          e.preventDefault(); this.$refs.list && this.$refs.list.toggleSortDir(); break;
         case 'c':
           this.store.showCompleted=!this.store.showCompleted; break;
       }

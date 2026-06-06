@@ -14,6 +14,7 @@ window.HelpModal = {
         { k:'x  /  space',   d:'toggle done (spawns next occurrence if recurring)' },
         { k:'e  /  enter',   d:'open the task detail' },
         { k:'i',             d:'new task (focuses the quick-add box)' },
+        { k:'s  /  ^',       d:'cycle sort field / flip direction (^ asc · v desc)' },
         { k:'c',             d:'show / hide completed tasks' },
         { k:'/',             d:'focus the query bar' },
         { k:'f',             d:'focus the filter builder' },
@@ -49,6 +50,7 @@ window.HelpModal = {
       ]},
       { name:'new task', code:'cyan', items:[
         { k:'#label',     d:'add or create a label on the task (forced lowercase)' },
+        { k:'!3',         d:'set priority 1–5 (very low → very high); !0 clears · other values stay text' },
         { k:'enter',      d:'add the task' },
         { k:'esc',        d:'leave the box, back to the list' },
         { k:'in a view',  d:'new tasks inherit the view’s filters: status · due · labels · project' },

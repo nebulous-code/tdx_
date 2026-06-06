@@ -336,6 +336,11 @@ input[type="number"]::-webkit-inner-spin-button { opacity: .6; }
 .tmeta .m.overdue { color: var(--red); }
 .tmeta .m.today { color: var(--amber); text-shadow: var(--glow-soft); }
 .tmeta .m.rec { color: var(--cyan); }
+/* priority badge — fixed, theme-independent colors (like the project icon palette) */
+.tmeta .m.prio { color: #8a93a6; }          /* very low / low — neutral slate */
+.tmeta .m.prio.prio3 { color: #ffd23f; }    /* medium — yellow */
+.tmeta .m.prio.prio4 { color: #ff9f43; }    /* high — orange */
+.tmeta .m.prio.prio5 { color: #ff5c5c; }    /* very high — red */
 .tag {
   color: var(--amber-dim); border: 1px solid var(--line-2);
   border-radius: 9px; padding: 0 6px; font-size: 10px; white-space: nowrap;

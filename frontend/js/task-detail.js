@@ -11,7 +11,7 @@ window.TaskDetail = {
     </div>
 
     <div v-if="task" class="detail-body">
-      <textarea ref="title" class="d-title" v-model="task.title" rows="1" @input="autosize" @keydown.enter.prevent="save"></textarea>
+      <textarea ref="title" class="d-title" v-model="task.title" rows="1" @input="autosize" @keydown.enter.prevent="save" @keydown.esc.stop.prevent="escField('title')"></textarea>
 
       <!-- project + status -->
       <div class="row2">
@@ -22,10 +22,20 @@ window.TaskDetail = {
           </select>
         </div>
         <div class="field">
-          <label>status</label>
-          <button class="btn" style="width:100%;justify-content:center;" :class="{primary: task.done}" @click="store.toggleDone(task)">
-            {{ task.done ? '✓ done' : '○ open' }}
-          </button>
+          <label>status · priority</label>
+          <div style="display:flex;gap:6px;">
+            <button class="btn" style="flex:1;justify-content:center;" :class="{primary: task.done}" @click="store.toggleDone(task)">
+              {{ task.done ? '✓ done' : '○ open' }}
+            </button>
+            <select class="input" style="flex:1;" v-model.number="task.priority">
+              <option :value="5">5 v.high</option>
+              <option :value="4">4 high</option>
+              <option :value="3">3 med</option>
+              <option :value="2">2 low</option>
+              <option :value="1">1 v.low</option>
+              <option :value="0">0 none</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -62,7 +72,7 @@ window.TaskDetail = {
       <!-- notes -->
       <div class="field">
         <label>notes</label>
-        <textarea class="d-notes" v-model="task.notes" placeholder="# markdown-ish notes…"></textarea>
+        <textarea ref="notes" class="d-notes" v-model="task.notes" placeholder="# markdown-ish notes…" @keydown.esc.stop.prevent="escField('notes')"></textarea>
       </div>
 
       <!-- subtasks -->
@@ -101,14 +111,29 @@ window.TaskDetail = {
     }
   },
   watch: {
-    'store.selectedTaskId'(){ this.$nextTick(this.autosize); }
+    'store.selectedTaskId'(){ this.$nextTick(()=>{ this.autosize(); this.snapshotBaseline(); }); },
+    'store.detailOpen'(v){ if(v) this.$nextTick(this.snapshotBaseline); }
   },
   methods: {
     close(){ this.store.detailOpen=false; },
+    // signature of the editable fields, to detect unsaved edits since the drawer opened
+    taskSig(){ const t=this.task; return t ? JSON.stringify([t.title,t.notes,t.due,t.reminder,t.projectId,t.recurrence,t.priority,(t.labels||[]).slice().sort()]) : ''; },
+    snapshotBaseline(){ this._baseline = this.taskSig(); },
+    isDirty(){ return !!this.task && this.taskSig() !== this._baseline; },
+    // Escape out of a detail text field: release the cursor, and if there are
+    // unsaved edits confirm before closing (No keeps you in the field).
+    async escField(refName){
+      const el=this.$refs[refName]; if(el) el.blur();
+      if(!this.isDirty()){ this.store.detailOpen=false; return; }
+      const ok = await this.store.askConfirm('Save changes and close?  ·  No = keep editing');
+      if(ok){ this.save(); }
+      else { this.$nextTick(()=>{ const e2=this.$refs[refName]; if(e2) e2.focus(); }); }
+    },
     save(){
       if(this.$refs.title) this.$refs.title.blur();
       if(this.store.saveNow) this.store.saveNow();   // flush the debounced write now
       this.store.toast('✓ saved');
+      this.snapshotBaseline();
       this.store.detailOpen=false;
     },
     indent(p){ return p.parentId ? '  ↳ ' : ''; },
@@ -127,7 +152,7 @@ window.TaskDetail = {
     },
     duplicate(){
       const t=this.task;
-      const copy=this.store.addTask({ title:t.title+' (copy)', projectId:t.projectId, due:t.due, reminder:t.reminder, labels:[...t.labels], rec:t.recurrence, notes:t.notes });
+      const copy=this.store.addTask({ title:t.title+' (copy)', projectId:t.projectId, due:t.due, reminder:t.reminder, labels:[...t.labels], rec:t.recurrence, notes:t.notes, priority:t.priority });
       this.store.selectedTaskId=copy.id;
       this.store.toast('⧉ duplicated');
     },

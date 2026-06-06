@@ -98,6 +98,7 @@
       labels: o.labels || [],
       recurrence: o.rec || null,
       notes: o.notes || '',
+      priority: o.priority || 0,
       collapsed: false,
       createdAt: T(todayD),
       completedAt: o.done ? T(todayD) : null,
@@ -122,7 +123,9 @@
     selectedTaskId: null,
     detailOpen: false,
     showCompleted: false,
-    sortBy: 'due',           // due | created | title | project
+    sortField: 'due',        // due | created | title | project | priority | tag
+    // per-field direction, remembered for the session (not persisted). 'asc' = ^, 'desc' = v.
+    sortDirs: { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', tag:'asc' },
     builderOpen: false,
     sidebarOpen: false,      // mobile slide-in
     navCollapsed: false,     // desktop: hide the sidebar column (toggled with n)
@@ -138,6 +141,8 @@
   store.ctx = () => ({ projects: store.projects, tasks: store.tasks, labels: store.labels });
   store.projectById = (id) => store.projects.find(p=>p.id===id);
   store.labelById = (id) => store.labels.find(l=>l.id===id);
+  // priority 0 (none) … 5 (very high)
+  store.priorityLabel = (p) => ['','very low','low','medium','high','very high'][p] || '';
   // labels rendered everywhere (nav, filter, task detail) sorted alphabetically by
   // slug (lowercase, no spaces); storage order is left untouched.
   store.sortedLabels = () => [...store.labels].sort((a,b)=> Q.slug(a.name).localeCompare(Q.slug(b.name)));
@@ -171,13 +176,20 @@
       if(!seen.has(r.id)){ seen.add(r.id); roots.push(r); }
     }
     let list = store.showCompleted ? roots : roots.filter(r=>!r.done || matchedIds.has(r.id));
-    const by=store.sortBy;
-    list = [...list].sort((a,b)=>{
-      if(by==='due'){ const av=a.due||'9999', bv=b.due||'9999'; return av<bv?-1:av>bv?1:0; }
-      if(by==='title') return a.title.localeCompare(b.title);
+    const by = store.sortField;
+    const dir = (store.sortDirs && store.sortDirs[by]) === 'desc' ? -1 : 1;  // ^ = asc, v = desc
+    // ascending comparator per field; direction flips it
+    const tagKey = t => (t.labels||[]).map(id=>{ const l=store.labelById(id); return l?l.name:''; }).filter(Boolean).sort().join('');
+    const cmp = (a,b) => {
+      if(by==='due')      return (a.due||'9999').localeCompare(b.due||'9999');
+      if(by==='created')  return (a.createdAt||'').localeCompare(b.createdAt||'');
+      if(by==='title')    return a.title.localeCompare(b.title);
       if(by==='project'){ const ap=(store.projectById(a.projectId)||{}).name||''; const bp=(store.projectById(b.projectId)||{}).name||''; return ap.localeCompare(bp); }
-      return a.createdAt<b.createdAt?1:-1;
-    });
+      if(by==='priority') return (a.priority||0)-(b.priority||0);
+      if(by==='tag')      return tagKey(a).localeCompare(tagKey(b));
+      return 0;
+    };
+    list = [...list].sort((a,b)=> dir * cmp(a,b));
     return list;
   };
 
@@ -333,7 +345,7 @@
         const clone = mk(uid('t'), t.projectId, t.parentId, t.title, {
           due: Rec.ymd(nxt),
           reminder: shiftReminder(t, nxt),
-          labels: [...t.labels], rec: t.recurrence, notes: t.notes,
+          labels: [...t.labels], rec: t.recurrence, notes: t.notes, priority: t.priority,
         });
         store.tasks.push(clone);
         store.toast('↻ next: '+Rec.ymd(nxt));

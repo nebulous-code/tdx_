@@ -1,4 +1,14 @@
 /* tasklist.js — task rows with nested subtasks */
+// sort fields cycled by the list-head button / the `s` shortcut; `^` toggles the
+// direction (^ = ascending, v = descending), remembered per field for the session.
+const SORTS = [
+  { key:'due',      label:'due' },
+  { key:'created',  label:'created' },
+  { key:'title',    label:'title' },
+  { key:'project',  label:'project' },
+  { key:'priority', label:'priority' },
+  { key:'tag',      label:'tag' },          // group by concatenated label names
+];
 window.TaskRow = {
   name: 'task-row',
   props: ['store','task','depth'],
@@ -16,6 +26,7 @@ window.TaskRow = {
           <span v-if="depth===0 && proj" class="m tproj">
             <span :style="{color: proj.color}">{{ proj.glyph }}</span>{{ proj.name }}
           </span>
+          <span v-if="task.priority" class="m prio" :class="'prio'+task.priority" :title="'priority: '+prioName">⚑ {{ prioName }}</span>
           <span v-if="task.due" class="m" :class="dueClass">◷ {{ dueLabel }}</span>
           <span v-if="task.reminder" class="m">◔ rem {{ relLabel(task.reminder) }}</span>
           <span v-if="task.recurrence" class="m rec" :title="recFull">↻ {{ recShort }}</span>
@@ -33,6 +44,7 @@ window.TaskRow = {
     subs(){ return this.store.subtasks(this.task.id); },
     doneSubs(){ return this.subs.filter(s=>s.done).length; },
     proj(){ return this.store.projectById(this.task.projectId); },
+    prioName(){ return this.store.priorityLabel(this.task.priority); },
     recShort(){ return Rec.compact(this.task.recurrence); },
     recFull(){ return Rec.summary(this.task.recurrence); },
     dueDelta(){ return this.task.due ? Rec.daysBetween(Rec.startOfDay(new Date()), Rec.parseYMD(this.task.due)) : null; },
@@ -77,7 +89,8 @@ window.TaskList = {
     <div class="list-head">
       <span class="grow">{{ rootTasks.length }} task{{ rootTasks.length===1?'':'s' }}<span v-if="doneCount"> · {{ doneCount }} done</span></span>
       <span class="qbtn" :class="{on: store.showCompleted}" @click="store.showCompleted=!store.showCompleted">{{ store.showCompleted ? '☑' : '☐' }} completed</span>
-      <span class="qbtn" @click="cycleSort">sort: {{ store.sortBy }}</span>
+      <span class="qbtn" @click="cycleSort" title="cycle sort field (s)"><u>s</u>ort: {{ sortFieldLabel }}</span>
+      <span class="qbtn" @click="toggleSortDir" title="toggle direction (^)">{{ sortDirSymbol }}</span>
     </div>
 
     <div class="list-wrap" ref="scroll">
@@ -113,42 +126,29 @@ window.TaskList = {
     rootTasks(){ return this.store.visibleRoots(); },
     doneCount(){ return this.matched.filter(t=>t.done && !t.parentId).length; },
     // current view filters on params we can't apply to a new task (flags / free text)
-    warn(){ return this.store.viewWarn(); }
+    warn(){ return this.store.viewWarn(); },
+    sortFieldLabel(){ const o=SORTS.find(o=>o.key===this.store.sortField); return o ? o.label : this.store.sortField; },
+    sortDirSymbol(){ return this.store.sortDirs[this.store.sortField]==='desc' ? 'v' : '^'; }
   },
   methods: {
-    sortList(list){
-      const by = this.store.sortBy;
-      const arr = [...list];
-      arr.sort((a,b)=>{
-        if(by==='due'){
-          const av=a.due||'9999', bv=b.due||'9999';
-          return av<bv?-1:av>bv?1:0;
-        }
-        if(by==='title') return a.title.localeCompare(b.title);
-        if(by==='project'){
-          const ap=(this.store.projectById(a.projectId)||{}).name||'';
-          const bp=(this.store.projectById(b.projectId)||{}).name||'';
-          return ap.localeCompare(bp);
-        }
-        return a.createdAt<b.createdAt?1:-1; // created desc
-      });
-      return arr;
-    },
     cycleSort(){
-      const order=['due','created','title','project'];
-      const i=order.indexOf(this.store.sortBy);
-      this.store.sortBy = order[(i+1)%order.length];
+      const i=SORTS.findIndex(o=>o.key===this.store.sortField);
+      this.store.sortField = SORTS[(i+1)%SORTS.length].key;
+    },
+    toggleSortDir(){
+      const f=this.store.sortField;
+      this.store.sortDirs[f] = this.store.sortDirs[f]==='desc' ? 'asc' : 'desc';
     },
     commitAdd(){
       const text = this.draft.trim();
       if(!text) return;
-      const { title, labels } = this.parseQuickAdd(text);
+      const { title, labels, priority } = this.parseQuickAdd(text);
       // inherit the current view's filters (status/due/labels/project) so the new
       // task stays visible; merge any #tags typed in the box with the view's labels
       const def = this.store.viewDefaults();
       const merged = [...new Set([...(def.labels||[]), ...labels])];
       const t = this.store.addTask({
-        title, labels: merged,
+        title, labels: merged, priority,
         projectId: def.projectId, due: def.due, done: def.done,
       });
       this.draft = '';
@@ -157,8 +157,14 @@ window.TaskList = {
     },
     parseQuickAdd(text){
       const labels=[];
-      const title = text.replace(/#(\S+)/g, (_,n)=>{ const l=this.store.addLabel(n); labels.push(l.id); return ''; }).replace(/\s+/g,' ').trim();
-      return { title: title||text, labels };
+      let priority=0;
+      let t = text;
+      // !N priority — single digit 0-5 not followed by another digit; otherwise left as text
+      t = t.replace(/(^|\s)!([0-5])(?!\d)/, (_,pre,n)=>{ priority=+n; return pre; });
+      // #label
+      t = t.replace(/#(\S+)/g, (_,n)=>{ const l=this.store.addLabel(n); labels.push(l.id); return ''; });
+      const title = t.replace(/\s+/g,' ').trim();
+      return { title: title||text, labels, priority };
     },
     focusAdd(){ this.$refs.qa && this.$refs.qa.focus(); },
     // Esc out of the quick-add box: clear it, blur, and drop the keyboard into

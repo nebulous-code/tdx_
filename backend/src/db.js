@@ -61,17 +61,17 @@ function runMigrations() {
 function seedUserDefaults(userId) {
   const seed = db.transaction(() => {
     db.prepare(
-      'INSERT INTO projects (user_id, id, parent_id, name, color, glyph, collapsed) VALUES (?, ?, ?, ?, ?, ?, 0)'
+      'INSERT INTO projects (user_id, id, parent_id, name, color, glyph, collapsed, position) VALUES (?, ?, ?, ?, ?, ?, 0, 0)'
     ).run(userId, 'p_inbox', null, 'inbox', '#ffb000', '⌂');
 
     const sv = db.prepare(
-      'INSERT INTO saved_queries (user_id, id, name, glyph, query, system) VALUES (?, ?, ?, ?, ?, 1)'
+      'INSERT INTO saved_queries (user_id, id, name, glyph, query, system, position) VALUES (?, ?, ?, ?, ?, 1, ?)'
     );
-    sv.run(userId, 'sv_today',   'Today',     '☉', 'status:open due:today');
-    sv.run(userId, 'sv_overdue', 'Overdue',   '!', 'status:overdue');
-    sv.run(userId, 'sv_week',    'This week', '☰', 'status:open due:week');
-    sv.run(userId, 'sv_rec',     'Recurring', '↻', 'recurring:true status:open');
-    sv.run(userId, 'sv_nodate',  'No date',   '∅', 'due:none status:open');
+    sv.run(userId, 'sv_today',   'Today',     '☉', 'status:open due:today',      0);
+    sv.run(userId, 'sv_overdue', 'Overdue',   '!', 'status:overdue',             1);
+    sv.run(userId, 'sv_week',    'This week', '☰', 'status:open due:week',       2);
+    sv.run(userId, 'sv_rec',     'Recurring', '↻', 'recurring:true status:open', 3);
+    sv.run(userId, 'sv_nodate',  'No date',   '∅', 'due:none status:open',       4);
   });
   seed();
 }
