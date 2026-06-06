@@ -88,7 +88,7 @@ window.TaskList = {
 
     <div class="list-head">
       <span class="grow">{{ rootTasks.length }} task{{ rootTasks.length===1?'':'s' }}<span v-if="doneCount"> · {{ doneCount }} done</span></span>
-      <span class="qbtn" :class="{on: store.showCompleted}" @click="store.showCompleted=!store.showCompleted">{{ store.showCompleted ? '☑' : '☐' }} completed</span>
+      <span class="qbtn" :class="{on: store.showCompleted}" @click="store.showCompleted=!store.showCompleted" title="show / hide completed (c)">{{ store.showCompleted ? '☑' : '☐' }} <u>c</u>ompleted</span>
       <span class="qbtn" @click="cycleSort" title="cycle sort field (s)"><u>s</u>ort: {{ sortFieldLabel }}</span>
       <span class="qbtn" @click="toggleSortDir" title="toggle direction (^)">{{ sortDirSymbol }}</span>
     </div>
