@@ -61,6 +61,8 @@ window.HelpModal = {
         { k:'status:…',         d:'open · done · overdue · today' },
         { k:'due:…',            d:'today · tomorrow · week · month · overdue · set · none' },
         { k:'due:<7d  due:=0d', d:'compare days from today (< > <= >= =, e.g. <=3d, >0d)' },
+        { k:'due:su  due:mwf',  d:'next selected weekday(s); carries overdue until the window passes' },
+        { k:'  note',           d:'due:w = Wednesday, but due:week = next 7 days' },
         { k:'reminder:…',       d:'today · overdue · set · none (also <Nd comparisons)' },
         { k:'recurring:true',   d:'has a recurrence rule (or false)' },
         { k:'is:…',             d:'task · subtask · recurring · open · done' },

@@ -80,6 +80,24 @@
     return false;
   }
 
+  // ---- weekday window (due:su, due:mwf, …) ----------------------------------
+  // letter -> JS getDay() (0=Sun … 6=Sat)
+  const DOW = { u:0, m:1, t:2, w:3, r:4, f:5, s:6 };
+  function weekdaySet(v){ const s=new Set(); for(const c of String(v||'')){ if(c in DOW) s.add(DOW[c]); } return s; }
+  // The active cycle's dates for the selected weekdays. weekStart: 0=Sun..6=Sat (default Mon).
+  // Window = this week's selected days, rolling to next week once we're past the last one.
+  function dueWindow(daySet, weekStart){
+    weekStart = (weekStart == null) ? 1 : weekStart;
+    if(!daySet.size) return [];
+    const now = today();                                   // Rec.startOfDay(new Date())
+    const back = (now.getDay() - weekStart + 7) % 7;       // days since the week start
+    const start = Rec.addDays(now, -back);
+    let dates = [...daySet].map(d => Rec.addDays(start, (d - weekStart + 7) % 7));
+    const last = dates.reduce((a,b) => a > b ? a : b);
+    if(now > last) dates = dates.map(d => Rec.addDays(d, 7));  // past the window -> next week
+    return dates.map(Rec.ymd);
+  }
+
   function evalTerm(task, t, ctx){
     const labelsOf = (task.labels||[]);
     let res = false;
@@ -118,6 +136,7 @@
         else if(t.value==='overdue') res = d!==null && d<0;
         else if(t.value==='week') res = d!==null && d>=0 && d<=7;
         else if(t.value==='month') res = d!==null && d>=0 && d<=31;
+        else if(/^[mtwrfsu]+$/.test(t.value)) res = !!task.due && dueWindow(weekdaySet(t.value)).includes(task.due.slice(0,10));
         else res = cmpDate(d, t.value);
         break;
       }

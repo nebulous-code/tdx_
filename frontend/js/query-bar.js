@@ -26,6 +26,9 @@ window.QueryBar = {
         <div class="chips">
           <span v-for="dd in dueOpts" :key="dd.v" class="chip"
                 :class="{on: has('due',dd.v), kfocus: isFocused('due',dd.v)}" @click="toggleExclusive('due',dd.v)">{{ dd.t }}</span>
+          <span class="chip-sep"></span>
+          <span v-for="d in dueDays" :key="d.l" class="chip chip-day"
+                :class="{on: hasDueDay(d.l), kfocus: isFocused('due',d.l)}" @click="toggleDueWeekday(d.l)">{{ d.t }}</span>
         </div>
       </div>
       <div class="bgroup">
@@ -62,6 +65,10 @@ window.QueryBar = {
         {v:'today',t:'today'},{v:'tomorrow',t:'tomorrow'},{v:'overdue',t:'overdue'},
         {v:'week',t:'≤7d'},{v:'<3d',t:'<3d'},{v:'none',t:'no date'},{v:'set',t:'has date'}
       ],
+      // weekday window toggles (build one due:<letters> value, e.g. due:su)
+      dueDays:[
+        {l:'m',t:'M'},{l:'t',t:'T'},{l:'w',t:'W'},{l:'r',t:'R'},{l:'f',t:'F'},{l:'s',t:'S'},{l:'u',t:'U'}
+      ],
       focusGroup:null,   // keyboard-focused builder group key
       focusValue:null,   // keyboard-focused chip value within that group
     };
@@ -73,7 +80,8 @@ window.QueryBar = {
     navGroups(){
       return [
         { key:'status',  chips:['open','done','overdue','today'].map(v=>({field:'status',value:v,exclusive:true})) },
-        { key:'due',     chips:this.dueOpts.map(o=>({field:'due',value:o.v,exclusive:true})) },
+        { key:'due',     chips:[ ...this.dueOpts.map(o=>({field:'due',value:o.v,exclusive:true})),
+                                 ...this.dueDays.map(d=>({field:'due',value:d.l,dueDay:true})) ] },
         { key:'label',   chips:this.store.sortedLabels().map(l=>({field:'label',value:l.name,exclusive:false})) },
         { key:'project', chips:this.store.projects.map(p=>({field:'project',value:p.name,exclusive:true})) },
         { key:'flags',   chips:[
@@ -126,6 +134,19 @@ window.QueryBar = {
       if(!on) terms.push({field,value,neg:false});
       this.setTerms(terms);
     },
+    // ---- weekday window (due:<letters>) ----
+    dueValue(){ const t=this.terms.find(t=>t.field==='due' && !t.neg); return t ? t.value : ''; },
+    hasDueDay(l){ const v=this.dueValue(); return /^[mtwrfsu]+$/.test(v) && v.includes(l); },
+    toggleDueWeekday(l){
+      const ORDER='mtwrfsu';
+      const v=this.dueValue();
+      const set=new Set(/^[mtwrfsu]+$/.test(v) ? v.split('') : []);  // start fresh if due was a keyword/comparison
+      set.has(l) ? set.delete(l) : set.add(l);
+      const val=ORDER.split('').filter(c=>set.has(c)).join('');
+      const terms=this.terms.filter(t=>t.field!=='due');             // due is single-value
+      if(val) terms.push({field:'due', value:val, neg:false});
+      this.setTerms(terms);
+    },
     clearQuery(){ this.queryString=''; },
     save(){ this.$emit('save-query', this.queryString); },
     run(){ this.$refs.q && this.$refs.q.blur(); },
@@ -160,7 +181,9 @@ window.QueryBar = {
     },
     ftoggleFocused(){
       const c=this.currentChip(); if(!c) return;
-      if(c.exclusive) this.toggleExclusive(c.field,c.value); else this.toggle(c.field,c.value);
+      if(c.dueDay) this.toggleDueWeekday(c.value);
+      else if(c.exclusive) this.toggleExclusive(c.field,c.value);
+      else this.toggle(c.field,c.value);
     },
     scrollChipIntoView(){
       this.$nextTick(()=>{ const el=document.querySelector('.builder .chip.kfocus'); if(el) el.scrollIntoView({block:'nearest',inline:'nearest'}); });

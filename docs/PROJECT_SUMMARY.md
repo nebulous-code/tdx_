@@ -12,9 +12,12 @@ Features I think are genuinely unique:
 - I tied the ^ key to sort ascending/descending.
 - Filter call outs in the top (or wherever I put it)
 - I think my themes are pretty cool
+- The ability to filter to a certain set of days of week for weekend filters
 
 Things I wrestled with
 - Getting AI to not give me an escape nav from the and move me right
 
 Things I wish I introduced earlier:
 - better rules about how to handle nav in a window.
+
+Honestly it's been really fun watching this project evolve as I need it to. I need something like priority on a task and it gets added and then I use it. 

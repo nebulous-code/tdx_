@@ -122,12 +122,9 @@ until the window passes` and a note that `due:w`=Wednesday vs `due:week`=next 7 
 - **Timezone:** local `startOfDay`, consistent with the rest of the date logic.
 - **Sorting:** the `due` sort still orders tasks within the window naturally.
 
-## Still to confirm
-1. **Future-first search change** is global to task-creation due-resolution. I'm confident
-   it's invisible for existing filters (analysis above), but flagging since it touches shared
-   code — OK to proceed?
-2. **Week start:** default Monday now; the configurable setting (likely a per-user pref like
-   theme — a `week_start` column / account-screen control) is **not** built yet, just
-   architected. Confirm that's the right deferral.
-3. **Builder chips:** I'll build the 7 toggles in the due group as described; you wanted to see
-   them before judging fit — expect a round of tweaks there.
+## Resolved
+1. **Future-first task-creation search** — approved; lives in `viewDefaults` (regression-free).
+2. **Week start** — default Monday now; `weekStart` is a parameter so a configurable per-user
+   setting drops in later. That setting is tracked separately as **t_351** (out of scope here).
+3. **Builder chips** — 7 weekday toggles built into the due group; expect a visual tweak pass
+   once reviewed in-app.

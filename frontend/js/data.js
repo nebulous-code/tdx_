@@ -243,8 +243,12 @@
     const wantsNoDue = terms.some(t => t.field==='due' && t.value==='none' && !t.neg);
     if(hasDateConstraint && !wantsNoDue){
       const base = Rec.startOfDay(new Date());
+      // future-first: closest date that satisfies the due/status terms, preferring
+      // today/upcoming over past (so a due:<weekdays> view lands a new task on the
+      // next selected weekday). Regression-free for the other due filters.
       const offsets = [0];
-      for(let i=1; i<=400; i++){ offsets.push(-i); offsets.push(i); }
+      for(let i=1; i<=400; i++){ offsets.push(i); }
+      for(let i=1; i<=400; i++){ offsets.push(-i); }
       for(const delta of offsets){
         const cand = { due: Rec.ymd(Rec.addDays(base, delta)), done: !!out.done,
           parentId:null, recurrence:null, labels:[], title:'', notes:'' };
