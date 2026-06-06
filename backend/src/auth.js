@@ -55,7 +55,7 @@ function resolveSession(rawToken) {
   }
   db.prepare('UPDATE sessions SET expires_at = ?, last_seen = ? WHERE id = ?')
     .run(new Date(now.getTime() + SESSION_TTL_MS).toISOString(), now.toISOString(), sid);
-  return db.prepare('SELECT id, username, email FROM users WHERE id = ?').get(sess.user_id) || null;
+  return db.prepare('SELECT id, username, email, theme FROM users WHERE id = ?').get(sess.user_id) || null;
 }
 
 const revokeSession = (rawToken) =>

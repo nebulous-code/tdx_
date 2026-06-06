@@ -1,0 +1,58 @@
+/* themes.css — preset color palettes. Each block re-declares the token set the
+   whole app is built on, so setting data-theme="<key>" on <html> reskins the UI
+   with no markup changes. No attribute (or "amber") = the default amber phosphor.
+   :root[data-theme] wins over the plain :root defaults in styles.css. */
+
+/* amber — P3 amber phosphor (the default; listed so it can be re-selected) */
+:root[data-theme="amber"] {
+  --bg:#0b0a07; --bg-1:#100e0a; --bg-2:#16130d; --bg-3:#1e1a11; --line:#2a2414; --line-2:#3a3119;
+  --amber:#ffb000; --amber-hi:#ffd166; --amber-dim:#b9892f; --amber-mut:#7c5f24; --amber-faint:#4a3a18;
+  --glow:0 0 6px rgba(255,176,0,.35); --glow-soft:0 0 4px rgba(255,176,0,.22); --glow-strong:0 0 10px rgba(255,176,0,.55);
+  --green:#46d369; --red:#ff5c5c; --cyan:#3fd7d7;
+  --on-accent:#1a1300; --sel-bg:rgba(255,176,0,.28);
+}
+
+/* matrix — neon terminal green on a cool green-black */
+:root[data-theme="matrix"] {
+  --bg:#060807; --bg-1:#0a0e0b; --bg-2:#0f150f; --bg-3:#16201a; --line:#1c2a1f; --line-2:#294532;
+  --amber:#22ff66; --amber-hi:#9dffbe; --amber-dim:#1cbd4d; --amber-mut:#147d36; --amber-faint:#0c4a22;
+  --glow:0 0 6px rgba(34,255,102,.35); --glow-soft:0 0 4px rgba(34,255,102,.22); --glow-strong:0 0 10px rgba(34,255,102,.55);
+  --green:#8bff5a; --red:#ff5c6e; --cyan:#3fd7d7;
+  --on-accent:#022007; --sel-bg:rgba(34,255,102,.26);
+}
+
+/* ice — cyan VFD on a cool blue-black */
+:root[data-theme="ice"] {
+  --bg:#06090b; --bg-1:#0a1014; --bg-2:#0f181d; --bg-3:#162228; --line:#1d2e36; --line-2:#2a4450;
+  --amber:#3fe0e0; --amber-hi:#9ff5f5; --amber-dim:#2aa6a6; --amber-mut:#1d7373; --amber-faint:#114040;
+  --glow:0 0 6px rgba(63,224,224,.35); --glow-soft:0 0 4px rgba(63,224,224,.22); --glow-strong:0 0 10px rgba(63,224,224,.55);
+  --green:#46d369; --red:#ff6b6b; --cyan:#7fb8ff;
+  --on-accent:#022024; --sel-bg:rgba(63,224,224,.24);
+}
+
+/* paper — white phosphor on a neutral near-black */
+:root[data-theme="paper"] {
+  --bg:#0a0a0b; --bg-1:#0f0f11; --bg-2:#16161a; --bg-3:#1e1e22; --line:#26262b; --line-2:#37373d;
+  --amber:#e9e7df; --amber-hi:#ffffff; --amber-dim:#b5b2a8; --amber-mut:#807d74; --amber-faint:#4a4843;
+  --glow:0 0 6px rgba(233,231,223,.22); --glow-soft:0 0 4px rgba(233,231,223,.14); --glow-strong:0 0 10px rgba(233,231,223,.35);
+  --green:#46d369; --red:#ff5c5c; --cyan:#3fd7d7;
+  --on-accent:#0a0a0b; --sel-bg:rgba(233,231,223,.22);
+}
+
+/* plasma — gas-plasma ember on a warm black */
+:root[data-theme="plasma"] {
+  --bg:#0b0807; --bg-1:#110d0b; --bg-2:#171210; --bg-3:#201916; --line:#2c211c; --line-2:#3d2e26;
+  --amber:#ff6a4d; --amber-hi:#ff9b86; --amber-dim:#c24a35; --amber-mut:#8a3526; --amber-faint:#4f1f16;
+  --glow:0 0 6px rgba(255,106,77,.35); --glow-soft:0 0 4px rgba(255,106,77,.22); --glow-strong:0 0 10px rgba(255,106,77,.55);
+  --green:#7bd88f; --red:#ff2d6f; --cyan:#3fd7d7;
+  --on-accent:#200a06; --sel-bg:rgba(255,106,77,.24);
+}
+
+/* magenta — synthwave magenta on a cool purple-black */
+:root[data-theme="magenta"] {
+  --bg:#09070b; --bg-1:#0e0b12; --bg-2:#141019; --bg-3:#1c1722; --line:#2a2036; --line-2:#3d2e4f;
+  --amber:#ff5fb4; --amber-hi:#ff9fd4; --amber-dim:#c2437f; --amber-mut:#8a2f59; --amber-faint:#4f1b33;
+  --glow:0 0 6px rgba(255,95,180,.35); --glow-soft:0 0 4px rgba(255,95,180,.22); --glow-strong:0 0 10px rgba(255,95,180,.55);
+  --green:#5ce0a0; --red:#ff4d6d; --cyan:#5bd0ff;
+  --on-accent:#200615; --sel-bg:rgba(255,95,180,.24);
+}

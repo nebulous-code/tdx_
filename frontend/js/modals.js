@@ -76,6 +76,43 @@ window.ProjectModal = {
   }
 };
 
+window.LabelModal = {
+  props: ['store','model'],   // model: {label}
+  emits: ['close'],
+  template: `
+  <div class="overlay" @click.self="$emit('close')">
+    <div class="modal" style="max-width:380px;">
+      <div class="modal-head">edit label</div>
+      <div class="modal-body">
+        <div class="field">
+          <label>name</label>
+          <input ref="name" class="input" v-model="name" placeholder="label-name" spellcheck="false" autocapitalize="off" @keydown.enter="save" />
+        </div>
+        <div class="field"><span class="mut" style="font-size:11px;">renaming updates this label on every task that uses it</span></div>
+        <div class="acct-error" v-if="error">{{ error }}</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" @click="$emit('close')">cancel</button>
+        <button class="btn primary" @click="save">save</button>
+      </div>
+    </div>
+  </div>
+  `,
+  data(){ return { name: this.model.label.name, error:'' }; },
+  mounted(){ this.$nextTick(()=>this.$refs.name&&this.$refs.name.focus()); },
+  methods: {
+    save(){
+      const nm = this.name.replace(/^#/,'').trim().toLowerCase();
+      if(!nm){ this.error='enter a name'; return; }
+      const clash = this.store.labels.find(l=>l.id!==this.model.label.id && Q.slug(l.name)===Q.slug(nm));
+      if(clash){ this.error='a label "'+clash.name+'" already exists'; return; }
+      this.model.label.name = nm;   // referenced by id, so this updates every task
+      this.store.toast('✓ label renamed');
+      this.$emit('close');
+    }
+  }
+};
+
 window.SaveQueryModal = {
   props: ['store','model'],   // model: {mode:'new'|'edit', query, view}
   emits: ['close'],
@@ -111,7 +148,7 @@ window.SaveQueryModal = {
         </div>
       </div>
       <div class="modal-foot">
-        <button v-if="model.mode==='edit' && !(model.view && model.view.system)" class="btn danger" style="margin-right:auto;" @click="remove">delete</button>
+        <button v-if="model.mode==='edit'" class="btn danger" style="margin-right:auto;" @click="remove">delete</button>
         <button class="btn" @click="$emit('close')">cancel</button>
         <button class="btn primary" @click="save">{{ model.mode==='edit' ? 'save' : '★ save view' }}</button>
       </div>
@@ -146,7 +183,7 @@ window.SaveQueryModal = {
       this.$emit('close');
     },
     remove(){
-      const v=this.model.view; if(!v || v.system) return;
+      const v=this.model.view; if(!v) return;
       if(confirm('Delete saved view "'+v.name+'"?')){
         this.store.deleteQuery(v);
         if(this.store.view.kind==='query' && this.store.view.id===v.id)

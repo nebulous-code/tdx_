@@ -21,7 +21,8 @@ const COOKIE_OPTS = {
   maxAge: Math.floor(auth.SESSION_TTL_MS / 1000),
 };
 
-const publicUser = (u) => ({ id: u.id, username: u.username, email: u.email });
+const ALLOWED_THEMES = ['amber', 'matrix', 'ice', 'paper', 'plasma', 'magenta'];
+const publicUser = (u) => ({ id: u.id, username: u.username, email: u.email, theme: u.theme || 'amber' });
 
 async function routes(fastify) {
   // ---- login --------------------------------------------------------------
@@ -80,6 +81,12 @@ async function routes(fastify) {
     let username = current.username;
     let email = current.email;
     let passwordHash = current.password_hash;
+    let theme = current.theme || 'amber';
+
+    if (body.theme !== undefined) {
+      if (!ALLOWED_THEMES.includes(body.theme)) return reply.code(400).send({ error: 'unknown theme', field: 'theme' });
+      theme = body.theme;
+    }
 
     if (body.username !== undefined) {
       const v = auth.validateUsername(body.username);
@@ -111,8 +118,8 @@ async function routes(fastify) {
 
     const now = new Date().toISOString();
     try {
-      db.prepare('UPDATE users SET username = ?, email = ?, password_hash = ?, updated_at = ? WHERE id = ?')
-        .run(username, email, passwordHash, now, userId);
+      db.prepare('UPDATE users SET username = ?, email = ?, password_hash = ?, theme = ?, updated_at = ? WHERE id = ?')
+        .run(username, email, passwordHash, theme, now, userId);
     } catch (err) {
       // Backstop for the UNIQUE COLLATE NOCASE constraints if a race slips past the checks.
       if (/UNIQUE/.test(err.message)) return reply.code(409).send({ error: 'username or email already in use' });
@@ -126,7 +133,7 @@ async function routes(fastify) {
       auth.revokeUserSessions(userId, unsigned && unsigned.valid ? unsigned.value : null);
     }
 
-    return publicUser({ id: userId, username, email });
+    return publicUser({ id: userId, username, email, theme });
   });
 }
 

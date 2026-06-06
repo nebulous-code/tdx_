@@ -31,7 +31,7 @@ window.QueryBar = {
       <div class="bgroup">
         <div class="bg-label">labels</div>
         <div class="chips">
-          <span v-for="l in store.labels" :key="l.id" class="chip"
+          <span v-for="l in store.sortedLabels()" :key="l.id" class="chip"
                 :class="{on: has('label',l.name), kfocus: isFocused('label',l.name)}" @click="toggle('label',l.name)">#{{ l.name }}</span>
         </div>
       </div>
@@ -74,7 +74,7 @@ window.QueryBar = {
       return [
         { key:'status',  chips:['open','done','overdue','today'].map(v=>({field:'status',value:v,exclusive:true})) },
         { key:'due',     chips:this.dueOpts.map(o=>({field:'due',value:o.v,exclusive:true})) },
-        { key:'label',   chips:this.store.labels.map(l=>({field:'label',value:l.name,exclusive:false})) },
+        { key:'label',   chips:this.store.sortedLabels().map(l=>({field:'label',value:l.name,exclusive:false})) },
         { key:'project', chips:this.store.projects.map(p=>({field:'project',value:p.name,exclusive:true})) },
         { key:'flags',   chips:[
           {field:'recurring',value:'true',exclusive:true},
@@ -97,10 +97,22 @@ window.QueryBar = {
     terms(){ return Q.parse(this.queryString).terms; }
   },
   methods: {
-    has(field,value){ return this.terms.some(t=>t.field===field && t.value===String(value).toLowerCase() && !t.neg); },
+    has(field,value){
+      const v = String(value).toLowerCase();
+      // project/label terms are stored as slugs (alphanumeric-only), so compare by
+      // slug — otherwise multi-word names ("Move Apartments") never match the chip.
+      return this.terms.some(t => t.field===field && !t.neg &&
+        ((field==='project'||field==='label') ? Q.slug(t.value)===Q.slug(v) : t.value===v));
+    },
     setTerms(terms){ this.queryString = Q.build(terms); },
+    // project/label values are slugged (alphanumeric-only) so multi-word names
+    // ("Move Apartments") stay a single token; other fields keep their literal
+    // value (slug would break comparisons like due:<3d).
+    normValue(field,value){
+      return (field==='project'||field==='label') ? Q.slug(value) : String(value).toLowerCase();
+    },
     toggle(field,value){
-      value=String(value).toLowerCase();
+      value=this.normValue(field,value);
       const terms=[...this.terms];
       const i=terms.findIndex(t=>t.field===field && t.value===value);
       if(i>=0) terms.splice(i,1); else terms.push({field,value,neg:false});
@@ -108,7 +120,7 @@ window.QueryBar = {
     },
     // only one value allowed per field (status, due, project, recurring)
     toggleExclusive(field,value){
-      value=String(value).toLowerCase();
+      value=this.normValue(field,value);
       const on=this.has(field,value);
       let terms=this.terms.filter(t=>t.field!==field);
       if(!on) terms.push({field,value,neg:false});

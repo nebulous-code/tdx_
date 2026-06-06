@@ -6,17 +6,19 @@ window.AppSidebar = {
 
     <!-- smart views (saved queries) -->
     <div class="side-section">
-      <div class="side-head">
-        <span>views</span><span class="ln"></span>
+      <div class="side-head" :class="{ kfocus: store.focusPane==='side' && store.sideFocusId==='head_query' }">
+        <span class="sec-toggle" @click="store.navSections.query=!store.navSections.query">{{ store.navSections.query?'▸':'▾' }} views</span>
+        <span class="ln"></span>
         <span class="add" title="New query view" @click="$emit('new-query')">+</span>
       </div>
-      <div v-for="sv in store.savedQueries" :key="sv.id"
+      <div v-show="!store.navSections.query" v-for="sv in store.savedQueries" :key="sv.id"
            class="nav-item"
            :class="{ active: store.view.kind==='query' && store.view.id===sv.id, kfocus: store.focusPane==='side' && store.sideFocusId===sv.id }"
            @click="store.openQueryView(sv)"
-           @contextmenu.prevent="maybeDelete(sv)">
+           @contextmenu.prevent="$emit('edit-query', sv)">
         <span class="glyph" :style="{color: glyphColor(sv)}">{{ sv.glyph }}</span>
         <span class="label">{{ sv.name }}</span>
+        <span class="add" title="Delete view (x)" @click.stop="$emit('delete-query', sv)">✕</span>
         <span class="add" title="Edit view (e)" @click.stop="$emit('edit-query', sv)">›</span>
         <span class="count">{{ store.queryCount(sv.query) }}</span>
       </div>
@@ -24,26 +26,33 @@ window.AppSidebar = {
 
     <!-- project tree -->
     <div class="side-section">
-      <div class="side-head">
-        <span>projects</span><span class="ln"></span>
+      <div class="side-head" :class="{ kfocus: store.focusPane==='side' && store.sideFocusId==='head_project' }">
+        <span class="sec-toggle" @click="store.navSections.project=!store.navSections.project">{{ store.navSections.project?'▸':'▾' }} projects</span>
+        <span class="ln"></span>
         <span class="add" title="New project" @click="$emit('new-project', null)">+</span>
       </div>
-      <template v-for="p in roots" :key="p.id">
-        <tree-row :store="store" :project="p" :depth="0"
-                  @new-sub="$emit('new-project', $event)"
-                  @edit="$emit('edit-project', $event)"></tree-row>
-      </template>
+      <div v-show="!store.navSections.project">
+        <template v-for="p in roots" :key="p.id">
+          <tree-row :store="store" :project="p" :depth="0"
+                    @new-sub="$emit('new-project', $event)"
+                    @edit="$emit('edit-project', $event)"></tree-row>
+        </template>
+      </div>
     </div>
 
     <!-- labels -->
     <div class="side-section">
-      <div class="side-head"><span>labels</span><span class="ln"></span></div>
-      <div v-for="l in store.labels" :key="l.id"
+      <div class="side-head" :class="{ kfocus: store.focusPane==='side' && store.sideFocusId==='head_label' }">
+        <span class="sec-toggle" @click="store.navSections.label=!store.navSections.label">{{ store.navSections.label?'▸':'▾' }} labels</span>
+        <span class="ln"></span>
+      </div>
+      <div v-show="!store.navSections.label" v-for="l in store.sortedLabels()" :key="l.id"
            class="nav-item"
            :class="{ active: isLabelView(l), kfocus: store.focusPane==='side' && store.sideFocusId===l.id }"
            @click="openLabel(l)">
         <span class="glyph mut">#</span>
         <span class="label">{{ l.name }}</span>
+        <span class="add" title="Edit label (e)" @click.stop="$emit('edit-label', l)">›</span>
         <span class="count">{{ labelCount(l) }}</span>
       </div>
     </div>
@@ -56,11 +65,7 @@ window.AppSidebar = {
     glyphColor(sv){ return sv.color ? sv.color : (sv.system ? '' : 'var(--amber)'); },
     isLabelView(l){ return this.store.view.kind==='query' && this.store.view.query==='label:'+l.name+' status:open'; },
     labelCount(l){ return this.store.queryCount('label:'+l.name+' status:open'); },
-    openLabel(l){ this.store.openLabelView(l); },
-    maybeDelete(sv){
-      if(sv.system) return;
-      if(confirm('Delete saved view "'+sv.name+'"?')) this.store.deleteQuery(sv);
-    }
+    openLabel(l){ this.store.openLabelView(l); }
   }
 };
 

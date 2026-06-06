@@ -126,6 +126,7 @@
     builderOpen: false,
     sidebarOpen: false,      // mobile slide-in
     navCollapsed: false,     // desktop: hide the sidebar column (toggled with n)
+    navSections: { query:false, project:false, label:false },  // collapsed sidebar sections (Tab)
     focusPane: 'list',       // 'list' | 'side' | 'filter' — which window the keyboard drives
     sideFocusId: null,       // id of the keyboard-focused sidebar item
     toasts: [],
@@ -136,6 +137,9 @@
   store.ctx = () => ({ projects: store.projects, tasks: store.tasks, labels: store.labels });
   store.projectById = (id) => store.projects.find(p=>p.id===id);
   store.labelById = (id) => store.labels.find(l=>l.id===id);
+  // labels rendered everywhere (nav, filter, task detail) sorted alphabetically by
+  // slug (lowercase, no spaces); storage order is left untouched.
+  store.sortedLabels = () => [...store.labels].sort((a,b)=> Q.slug(a.name).localeCompare(Q.slug(b.name)));
   store.childProjects = (pid) => store.projects.filter(p=>p.parentId===pid);
   store.subtasks = (tid) => store.tasks.filter(t=>t.parentId===tid);
   store.taskById = (id) => store.tasks.find(t=>t.id===id);
@@ -267,13 +271,20 @@
   // tree respecting collapse, then labels) — used for keyboard navigation.
   store.sideItems = () => {
     const items = [];
-    store.savedQueries.forEach(sv => items.push({ kind:'query', id:sv.id, ref:sv }));
-    const walk = (p) => {
-      items.push({ kind:'project', id:p.id, ref:p });
-      if(!p.collapsed) store.childProjects(p.id).forEach(walk);
-    };
-    store.projects.filter(p=>!p.parentId).forEach(walk);
-    store.labels.forEach(l => items.push({ kind:'label', id:l.id, ref:l }));
+    const ns = store.navSections || {};
+    // section headers are always navigable (so a collapsed section can be re-expanded)
+    items.push({ kind:'head', section:'query', id:'head_query' });
+    if(!ns.query) store.savedQueries.forEach(sv => items.push({ kind:'query', id:sv.id, ref:sv }));
+    items.push({ kind:'head', section:'project', id:'head_project' });
+    if(!ns.project){
+      const walk = (p) => {
+        items.push({ kind:'project', id:p.id, ref:p });
+        if(!p.collapsed) store.childProjects(p.id).forEach(walk);
+      };
+      store.projects.filter(p=>!p.parentId).forEach(walk);
+    }
+    items.push({ kind:'head', section:'label', id:'head_label' });
+    if(!ns.label) store.sortedLabels().forEach(l => items.push({ kind:'label', id:l.id, ref:l }));
     return items;
   };
   store.openSideItem = (it) => {
@@ -358,9 +369,10 @@
   };
 
   store.addLabel = (name) => {
-    let lab = store.labels.find(l=>Q.slug(l.name)===Q.slug(name));
+    const clean = String(name||'').replace(/^#/,'').trim().toLowerCase();
+    let lab = store.labels.find(l=>Q.slug(l.name)===Q.slug(clean));
     if(lab) return lab;
-    lab = { id: uid('l'), name: name.replace(/^#/,'') };
+    lab = { id: uid('l'), name: clean };
     store.labels.push(lab); return lab;
   };
 
@@ -383,4 +395,12 @@
   };
 
   window.store = store;
+
+  // Apply a color theme by toggling data-theme on <html>; themes.css cascades
+  // the new token set across the whole UI. Falsy / unknown -> default 'amber'.
+  window.THEMES = ['amber','matrix','ice','paper','plasma','magenta'];
+  window.applyTheme = (key) => {
+    const t = window.THEMES.includes(key) ? key : 'amber';
+    document.documentElement.setAttribute('data-theme', t);
+  };
 })();

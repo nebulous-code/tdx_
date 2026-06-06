@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>tdx // terminal todo</title>
 <link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="themes.css" />
 <link rel="icon" href="/icons/icon-192.png" />
 <meta name="theme-color" content="#0b0a07" />
 </head>
@@ -37,8 +38,10 @@
     <app-sidebar :store="store"
       @new-query="openSave(store.view.query||'')"
       @edit-query="openViewEdit"
+      @delete-query="deleteView"
       @new-project="openProjectModal('new', $event)"
-      @edit-project="openProjectModal('edit', null, $event)"></app-sidebar>
+      @edit-project="openProjectModal('edit', null, $event)"
+      @edit-label="openLabelEdit"></app-sidebar>
     <div class="scrim" :class="{ show: store.sidebarOpen }" @click="store.sidebarOpen=false"></div>
 
     <!-- main -->
@@ -49,7 +52,7 @@
         <span class="mut" style="font-size:11px;" v-if="store.currentQuery()">› {{ store.currentQuery() }}</span>
       </div>
       <task-list ref="list" :store="store"></task-list>
-      <task-detail :store="store"></task-detail>
+      <task-detail ref="detail" :store="store"></task-detail>
     </main>
 
     <!-- status bar -->
@@ -75,9 +78,36 @@
   <!-- modals -->
   <project-modal v-if="projectModal" :store="store" :model="projectModal" @close="projectModal=null"></project-modal>
   <save-query-modal v-if="saveModal" :store="store" :model="saveModal" @close="saveModal=null"></save-query-modal>
+  <label-modal v-if="labelModal" :store="store" :model="labelModal" @close="labelModal=null"></label-modal>
   <help-modal v-if="helpOpen" @close="helpOpen=false"></help-modal>
   <account-screen v-if="accountOpen" :store="store"
     @close="accountOpen=false" @saved="onAccountSaved" @logout="onLogout"></account-screen>
+
+  <!-- app-styled confirm (store.askConfirm) -->
+  <div v-if="confirmState" class="overlay" @click.self="resolveConfirm(false)" style="z-index:10005;">
+    <div class="modal" style="max-width:360px;">
+      <div class="modal-body" style="text-align:center;line-height:1.6;">{{ confirmState.msg }}</div>
+      <div class="modal-foot" style="justify-content:center;gap:10px;">
+        <button class="btn" @click="resolveConfirm(false)">No (esc)</button>
+        <button class="btn primary" @click="resolveConfirm(true)">Yes (enter)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- app-styled prompt (store.askPrompt) -->
+  <div v-if="promptState" class="overlay" @click.self="resolvePrompt(false)" style="z-index:10005;">
+    <div class="modal" style="max-width:380px;">
+      <div class="modal-head">{{ promptState.label }}</div>
+      <div class="modal-body">
+        <input ref="promptInput" class="input" v-model="promptState.value" spellcheck="false"
+               @keydown.enter="resolvePrompt(true)" @keydown.esc="resolvePrompt(false)" />
+      </div>
+      <div class="modal-foot">
+        <button class="btn" @click="resolvePrompt(false)">cancel</button>
+        <button class="btn primary" @click="resolvePrompt(true)">ok ↵</button>
+      </div>
+    </div>
+  </div>
 
   <!-- toasts -->
   <div class="toasts">
@@ -113,6 +143,9 @@ const app = createApp({
     selIndex: 0,
     helpOpen: false,
     accountOpen: false,
+    labelModal: null,
+    confirmState: null,   // { msg, resolve } for store.askConfirm
+    promptState: null,    // { label, value, resolve } for store.askPrompt
     loaded: false,   // true once we've successfully loaded server state; gates writes
   }; },
   computed: {
@@ -129,9 +162,31 @@ const app = createApp({
     },
     openSave(query){ this.saveModal = { mode:'new', query: query||'' }; },
     openViewEdit(sv){ this.saveModal = { mode:'edit', view: sv }; },
+    openLabelEdit(l){ this.labelModal = { label: l }; },
+    async deleteView(sv){
+      if(await this.store.askConfirm('Delete view "'+sv.name+'"?')){
+        if(this.store.view.kind==='query' && this.store.view.id===sv.id)
+          this.store.setView({ kind:'query', id:'sv_today', title:'Today', query:'status:open due:today' });
+        this.store.deleteQuery(sv);
+      }
+    },
+    resolveConfirm(v){ if(this.confirmState){ const r=this.confirmState.resolve; this.confirmState=null; r(v); } },
+    resolvePrompt(ok){
+      if(!this.promptState) return;
+      const r=this.promptState.resolve;
+      const val = ok ? (this.promptState.value||'').trim() : '';
+      this.promptState=null; r(val || null);
+    },
     openAccount(){ this.accountOpen = true; },
     // ---- keyboard ----
     onKey(e){
+      // app-styled confirm / prompt take priority over every other shortcut
+      if(this.confirmState){
+        if(e.key==='Enter'){ e.preventDefault(); this.resolveConfirm(true); }
+        else if(e.key==='Escape'){ e.preventDefault(); this.resolveConfirm(false); }
+        return;
+      }
+      if(this.promptState) return;   // the prompt input handles its own enter/esc
       // the account popup is a takeover: it owns the keyboard while open
       if(this.accountOpen) return;
       const tag=(e.target.tagName||'').toLowerCase();
@@ -146,6 +201,7 @@ const app = createApp({
         if(this.paletteOpen){ this.paletteOpen=false; return; }
         if(this.projectModal){ this.projectModal=null; return; }
         if(this.saveModal){ this.saveModal=null; return; }
+        if(this.labelModal){ this.labelModal=null; return; }
         if(this.store.detailOpen){ this.store.detailOpen=false; return; }
       }
       // '?' opens the keyboard/syntax reference (shift+/ — handle before the bare
@@ -153,7 +209,7 @@ const app = createApp({
       if(e.key==='?' && !typing){ e.preventDefault(); this.helpOpen=true; return; }
       // '@' (shift+2) opens the account screen
       if(e.key==='@' && !typing){ e.preventDefault(); this.openAccount(); return; }
-      if(typing || this.paletteOpen || this.projectModal || this.saveModal || this.helpOpen) return;
+      if(typing || this.paletteOpen || this.projectModal || this.saveModal || this.labelModal || this.helpOpen) return;
 
       // filter builder: F collapses the panel, f focuses into it (from any window)
       if(e.key==='F'){ e.preventDefault(); this.toggleBuilder(); return; }
@@ -164,6 +220,13 @@ const app = createApp({
       // each pane has its own navigation while focused
       if(this.store.focusPane==='side'){ this.sidebarKey(e); return; }
       if(this.store.focusPane==='filter'){ this.filterKey(e); return; }
+
+      // task-detail drawer shortcuts (when open): enter save · u duplicate · d delete
+      if(this.store.detailOpen){
+        if(e.key==='Enter'){ e.preventDefault(); this.$refs.detail && this.$refs.detail.save(); return; }
+        if(e.key==='u'){ e.preventDefault(); this.$refs.detail && this.$refs.detail.duplicate(); return; }
+        if(e.key==='d'){ e.preventDefault(); this.$refs.detail && this.$refs.detail.del(); return; }
+      }
 
       // j/k walk the flattened visible rows, so subtasks are reachable too
       const rows=this.store.visibleRows();
@@ -213,6 +276,7 @@ const app = createApp({
     },
     // ---- sidebar keyboard navigation ----
     enterSidebar(){
+      this.store.navCollapsed=false;   // h/← always reveals the nav before entering
       const items=this.store.sideItems();
       if(!items.length) return;
       // start on the currently active view if we can find it, else first item
@@ -221,8 +285,8 @@ const app = createApp({
         const v=this.store.view;
         const cur=items.find(i =>
           (v.kind==='project' && i.kind==='project' && i.id===v.id) ||
-          (v.kind==='query'   && i.kind!=='project' && i.id===v.id));
-        id=cur ? cur.id : items[0].id;
+          (v.kind==='query'   && i.kind!=='project' && i.kind!=='head' && i.id===v.id));
+        id=cur ? cur.id : (items.find(i=>i.kind!=='head') || items[0]).id;
       }
       this.store.sideFocusId=id;
       this.store.focusPane='side';
@@ -233,9 +297,15 @@ const app = createApp({
     // show/hide the whole sidebar nav column; if we hide it while focused there,
     // drop keyboard focus back to the task list
     toggleNav(){
-      this.store.navCollapsed = !this.store.navCollapsed;
-      this.store.sidebarOpen = !this.store.navCollapsed;   // mirror on mobile slide-in
-      if(this.store.navCollapsed && this.store.focusPane==='side') this.exitSidebar();
+      if(this.store.navCollapsed){
+        // expanding: reveal and drop the cursor into the nav (like h/←)
+        this.enterSidebar();
+      } else {
+        // collapsing: hide and, if we were navigating it, fall back to the list
+        this.store.navCollapsed = true;
+        this.store.sidebarOpen = false;
+        if(this.store.focusPane==='side') this.exitSidebar();
+      }
     },
     // ---- filter builder keyboard navigation ----
     enterFilter(){
@@ -282,21 +352,75 @@ const app = createApp({
         case 'k': case 'ArrowUp':
           e.preventDefault(); idx=Math.max(0, idx-1);
           this.store.sideFocusId=items[idx].id; this.scrollSideIntoView(); break;
-        case 'Enter': case 'l': case 'ArrowRight': case ' ':
-          e.preventDefault(); this.store.openSideItem(items[idx]); this.exitSidebar(); break;
+        case 'Enter': case ' ': {
+          e.preventDefault();
+          const it=items[idx];
+          if(it && it.kind==='head') this.toggleSection(it.section);   // expand/collapse on a header
+          else { this.store.openSideItem(it); this.exitSidebar(); }
+          break;
+        }
+        case 'l': case 'ArrowRight': {
+          e.preventDefault();
+          const it=items[idx];
+          if(it && it.kind==='head'){ if(this.store.navSections[it.section]) this.toggleSection(it.section); break; }  // l expands a collapsed section
+          if(it && it.kind==='project' && it.ref.collapsed && this.store.childProjects(it.ref.id).length){ it.ref.collapsed=false; break; }  // expand a collapsed parent
+          this.store.openSideItem(it); this.exitSidebar(); break;
+        }
         case 'e': {
           e.preventDefault();
           const it=items[idx];
           if(it.kind==='project') this.openProjectModal('edit', null, it.ref);
           else if(it.kind==='query') this.openViewEdit(it.ref);
-          break;   // labels not editable yet
+          else if(it.kind==='label') this.openLabelEdit(it.ref);
+          break;
         }
-        case 'h': case 'ArrowLeft': case 'Escape':
+        case 'x': {   // delete the focused view
+          e.preventDefault();
+          const it=items[idx];
+          if(it.kind==='query') this.deleteView(it.ref);
+          break;
+        }
+        case 'a': {   // add a sub-project under the focused project
+          e.preventDefault();
+          const it=items[idx];
+          if(it.kind==='project') this.openProjectModal('new', it.ref.id);
+          break;
+        }
+        case 'A':     // add a top-level project
+          e.preventDefault(); this.openProjectModal('new', null); break;
+        case 'Tab': {  // collapse / expand the focused item's section
+          e.preventDefault();
+          const it=items[idx];
+          if(it) this.toggleSection(it.kind==='head' ? it.section : it.kind);
+          break;
+        }
+        case 'h': case 'ArrowLeft': {
+          // walk up / collapse the tree — never leaves the nav (use esc for that)
+          e.preventDefault();
+          const it=items[idx];
+          if(!it) break;
+          if(it.kind==='head'){ this.toggleSection(it.section); break; }   // toggle the section (like Tab)
+          if(it.kind==='project'){
+            if(!it.ref.collapsed && this.store.childProjects(it.ref.id).length){ it.ref.collapsed=true; this.scrollSideIntoView(); break; }  // collapse expanded parent (stay on it)
+            this.store.sideFocusId = it.ref.parentId || 'head_project';   // up: parent project, else the projects header
+            this.scrollSideIntoView(); break;
+          }
+          this.store.sideFocusId = (it.kind==='label') ? 'head_label' : 'head_query';   // view/label → its section header
+          this.scrollSideIntoView(); break;
+        }
+        case 'Escape':
           e.preventDefault(); this.exitSidebar(); break;
       }
     },
+    // toggle a section's collapse and park the cursor on its (always-present) header,
+    // so a collapsed section stays reachable and can be re-expanded with Tab
+    toggleSection(section){
+      this.store.navSections[section] = !this.store.navSections[section];
+      this.store.sideFocusId = 'head_'+section;
+      this.scrollSideIntoView();
+    },
     scrollSideIntoView(){
-      this.$nextTick(()=>{ const el=document.querySelector('.sidebar .nav-item.kfocus'); if(el) el.scrollIntoView({block:'nearest'}); });
+      this.$nextTick(()=>{ const el=document.querySelector('.sidebar .kfocus'); if(el) el.scrollIntoView({block:'nearest'}); });
     },
     // ---- persistence (snapshot store over /api/state) ----
     // Replace the store's arrays in-place (keeps Vue reactivity refs intact).
@@ -369,14 +493,14 @@ const app = createApp({
     async checkSession(){
       try{
         const res = await fetch('/api/auth/me', { credentials:'include' });
-        if(res.ok){ this.store.currentUser = await res.json(); await this.startSession(); }
+        if(res.ok){ this.store.currentUser = await res.json(); window.applyTheme(this.store.currentUser.theme); await this.startSession(); }
         else { this.store.currentUser = null; }
       }catch(e){
         this.store.currentUser = null;
         this.store.toast('offline — could not reach the server');
       }
     },
-    async onAuthed(user){ this.store.currentUser = user; await this.startSession(); },
+    async onAuthed(user){ this.store.currentUser = user; window.applyTheme(user.theme); await this.startSession(); },
     // Attach the keyboard + change-watcher (once) and load this user's state.
     async startSession(){
       if(!this._keysAttached){ document.addEventListener('keydown', this.onKey); this._keysAttached = true; }
@@ -391,13 +515,14 @@ const app = createApp({
       this.store.tasks.splice(0); this.store.projects.splice(0);
       this.store.labels.splice(0); this.store.savedQueries.splice(0);
     },
-    onAccountSaved(user){ this.store.currentUser = user; },
+    onAccountSaved(user){ this.store.currentUser = user; window.applyTheme(user.theme); },
     async onLogout(){
       this.loaded = false;
       this.accountOpen = false;
       if(this._keysAttached){ document.removeEventListener('keydown', this.onKey); this._keysAttached = false; }
       this.clearLocalState();
       this.store.currentUser = null;     // flips back to the login screen
+      window.applyTheme('amber');        // login screen uses the default theme
     },
     // 401 mid-session (expired / revoked): drop to the login screen.
     handleAuthExpired(){
@@ -407,6 +532,7 @@ const app = createApp({
       if(this._keysAttached){ document.removeEventListener('keydown', this.onKey); this._keysAttached = false; }
       this.clearLocalState();
       this.store.currentUser = null;
+      window.applyTheme('amber');
       this.store.toast('session expired — please sign in');
     }
   },
@@ -419,6 +545,12 @@ const app = createApp({
     // explicit "save now" (e.g. the detail drawer's Save button): cancel the
     // debounce and persist immediately.
     this.store.saveNow=()=>{ if(this._save){ clearTimeout(this._save); this._save=null; } this.persist(); };
+    // app-styled confirm / prompt (Promise-based) usable from any component
+    this.store.askConfirm=(msg)=> new Promise((res)=>{ this.confirmState={ msg, resolve:res }; });
+    this.store.askPrompt=(label, value='')=> new Promise((res)=>{
+      this.promptState={ label, value, resolve:res };
+      this.$nextTick(()=>{ const el=this.$refs.promptInput; if(el){ el.focus(); el.select(); } });
+    });
     window.addEventListener('pagehide', this._flush);
     this._onVis=()=>{ if(document.visibilityState==='hidden') this._flush(); };
     document.addEventListener('visibilitychange', this._onVis);
@@ -451,6 +583,7 @@ app.component('query-bar', window.QueryBar);
 app.component('command-palette', window.CommandPalette);
 app.component('project-modal', window.ProjectModal);
 app.component('save-query-modal', window.SaveQueryModal);
+app.component('label-modal', window.LabelModal);
 app.component('help-modal', window.HelpModal);
 app.component('login-screen', window.LoginScreen);
 app.component('account-screen', window.AccountScreen);

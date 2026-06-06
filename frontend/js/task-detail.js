@@ -11,7 +11,7 @@ window.TaskDetail = {
     </div>
 
     <div v-if="task" class="detail-body">
-      <textarea ref="title" class="d-title" v-model="task.title" rows="1" @input="autosize" @keydown.enter.prevent="blurTitle"></textarea>
+      <textarea ref="title" class="d-title" v-model="task.title" rows="1" @input="autosize" @keydown.enter.prevent="save"></textarea>
 
       <!-- project + status -->
       <div class="row2">
@@ -33,11 +33,11 @@ window.TaskDetail = {
       <div class="row2">
         <div class="field">
           <label>due date</label>
-          <input class="input" type="date" v-model="task.due" />
+          <input class="input" type="date" v-model="task.due" @keydown.enter="save" />
         </div>
         <div class="field">
           <label>reminder</label>
-          <input class="input" type="datetime-local" v-model="task.reminder" />
+          <input class="input" type="datetime-local" v-model="task.reminder" @keydown.enter="save" />
         </div>
       </div>
       <div class="field" v-if="task.due" style="margin-top:-6px;">
@@ -48,7 +48,7 @@ window.TaskDetail = {
       <div class="field">
         <label>labels</label>
         <div class="labelpick">
-          <span v-for="l in store.labels" :key="l.id" class="chip" :class="{on: task.labels.includes(l.id)}" @click="toggleLabel(l.id)">#{{ l.name }}</span>
+          <span v-for="l in store.sortedLabels()" :key="l.id" class="chip" :class="{on: task.labels.includes(l.id)}" @click="toggleLabel(l.id)">#{{ l.name }}</span>
           <span class="chip" @click="addLabel">+ new</span>
         </div>
       </div>
@@ -81,9 +81,9 @@ window.TaskDetail = {
     </div>
 
     <div v-if="task" class="d-actions">
-      <button class="btn primary" @click="save">✓ save</button>
-      <button class="btn" @click="duplicate">⧉ duplicate</button>
-      <button class="btn danger" style="margin-left:auto;" @click="del">🗑 delete</button>
+      <button class="btn primary" @click="save"><span>save ↵</span></button>
+      <button class="btn" @click="duplicate"><span>d<u>u</u>plicate</span></button>
+      <button class="btn danger" style="margin-left:auto;" @click="del"><span><u>d</u>elete</span></button>
     </div>
   </div>
   `,
@@ -116,8 +116,8 @@ window.TaskDetail = {
       const i=this.task.labels.indexOf(id);
       if(i>=0) this.task.labels.splice(i,1); else this.task.labels.push(id);
     },
-    addLabel(){
-      const name = prompt('New label name:');
+    async addLabel(){
+      const name = await this.store.askPrompt('new label');
       if(name){ const l=this.store.addLabel(name); if(!this.task.labels.includes(l.id)) this.task.labels.push(l.id); }
     },
     addSub(){
@@ -131,9 +131,8 @@ window.TaskDetail = {
       this.store.selectedTaskId=copy.id;
       this.store.toast('⧉ duplicated');
     },
-    del(){ if(confirm('Delete this task'+(this.subs.length?' and its subtasks':'')+'?')) this.store.deleteTask(this.task); },
-    autosize(){ const el=this.$refs.title; if(el){ el.style.height='auto'; el.style.height=el.scrollHeight+'px'; } },
-    blurTitle(){ this.$refs.title && this.$refs.title.blur(); }
+    async del(){ if(await this.store.askConfirm('Delete this task'+(this.subs.length?' and its subtasks':'')+'?')) this.store.deleteTask(this.task); },
+    autosize(){ const el=this.$refs.title; if(el){ el.style.height='auto'; el.style.height=el.scrollHeight+'px'; } }
   },
   data(){ return { subDraft:'' }; }
 };
