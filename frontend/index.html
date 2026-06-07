@@ -82,6 +82,7 @@
   <help-modal v-if="helpOpen" @close="helpOpen=false"></help-modal>
   <account-screen v-if="accountOpen" :store="store"
     @close="accountOpen=false" @saved="onAccountSaved" @logout="onLogout"></account-screen>
+  <sort-modal v-if="sortOpen" :store="store" @close="sortOpen=false"></sort-modal>
 
   <!-- app-styled confirm (store.askConfirm) -->
   <div v-if="confirmState" class="overlay" @click.self="resolveConfirm(false)" style="z-index:10005;">
@@ -130,6 +131,7 @@
 <script src="js/help-modal.js"></script>
 <script src="js/login-screen.js"></script>
 <script src="js/account-screen.js"></script>
+<script src="js/sort-modal.js"></script>
 <script>
 const { createApp } = Vue;
 let stateVersion = 0;   // optimistic-concurrency version from the server
@@ -144,6 +146,7 @@ const app = createApp({
     selIndex: 0,
     helpOpen: false,
     accountOpen: false,
+    sortOpen: false,
     labelModal: null,
     confirmState: null,   // { msg, resolve } for store.askConfirm
     promptState: null,    // { label, value, resolve } for store.askPrompt
@@ -190,13 +193,16 @@ const app = createApp({
     onKey(e){
       // app-styled confirm / prompt take priority over every other shortcut
       if(this.confirmState){
-        if(e.key==='Enter'){ e.preventDefault(); this.resolveConfirm(true); }
-        else if(e.key==='Escape'){ e.preventDefault(); this.resolveConfirm(false); }
+        // stop the same key from also reaching a modal's KbForm listener (both are on
+        // document) — otherwise resolving here lets the modal re-fire its dirty-guard
+        e.stopImmediatePropagation();
+        if(e.key==='Enter'){ e.preventDefault(); this.resolveConfirm(true); }   // Yes — discard & close
+        else if(e.key==='Escape'){ e.preventDefault(); this.resolveConfirm(false); }   // No — keep editing
         return;
       }
       if(this.promptState) return;   // the prompt input handles its own enter/esc
       // KbForm-driven modals are takeovers: each owns the keyboard while open
-      if(this.accountOpen || this.projectModal || this.saveModal || this.labelModal || this.helpOpen) return;
+      if(this.accountOpen || this.sortOpen || this.projectModal || this.saveModal || this.labelModal || this.helpOpen) return;
       const tag=(e.target.tagName||'').toLowerCase();
       const typing = tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable;
       // ⌘K / Ctrl+K everywhere
@@ -235,6 +241,8 @@ const app = createApp({
       if(e.key==='?' && !typing){ e.preventDefault(); this.helpOpen=true; return; }
       // '@' (shift+2) opens the account screen
       if(e.key==='@' && !typing){ e.preventDefault(); this.openAccount(); return; }
+      // 'S' (shift+s) opens the sort-preferences popup
+      if(e.key==='S' && !typing){ e.preventDefault(); this.sortOpen=true; return; }
       if(typing || this.paletteOpen) return;
 
       // filter builder: F collapses the panel, f focuses into it (from any window)
@@ -554,14 +562,14 @@ const app = createApp({
     async checkSession(){
       try{
         const res = await fetch('/api/auth/me', { credentials:'include' });
-        if(res.ok){ this.store.currentUser = await res.json(); window.applyTheme(this.store.currentUser.theme); await this.startSession(); }
+        if(res.ok){ this.store.currentUser = await res.json(); window.applyTheme(this.store.currentUser.theme); this.store.applySortPrefs(this.store.currentUser.sort_prefs); await this.startSession(); }
         else { this.store.currentUser = null; }
       }catch(e){
         this.store.currentUser = null;
         this.store.toast('offline — could not reach the server');
       }
     },
-    async onAuthed(user){ this.store.currentUser = user; window.applyTheme(user.theme); await this.startSession(); },
+    async onAuthed(user){ this.store.currentUser = user; window.applyTheme(user.theme); this.store.applySortPrefs(user.sort_prefs); await this.startSession(); },
     // Attach the keyboard + change-watcher (once) and load this user's state.
     async startSession(){
       if(!this._keysAttached){ document.addEventListener('keydown', this.onKey); this._keysAttached = true; }
@@ -576,7 +584,7 @@ const app = createApp({
       this.store.tasks.splice(0); this.store.projects.splice(0);
       this.store.labels.splice(0); this.store.savedQueries.splice(0);
     },
-    onAccountSaved(user){ this.store.currentUser = user; window.applyTheme(user.theme); },
+    onAccountSaved(user){ this.store.currentUser = user; window.applyTheme(user.theme); this.store.applySortPrefs(user.sort_prefs); },
     async onLogout(){
       this.loaded = false;
       this.accountOpen = false;
@@ -648,6 +656,7 @@ app.component('label-modal', window.LabelModal);
 app.component('help-modal', window.HelpModal);
 app.component('login-screen', window.LoginScreen);
 app.component('account-screen', window.AccountScreen);
+app.component('sort-modal', window.SortModal);
 app.mount('#app');
 </script>
 </body>

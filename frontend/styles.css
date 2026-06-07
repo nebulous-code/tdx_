@@ -610,6 +610,15 @@ input[type="number"]::-webkit-inner-spin-button { opacity: .6; }
 .account-modal .acct-row input:focus { border-color: var(--amber-mut); }
 .account-modal .acct-sep { margin: 14px 0 8px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--amber-mut); border-top: 1px solid var(--line); padding-top: 10px; }
 .account-modal .acct-error { color: var(--red); font-size: 12px; margin-top: 10px; min-height: 1em; }
+/* sort-preferences popup rows */
+.account-modal .sort-row { cursor: default; gap: 10px; }
+.account-modal .sort-row .sort-check { flex: 0 0 16px; text-align: center; color: var(--amber); }
+.account-modal .sort-row .sort-name { flex: 1; color: var(--amber-hi); }
+.account-modal .sort-row .sort-dir { color: var(--amber-mut); font-size: 11px; white-space: nowrap; }
+.account-modal .sort-row .sort-move { color: var(--amber-hi); font-size: 11px; }
+.account-modal .sort-row.sort-off { opacity: .45; }
+.account-modal .sort-row.sort-off .sort-check { color: var(--amber-dim); }
+.account-modal .sort-row.moving { background: var(--bg-3); box-shadow: inset 0 0 0 1px var(--amber); }
 .account-modal .btn.kfocus { box-shadow: 0 0 0 1px var(--amber-hi), var(--glow-soft); border-color: var(--amber-hi); }
 .account-modal .acct-themes { display: grid; grid-template-columns: repeat(6, 40px); gap: 8px; padding: 5px 8px; border-radius: var(--radius); }
 .account-modal .acct-themes.kfocus { box-shadow: inset 0 0 0 1px var(--amber-mut); background: var(--bg-2); }

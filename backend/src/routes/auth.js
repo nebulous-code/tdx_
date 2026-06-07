@@ -23,7 +23,23 @@ const COOKIE_OPTS = {
 
 const ALLOWED_THEMES = ['amber', 'matrix', 'ice', 'paper', 'plasma', 'magenta'];
 const WEEK_STARTS = [0, 1, 2, 3, 4, 5, 6];   // 0=Sun … 6=Sat
-const publicUser = (u) => ({ id: u.id, username: u.username, email: u.email, theme: u.theme || 'amber', week_start: u.week_start ?? 1 });
+const SORT_KEYS = ['due', 'created', 'title', 'project', 'priority', 'tag'];
+// validate + normalize a client-supplied sort_prefs object → a clean {order,enabled,dirs}
+// (or null). Returns undefined if the payload is malformed.
+function cleanSortPrefs(p) {
+  if (p === null) return null;
+  if (typeof p !== 'object' || Array.isArray(p)) return undefined;
+  const order = Array.isArray(p.order) ? p.order.filter(k => SORT_KEYS.includes(k)) : [];
+  for (const k of SORT_KEYS) if (!order.includes(k)) order.push(k);   // backfill any missing keys
+  const enabled = {}, dirs = {};
+  for (const k of SORT_KEYS) {
+    enabled[k] = (p.enabled && p.enabled[k] === false) ? false : true;
+    dirs[k] = (p.dirs && p.dirs[k] === 'desc') ? 'desc' : 'asc';
+  }
+  if (!SORT_KEYS.some(k => enabled[k])) return undefined;   // at least one must stay enabled
+  return { order, enabled, dirs };
+}
+const publicUser = (u) => ({ id: u.id, username: u.username, email: u.email, theme: u.theme || 'amber', week_start: u.week_start ?? 1, sort_prefs: u.sort_prefs ? JSON.parse(u.sort_prefs) : null });
 
 async function routes(fastify) {
   // ---- login --------------------------------------------------------------
@@ -84,10 +100,16 @@ async function routes(fastify) {
     let passwordHash = current.password_hash;
     let theme = current.theme || 'amber';
     let weekStart = current.week_start ?? 1;
+    let sortPrefs = current.sort_prefs ?? null;   // JSON string or null
 
     if (body.theme !== undefined) {
       if (!ALLOWED_THEMES.includes(body.theme)) return reply.code(400).send({ error: 'unknown theme', field: 'theme' });
       theme = body.theme;
+    }
+    if (body.sort_prefs !== undefined) {
+      const clean = cleanSortPrefs(body.sort_prefs);
+      if (clean === undefined) return reply.code(400).send({ error: 'invalid sort prefs', field: 'sort_prefs' });
+      sortPrefs = clean === null ? null : JSON.stringify(clean);
     }
     if (body.week_start !== undefined) {
       if (!WEEK_STARTS.includes(Number(body.week_start))) return reply.code(400).send({ error: 'invalid week start', field: 'week_start' });
@@ -124,8 +146,8 @@ async function routes(fastify) {
 
     const now = new Date().toISOString();
     try {
-      db.prepare('UPDATE users SET username = ?, email = ?, password_hash = ?, theme = ?, week_start = ?, updated_at = ? WHERE id = ?')
-        .run(username, email, passwordHash, theme, weekStart, now, userId);
+      db.prepare('UPDATE users SET username = ?, email = ?, password_hash = ?, theme = ?, week_start = ?, sort_prefs = ?, updated_at = ? WHERE id = ?')
+        .run(username, email, passwordHash, theme, weekStart, sortPrefs, now, userId);
     } catch (err) {
       // Backstop for the UNIQUE COLLATE NOCASE constraints if a race slips past the checks.
       if (/UNIQUE/.test(err.message)) return reply.code(409).send({ error: 'username or email already in use' });
@@ -139,7 +161,7 @@ async function routes(fastify) {
       auth.revokeUserSessions(userId, unsigned && unsigned.valid ? unsigned.value : null);
     }
 
-    return publicUser({ id: userId, username, email, theme, week_start: weekStart });
+    return publicUser({ id: userId, username, email, theme, week_start: weekStart, sort_prefs: sortPrefs });
   });
 }
 

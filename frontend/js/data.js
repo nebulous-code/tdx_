@@ -124,8 +124,11 @@
     detailOpen: false,
     showCompleted: false,
     sortField: 'due',        // due | created | title | project | priority | tag
-    // per-field direction, remembered for the session (not persisted). 'asc' = ^, 'desc' = v.
+    // per-field direction. 'asc' = ^, 'desc' = v.
     sortDirs: { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', tag:'asc' },
+    // sort configuration (Shift+S popup, persisted per-user as users.sort_prefs)
+    sortOrder: ['due','created','title','project','priority','tag'],   // priority order for the `s` cycle
+    sortEnabled: { due:true, created:true, title:true, project:true, priority:true, tag:true },
     builderOpen: false,
     sidebarOpen: false,      // mobile slide-in
     navCollapsed: false,     // desktop: hide the sidebar column (toggled with n)
@@ -158,6 +161,29 @@
     return out;
   };
   store.reparentProject = (p, parentId) => { p.parentId = parentId || null; };
+  // ---- sort configuration (Shift+S popup; persisted as users.sort_prefs) ----
+  const SORT_KEYS = ['due','created','title','project','priority','tag'];
+  const DEFAULT_SORT_DIRS = { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', tag:'asc' };
+  // pure: turn a (possibly null/partial) stored prefs object into a clean {order,enabled,dirs}
+  store.normalizeSortPrefs = (p) => {
+    const order = (p && Array.isArray(p.order)) ? p.order.filter(k=>SORT_KEYS.includes(k)) : [];
+    for(const k of SORT_KEYS) if(!order.includes(k)) order.push(k);   // backfill any missing
+    const enabled = {}, dirs = {};
+    for(const k of SORT_KEYS){
+      enabled[k] = !(p && p.enabled && p.enabled[k]===false);
+      dirs[k] = (p && p.dirs && (p.dirs[k]==='asc' || p.dirs[k]==='desc')) ? p.dirs[k] : DEFAULT_SORT_DIRS[k];
+    }
+    if(!SORT_KEYS.some(k=>enabled[k])) enabled[order[0]] = true;   // keep ≥1 on
+    return { order, enabled, dirs };
+  };
+  // load stored prefs into the live session state (startup / after save)
+  store.applySortPrefs = (p) => {
+    const n = store.normalizeSortPrefs(p);
+    store.sortOrder = n.order;
+    for(const k of SORT_KEYS){ store.sortEnabled[k] = n.enabled[k]; store.sortDirs[k] = n.dirs[k]; }
+    const first = store.sortOrder.find(k=>store.sortEnabled[k]);   // start on the top enabled sort
+    if(first) store.sortField = first;
+  };
   store.subtasks = (tid) => store.tasks.filter(t=>t.parentId===tid);
   store.taskById = (id) => store.tasks.find(t=>t.id===id);
 

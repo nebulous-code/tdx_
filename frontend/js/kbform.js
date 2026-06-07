@@ -121,7 +121,10 @@ window.KbForm = {
       const r=this.kbCur(); if(r && r.type==='grid') r.grid.select(r.grid.items[cellAbs]);
     },
     kbKey(e){
-      if(this.store && (this.store.confirmState || this.store.promptState)) return;  // defer to root dialogs
+      // defer to the app-styled confirm/prompt dialog (state lives on the root app)
+      const root = this.$root;
+      if(root && (root.confirmState || root.promptState)) return;
+      if(this.store && (this.store.confirmState || this.store.promptState)) return;
       if(this.kbDelegate && this.kbDelegate(e)) return;   // host may handle/forward (e.g. a nested sub-pane)
       const tag = (e.target.tagName||'').toLowerCase();
       if(tag==='input' || tag==='textarea' || tag==='select'){

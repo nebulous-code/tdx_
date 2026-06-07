@@ -132,8 +132,11 @@ window.TaskList = {
   },
   methods: {
     cycleSort(){
-      const i=SORTS.findIndex(o=>o.key===this.store.sortField);
-      this.store.sortField = SORTS[(i+1)%SORTS.length].key;
+      // advance through enabled sorts in the user's configured order (Shift+S)
+      const enabled = this.store.sortOrder.filter(k=>this.store.sortEnabled[k]);
+      if(!enabled.length) return;
+      const i = enabled.indexOf(this.store.sortField);
+      this.store.sortField = enabled[(i+1) % enabled.length];   // i<0 → first enabled
     },
     toggleSortDir(){
       const f=this.store.sortField;

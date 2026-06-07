@@ -18,6 +18,7 @@ window.HelpModal = {
         { k:'e  /  enter',   d:'open the task detail' },
         { k:'i',             d:'new task (focuses the quick-add box)' },
         { k:'s  /  ^',       d:'cycle sort field / flip direction (^ asc · v desc)' },
+        { k:'S',             d:'sort config (reorder m · disable d · direction ^)' },
         { k:'c',             d:'show / hide completed tasks' },
         { k:'!',             d:'cycle priority (none → very high → none)' },
         { k:'/',             d:'focus the query bar' },
