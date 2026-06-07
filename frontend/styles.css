@@ -503,12 +503,14 @@ input[type="number"]::-webkit-inner-spin-button { opacity: .6; }
 .modal-foot { padding: 10px 14px; border-top: 1px solid var(--line); display: flex; gap: 8px; justify-content: flex-end; }
 
 /* color + glyph picker grids */
-.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+/* fixed 10-col grid so keyboard nav (cols:10) matches the visual rows */
+.swatches { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; }
 .swatch {
   width: 22px; height: 22px; border-radius: var(--radius); cursor: pointer;
   border: 1px solid rgba(255,255,255,.08); position: relative;
 }
 .swatch.on { box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 3px currentColor; }
+.swatch.kfocus { box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 3px var(--amber-hi); }
 .glyphgrid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
 .glyphpick {
   aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
@@ -517,6 +519,15 @@ input[type="number"]::-webkit-inner-spin-button { opacity: .6; }
 }
 .glyphpick:hover { border-color: var(--amber-mut); color: var(--amber); }
 .glyphpick.on { background: var(--bg-3); color: var(--amber-hi); border-color: var(--amber-mut); }
+.glyphpick.kfocus { box-shadow: inset 0 0 0 1px var(--amber-hi); border-color: var(--amber-hi); }
+/* keyboard focus for modal fields + buttons (KbForm) */
+.field.kfocus { box-shadow: inset 0 0 0 1px var(--amber-mut); border-radius: var(--radius); }
+.btn.kfocus { box-shadow: 0 0 0 1px var(--amber-hi), var(--glow-soft); border-color: var(--amber-hi); }
+.theme-box.kfocus { box-shadow: 0 0 0 2px var(--amber-hi); border-color: var(--amber-hi); }
+/* task-detail captured pane (KbForm) — fields/textareas/selects + label chips */
+.detail .d-title.kfocus, .detail .d-notes.kfocus, .detail select.kfocus,
+.detail .quickadd.kfocus { box-shadow: inset 0 0 0 1px var(--amber-mut); border-radius: var(--radius); }
+.detail .chip.kfocus { box-shadow: 0 0 0 1px var(--amber-hi); border-color: var(--amber-hi); }
 
 /* toast */
 .toasts { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); z-index: 10001; display: flex; flex-direction: column; gap: 6px; align-items: center; }
@@ -597,7 +608,7 @@ input[type="number"]::-webkit-inner-spin-button { opacity: .6; }
 .account-modal .acct-sep { margin: 14px 0 8px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--amber-mut); border-top: 1px solid var(--line); padding-top: 10px; }
 .account-modal .acct-error { color: var(--red); font-size: 12px; margin-top: 10px; min-height: 1em; }
 .account-modal .btn.kfocus { box-shadow: 0 0 0 1px var(--amber-hi), var(--glow-soft); border-color: var(--amber-hi); }
-.account-modal .acct-themes { display: flex; flex-wrap: wrap; gap: 8px; padding: 5px 8px; border-radius: var(--radius); }
+.account-modal .acct-themes { display: grid; grid-template-columns: repeat(6, 40px); gap: 8px; padding: 5px 8px; border-radius: var(--radius); }
 .account-modal .acct-themes.kfocus { box-shadow: inset 0 0 0 1px var(--amber-mut); background: var(--bg-2); }
 .theme-box {
   width: 40px; height: 30px; border: 1px solid var(--line-2); border-radius: var(--radius);

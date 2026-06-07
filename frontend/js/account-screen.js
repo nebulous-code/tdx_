@@ -1,11 +1,13 @@
 /* account-screen.js — a takeover popup (Quick-Reference style) for editing the
    account. NOT part of the h/l pane cycle: while open it owns j/k/i + Enter/Esc
    (the app's global handler early-returns when store-level accountOpen is set).
-   Fields are navigated with j/k, edited with i/click, saved with Enter, and Esc
-   exits with an unsaved-changes guard. Includes a live-preview color theme picker. */
+   Keyboard model is the shared KbForm mixin (see docs/KEYBOARD_FRAMEWORK.md): j/k
+   move rows, i/click edits an input, the theme picker is a grid row (h/l + live
+   preview), Enter saves, Esc exits with the shared dirty-guard. */
 window.AccountScreen = {
   props: ['store'],
   emits: ['close', 'saved', 'logout'],
+  mixins: [window.KbForm],
   data(){
     const u = this.store.currentUser || {};
     const theme = u.theme || 'amber';
@@ -15,8 +17,7 @@ window.AccountScreen = {
       oldPassword: '', newPassword: '', confirmPassword: '',
       theme,
       init: { username: u.username || '', email: u.email || '', theme },
-      focusIdx: 0,
-      rows: ['username','email','theme','oldPassword','newPassword','confirmPassword','save','logout'],
+      kbAutofocus: false,   // start in nav, not in the username field
       themes: [
         { key:'amber',   name:'amber',   bg:'#0b0a07', accent:'#ffb000' },
         { key:'matrix',  name:'matrix',  bg:'#060807', accent:'#22ff66' },
@@ -25,74 +26,57 @@ window.AccountScreen = {
         { key:'plasma',  name:'plasma',  bg:'#0b0807', accent:'#ff6a4d' },
         { key:'magenta', name:'magenta', bg:'#09070b', accent:'#ff5fb4' },
       ],
-      error: '', busy: false, confirmOpen: false,
+      error: '', busy: false,
     };
   },
   template: `
-  <div class="overlay" @click.self="attemptClose">
+  <div class="overlay" @click.self="kbAttemptClose">
     <div class="modal account-modal" style="max-width:460px;width:92vw;display:flex;flex-direction:column;max-height:84vh;">
       <div class="modal-head" style="display:flex;align-items:center;flex:0 0 auto;">
         <span style="flex:1;">account</span>
-        <span class="acct-x" @click="attemptClose" title="close (esc)">✕</span>
+        <span class="acct-x" @click="kbAttemptClose" title="close (esc)">✕</span>
       </div>
       <div class="modal-body" style="flex:1 1 auto;overflow-y:auto;">
-        <div class="acct-row" :class="{kfocus:focusIdx===ri('username')}" @click="edit('username',ri('username'))">
+        <div class="acct-row" :class="kbCls('username')" @click="$refs.username.focus()">
           <span class="acct-label">username</span>
-          <input ref="username" v-model="username" spellcheck="false" autocapitalize="off" />
+          <input ref="username" v-model="username" spellcheck="false" autocapitalize="off" @focus="kbFocusRow('username')" />
         </div>
-        <div class="acct-row" :class="{kfocus:focusIdx===ri('email')}" @click="edit('email',ri('email'))">
+        <div class="acct-row" :class="kbCls('email')" @click="$refs.email.focus()">
           <span class="acct-label">email</span>
-          <input ref="email" v-model="email" spellcheck="false" autocapitalize="off" />
+          <input ref="email" v-model="email" spellcheck="false" autocapitalize="off" @focus="kbFocusRow('email')" />
         </div>
 
         <div class="acct-sep">theme</div>
-        <div class="acct-themes" :class="{kfocus:focusIdx===ri('theme')}">
-          <span v-for="t in themes" :key="t.key" class="theme-box" :class="{on: theme===t.key}"
-                :style="{background:t.bg}" :title="t.name" @click="selectTheme(t.key)">
+        <div class="acct-themes">
+          <span v-for="(t,i) in themes" :key="t.key" class="theme-box" :class="[{on: theme===t.key}, kbCls('theme', i)]"
+                :style="{background:t.bg}" :title="t.name" @click="kbPick('theme', i)">
             <span class="theme-accent" :style="{background:t.accent, boxShadow:'0 0 7px '+t.accent+', 0 0 2px '+t.accent}"></span>
           </span>
         </div>
 
         <div class="acct-sep">change password <span class="mut">(optional)</span></div>
-        <div class="acct-row" :class="{kfocus:focusIdx===ri('oldPassword')}" @click="edit('oldPassword',ri('oldPassword'))">
+        <div class="acct-row" :class="kbCls('oldPassword')" @click="$refs.oldPassword.focus()">
           <span class="acct-label">current</span>
-          <input ref="oldPassword" type="password" v-model="oldPassword" autocomplete="current-password" />
+          <input ref="oldPassword" type="password" v-model="oldPassword" autocomplete="current-password" @focus="kbFocusRow('oldPassword')" />
         </div>
-        <div class="acct-row" :class="{kfocus:focusIdx===ri('newPassword')}" @click="edit('newPassword',ri('newPassword'))">
+        <div class="acct-row" :class="kbCls('newPassword')" @click="$refs.newPassword.focus()">
           <span class="acct-label">new</span>
-          <input ref="newPassword" type="password" v-model="newPassword" autocomplete="new-password" />
+          <input ref="newPassword" type="password" v-model="newPassword" autocomplete="new-password" @focus="kbFocusRow('newPassword')" />
         </div>
-        <div class="acct-row" :class="{kfocus:focusIdx===ri('confirmPassword')}" @click="edit('confirmPassword',ri('confirmPassword'))">
+        <div class="acct-row" :class="kbCls('confirmPassword')" @click="$refs.confirmPassword.focus()">
           <span class="acct-label">confirm</span>
-          <input ref="confirmPassword" type="password" v-model="confirmPassword" autocomplete="new-password" />
+          <input ref="confirmPassword" type="password" v-model="confirmPassword" autocomplete="new-password" @focus="kbFocusRow('confirmPassword')" />
         </div>
 
         <div class="acct-error" v-if="error">{{ error }}</div>
       </div>
       <div class="modal-foot" style="flex:0 0 auto;justify-content:space-between;">
-        <button class="btn" :class="{kfocus:focusIdx===ri('logout')}" @click="logout">log out</button>
-        <button class="btn primary" :class="{kfocus:focusIdx===ri('save')}" :disabled="busy" @click="save">{{ busy ? '…' : 'save ↵' }}</button>
-      </div>
-    </div>
-
-    <div class="overlay" v-if="confirmOpen" @click.self="confirmOpen=false" style="z-index:10003;background:rgba(5,4,2,.5);">
-      <div class="modal" style="max-width:340px;">
-        <div class="modal-body" style="text-align:center;line-height:1.6;">
-          Changes will be lost. Continue?
-        </div>
-        <div class="modal-foot" style="justify-content:center;gap:10px;">
-          <button class="btn" @click="confirmOpen=false">No (esc)</button>
-          <button class="btn primary" @click="discard">Yes (enter)</button>
-        </div>
+        <button class="btn" :class="kbCls('logout')" @click="logout">log out</button>
+        <button class="btn primary" :class="kbCls('save')" :disabled="busy" @click="save">{{ busy ? '…' : 'save ↵' }}</button>
       </div>
     </div>
   </div>
   `,
-  mounted(){
-    document.addEventListener('keydown', this.onKey);
-    this.$nextTick(()=>{ this.move(0); });
-  },
-  beforeUnmount(){ document.removeEventListener('keydown', this.onKey); },
   computed: {
     dirty(){
       return this.username !== this.init.username || this.email !== this.init.email ||
@@ -101,51 +85,23 @@ window.AccountScreen = {
     }
   },
   methods: {
-    ri(key){ return this.rows.indexOf(key); },
-    onKey(e){
-      if(this.confirmOpen){
-        if(e.key==='Enter'){ e.preventDefault(); this.discard(); }
-        else if(e.key==='Escape'){ e.preventDefault(); this.confirmOpen=false; }
-        return;
-      }
-      const inInput = (e.target.tagName||'').toLowerCase()==='input';
-      if(inInput){
-        if(e.key==='Enter'){ e.preventDefault(); this.save(); }
-        else if(e.key==='Escape'){ e.preventDefault(); e.target.blur(); } // back to nav
-        return; // otherwise let it type
-      }
-      const onTheme = this.rows[this.focusIdx]==='theme';
-      switch(e.key){
-        case 'j': case 'ArrowDown': e.preventDefault(); this.move(1); break;
-        case 'k': case 'ArrowUp':   e.preventDefault(); this.move(-1); break;
-        case 'h': case 'ArrowLeft': if(onTheme){ e.preventDefault(); this.cycleTheme(-1); } break;
-        case 'l': case 'ArrowRight':if(onTheme){ e.preventDefault(); this.cycleTheme(1); } break;
-        case 'i': e.preventDefault(); this.activate(true); break;
-        case 'Enter': e.preventDefault(); this.save(); break;
-        case ' ': e.preventDefault(); this.activate(false); break;
-        case 'Escape': e.preventDefault(); this.attemptClose(); break;
-      }
-    },
-    move(d){ this.focusIdx = Math.max(0, Math.min(this.rows.length-1, this.focusIdx + d)); },
-    // i = edit-only (inputs); space = activate (edit input / cycle theme / action)
-    activate(editOnly){
-      const row = this.rows[this.focusIdx];
-      if(row==='save'){ if(!editOnly) this.save(); return; }
-      if(row==='logout'){ if(!editOnly) this.logout(); return; }
-      if(row==='theme'){ this.cycleTheme(1); return; }
-      this.edit(row, this.focusIdx);
-    },
-    edit(key, idx){ this.focusIdx = idx; this.$nextTick(()=>{ const el=this.$refs[key]; if(el) el.focus(); }); },
+    kbRows(){ return [
+      { id:'username',        type:'input',  ref:'username' },
+      { id:'email',           type:'input',  ref:'email' },
+      { id:'theme',           type:'grid',   items:this.themes, cols:6, previewOnFocus:true,
+        isOn:t=>this.theme===t.key, select:t=>this.selectTheme(t.key) },
+      { id:'oldPassword',     type:'input',  ref:'oldPassword' },
+      { id:'newPassword',     type:'input',  ref:'newPassword' },
+      { id:'confirmPassword', type:'input',  ref:'confirmPassword' },
+      { id:'save',            type:'button', activate:()=>this.save() },
+      { id:'logout',          type:'button', activate:()=>this.logout() },
+    ]; },
+    kbSubmit(){ this.save(); },
+    kbDirty(){ return this.dirty; },
+    kbOnClose(){ this.revertTheme(); },   // discarding restores the pre-edit theme
     // ---- theme picker (live preview) ----
-    selectTheme(key){ this.theme = key; window.applyTheme(key); this.focusIdx = this.ri('theme'); },
-    cycleTheme(d){
-      let i = this.themes.findIndex(t=>t.key===this.theme); if(i<0) i=0;
-      i = (i + d + this.themes.length) % this.themes.length;
-      this.selectTheme(this.themes[i].key);
-    },
+    selectTheme(key){ this.theme = key; window.applyTheme(key); },
     revertTheme(){ window.applyTheme(this.init.theme); },
-    attemptClose(){ if(this.dirty) this.confirmOpen = true; else this.discard(); },
-    discard(){ this.revertTheme(); this.$emit('close'); },
     // client-side password policy mirror (the server enforces it too)
     pwError(pw){
       if(pw.length < 8) return 'new password must be at least 8 characters';
@@ -189,7 +145,7 @@ window.AccountScreen = {
           this.$emit('close');
           return;
         }
-        if(res.status===401){ this.discard(); return; } // session gone; root shows login
+        if(res.status===401){ this.kbClose(); return; } // session gone; root shows login
         const body = await res.json().catch(()=>({}));
         this.error = body.error || ('save failed ('+res.status+')');
       }catch(e){

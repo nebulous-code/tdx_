@@ -1,6 +1,12 @@
-/* task-detail.js — detail / edit drawer */
+/* task-detail.js — detail / edit drawer. A captured keyboard pane (focusPane
+   ==='detail'): the app's global onKey routes nav keys into the shared KbForm
+   mixin (kbAutoListen:false — the drawer is always mounted, so the app drives it
+   rather than KbForm attaching its own document listener). j/k walk the fields,
+   i/click edits, space toggles, Enter saves; Shift+J/K swap to the prev/next
+   task. Recurrence + existing subtasks stay mouse-driven for now. */
 window.TaskDetail = {
   props: ['store'],
+  mixins: [window.KbForm],
   template: `
   <div class="detail" :class="{ hidden: !store.detailOpen || !task }">
     <div v-if="task" class="detail-head">
@@ -11,23 +17,23 @@ window.TaskDetail = {
     </div>
 
     <div v-if="task" class="detail-body">
-      <textarea ref="title" class="d-title" v-model="task.title" rows="1" @input="autosize" @keydown.enter.prevent="save" @keydown.esc.stop.prevent="escField('title')"></textarea>
+      <textarea ref="title" class="d-title" :class="kbCls('title')" v-model="task.title" rows="1" @input="autosize" @focus="kbFocusRow('title')" @keydown.enter.prevent="save" @keydown.esc.stop.prevent="blurField"></textarea>
 
       <!-- project + status -->
       <div class="row2">
-        <div class="field">
+        <div class="field" :class="kbCls('project')">
           <label>project</label>
-          <select class="input" v-model="task.projectId">
+          <select ref="project" class="input" v-model="task.projectId" @focus="kbFocusRow('project')" @keydown.esc.stop.prevent="blurField">
             <option v-for="p in store.projects" :key="p.id" :value="p.id">{{ indent(p) }}{{ p.name }}</option>
           </select>
         </div>
         <div class="field">
           <label>status · priority</label>
           <div style="display:flex;gap:6px;">
-            <button class="btn" style="flex:1;justify-content:center;" :class="{primary: task.done}" @click="store.toggleDone(task)">
+            <button class="btn" style="flex:1;justify-content:center;" :class="[{primary: task.done}, kbCls('status')]" @click="store.toggleDone(task)">
               {{ task.done ? '✓ done' : '○ open' }}
             </button>
-            <select class="input" style="flex:1;" v-model.number="task.priority">
+            <select ref="priority" class="input" style="flex:1;" :class="kbCls('priority')" v-model.number="task.priority" @focus="kbFocusRow('priority')" @keydown.esc.stop.prevent="blurField">
               <option :value="5">5 v.high</option>
               <option :value="4">4 high</option>
               <option :value="3">3 med</option>
@@ -41,13 +47,13 @@ window.TaskDetail = {
 
       <!-- due + reminder -->
       <div class="row2">
-        <div class="field">
+        <div class="field" :class="kbCls('due')">
           <label>due date</label>
-          <input class="input" type="date" v-model="task.due" @keydown.enter="save" />
+          <input ref="due" class="input" type="date" v-model="task.due" @focus="kbFocusRow('due')" @keydown.enter="save" @keydown.esc.stop.prevent="blurField" />
         </div>
-        <div class="field">
+        <div class="field" :class="kbCls('reminder')">
           <label>reminder</label>
-          <input class="input" type="datetime-local" v-model="task.reminder" @keydown.enter="save" />
+          <input ref="reminder" class="input" type="datetime-local" v-model="task.reminder" @focus="kbFocusRow('reminder')" @keydown.enter="save" @keydown.esc.stop.prevent="blurField" />
         </div>
       </div>
       <div class="field" v-if="task.due" style="margin-top:-6px;">
@@ -58,8 +64,8 @@ window.TaskDetail = {
       <div class="field">
         <label>labels</label>
         <div class="labelpick">
-          <span v-for="l in store.sortedLabels()" :key="l.id" class="chip" :class="{on: task.labels.includes(l.id)}" @click="toggleLabel(l.id)">#{{ l.name }}</span>
-          <span class="chip" @click="addLabel">+ new</span>
+          <span v-for="(l,i) in store.sortedLabels()" :key="l.id" class="chip" :class="[{on: task.labels.includes(l.id)}, kbCls('labels', i)]" @click="kbPick('labels', i)">#{{ l.name }}</span>
+          <span class="chip" :class="kbCls('addlabel')" @click="addLabel">+ new</span>
         </div>
       </div>
 
@@ -72,7 +78,7 @@ window.TaskDetail = {
       <!-- notes -->
       <div class="field">
         <label>notes</label>
-        <textarea ref="notes" class="d-notes" v-model="task.notes" placeholder="# markdown-ish notes…" @keydown.esc.stop.prevent="escField('notes')"></textarea>
+        <textarea ref="notes" class="d-notes" :class="kbCls('notes')" v-model="task.notes" placeholder="# markdown-ish notes… (⌃/⌘+↵ saves)" @focus="kbFocusRow('notes')" @keydown.enter.ctrl.prevent="save" @keydown.enter.meta.prevent="save" @keydown.esc.stop.prevent="blurField"></textarea>
       </div>
 
       <!-- subtasks -->
@@ -83,20 +89,21 @@ window.TaskDetail = {
           <input class="input" style="border:none;background:transparent;padding:2px 4px;" v-model="s.title" :class="{done:s.done}" :style="s.done?{textDecoration:'line-through',color:'var(--amber-mut)'}:{}" />
           <span class="twist-sub" @click="store.deleteTask(s)" title="Delete">✕</span>
         </div>
-        <div class="quickadd" style="border:1px solid var(--line-2);background:var(--bg-3);border-radius:2px;margin-top:4px;padding:4px 8px;">
+        <div class="quickadd" :class="kbCls('addsub')" style="border:1px solid var(--line-2);background:var(--bg-3);border-radius:2px;margin-top:4px;padding:4px 8px;">
           <span class="prompt">+</span>
-          <input v-model="subDraft" placeholder="add subtask…" @keydown.enter="addSub" />
+          <input ref="addsub" v-model="subDraft" placeholder="add subtask…" @focus="kbFocusRow('addsub')" @keydown.enter="addSub" @keydown.esc.stop.prevent="blurField" />
         </div>
       </div>
     </div>
 
     <div v-if="task" class="d-actions">
-      <button class="btn primary" @click="save"><span>save ↵</span></button>
-      <button class="btn" @click="duplicate"><span>d<u>u</u>plicate</span></button>
-      <button class="btn danger" style="margin-left:auto;" @click="del"><span><u>d</u>elete</span></button>
+      <button class="btn primary" :class="kbCls('save')" @click="save"><span>save ↵</span></button>
+      <button class="btn" :class="kbCls('duplicate')" @click="duplicate"><span>d<u>u</u>plicate</span></button>
+      <button class="btn danger" :class="kbCls('delete')" style="margin-left:auto;" @click="del"><span><u>d</u>elete</span></button>
     </div>
   </div>
   `,
+  data(){ return { subDraft:'', kbAutoListen:false, kbAutofocus:false }; },
   computed: {
     task(){ return this.store.taskById(this.store.selectedTaskId); },
     parentTask(){ return this.task && this.task.parentId ? this.store.taskById(this.task.parentId) : null; },
@@ -111,29 +118,37 @@ window.TaskDetail = {
     }
   },
   watch: {
-    'store.selectedTaskId'(){ this.$nextTick(()=>{ this.autosize(); this.snapshotBaseline(); }); },
-    'store.detailOpen'(v){ if(v) this.$nextTick(this.snapshotBaseline); }
+    'store.selectedTaskId'(){ this.$nextTick(this.autosize); },
+    'store.detailOpen'(v){ if(v) this.$nextTick(this.kbInit); }
   },
   methods: {
-    close(){ this.store.detailOpen=false; },
-    // signature of the editable fields, to detect unsaved edits since the drawer opened
-    taskSig(){ const t=this.task; return t ? JSON.stringify([t.title,t.notes,t.due,t.reminder,t.projectId,t.recurrence,t.priority,(t.labels||[]).slice().sort()]) : ''; },
-    snapshotBaseline(){ this._baseline = this.taskSig(); },
-    isDirty(){ return !!this.task && this.taskSig() !== this._baseline; },
-    // Escape out of a detail text field: release the cursor, and if there are
-    // unsaved edits confirm before closing (No keeps you in the field).
-    async escField(refName){
-      const el=this.$refs[refName]; if(el) el.blur();
-      if(!this.isDirty()){ this.store.detailOpen=false; return; }
-      const ok = await this.store.askConfirm('Save changes and close?  ·  No = keep editing');
-      if(ok){ this.save(); }
-      else { this.$nextTick(()=>{ const e2=this.$refs[refName]; if(e2) e2.focus(); }); }
+    // ---- KbForm config (the app routes keys here via onKey; see header) ----
+    kbRows(){
+      const labels = this.store.sortedLabels();
+      return [
+        { id:'title',     type:'input',  ref:'title' },
+        { id:'project',   type:'input',  ref:'project' },
+        { id:'status',    type:'button', activate:()=>this.store.toggleDone(this.task) },
+        { id:'priority',  type:'input',  ref:'priority' },
+        { id:'due',       type:'input',  ref:'due' },
+        { id:'reminder',  type:'input',  ref:'reminder' },
+        { id:'labels',    type:'grid',   items:labels, cols:99,
+          isOn:l=>this.task.labels.includes(l.id), select:l=>this.toggleLabel(l.id), when:()=>labels.length>0 },
+        { id:'addlabel',  type:'button', activate:()=>this.addLabel() },
+        { id:'notes',     type:'input',  ref:'notes' },
+        { id:'addsub',    type:'input',  ref:'addsub' },
+        { id:'save',      type:'button', activate:()=>this.save() },
+        { id:'duplicate', type:'button', activate:()=>this.duplicate() },
+        { id:'delete',    type:'button', activate:()=>this.del() },
+      ];
     },
+    kbSubmit(){ this.save(); },
+    blurField(){ const a=document.activeElement; if(a && a.blur) a.blur(); },
+    close(){ this.store.detailOpen=false; },
     save(){
-      if(this.$refs.title) this.$refs.title.blur();
+      const a=document.activeElement; if(a && a.blur) a.blur();   // release focus from any field (e.g. notes on ⌃/⌘+↵)
       if(this.store.saveNow) this.store.saveNow();   // flush the debounced write now
       this.store.toast('✓ saved');
-      this.snapshotBaseline();
       this.store.detailOpen=false;
     },
     indent(p){ return p.parentId ? '  ↳ ' : ''; },
@@ -158,6 +173,5 @@ window.TaskDetail = {
     },
     async del(){ if(await this.store.askConfirm('Delete this task'+(this.subs.length?' and its subtasks':'')+'?')) this.store.deleteTask(this.task); },
     autosize(){ const el=this.$refs.title; if(el){ el.style.height='auto'; el.style.height=el.scrollHeight+'px'; } }
-  },
-  data(){ return { subDraft:'' }; }
+  }
 };
