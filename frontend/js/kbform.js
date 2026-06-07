@@ -7,10 +7,13 @@
      { id, type:'input',  ref, multiline? }          // text/select; i/click edits
      { id, type:'button', activate(), when?() }       // save/cancel/delete/logout
      { id, type:'grid',   items, cols, isOn, select } // color/glyph/theme
+     { id, type:'static' }                            // read-only row: just cursor + highlight (e.g. help body)
 
    Everything is rows; a row has 1..N cells. j/k move rows, h/l move cells within a
    grid row (with a remembered goal column). Hooks a component may implement:
      kbRows()  (required) · kbSubmit() (Enter/save) · kbDirty() · kbOnClose() · kbAutofocus (data)
+     kbTab(dir): if present, nav-mode h/l on a non-grid (1-cell) row switches tabs
+       instead of moving cells. Only use where EVERY non-grid row should switch tabs.
 */
 window.KbForm = {
   data(){ return { kbRow:0, kbCell:0, kbGoalCol:0 }; },
@@ -70,6 +73,13 @@ window.KbForm = {
       }
       this.kbPreview(); this.kbScroll();
     },
+    // h/l: switch tabs (if the component opts in via kbTab and we're not on a
+    // multi-cell grid row), otherwise move between cells in the current grid row
+    kbHL(d){
+      const r = this.kbCur();
+      if(this.kbTab && (!r || r.cellCount<=1)){ this.kbTab(d); return; }
+      this.kbLR(d);
+    },
     kbLR(d){
       const r = this.kbCur(); if(!r || r.cellCount<=1) return;
       this.kbCell = Math.max(0, Math.min(r.cellCount-1, this.kbCell + d));
@@ -122,8 +132,8 @@ window.KbForm = {
       switch(e.key){
         case 'j': case 'ArrowDown':  e.preventDefault(); this.kbMove(1); break;
         case 'k': case 'ArrowUp':    e.preventDefault(); this.kbMove(-1); break;
-        case 'l': case 'ArrowRight': e.preventDefault(); this.kbLR(1); break;
-        case 'h': case 'ArrowLeft':  e.preventDefault(); this.kbLR(-1); break;
+        case 'l': case 'ArrowRight': e.preventDefault(); this.kbHL(1); break;
+        case 'h': case 'ArrowLeft':  e.preventDefault(); this.kbHL(-1); break;
         case 'i': e.preventDefault(); this.kbEditCurrent(); break;
         case ' ': e.preventDefault(); this.kbActivate(); break;
         case 'Enter': e.preventDefault(); this.kbEnter(); break;

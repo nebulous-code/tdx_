@@ -1,11 +1,14 @@
 /* help-modal.js — keyboard + syntax reference (opened with ?). Tabbed by window;
    h/l (or click) switch tabs, j/k move a cursor through the rows (the focused row
-   brightens), and the body scrolls to keep the cursor in view. */
+   brightens), and the body scrolls to keep the cursor in view. Uses the shared
+   KbForm mixin: the body rows are read-only 'static' rows (j/k + highlight) and
+   h/l switch tabs via the kbTab hook. See docs/KEYBOARD_FRAMEWORK.md. */
 window.HelpModal = {
   emits: ['close'],
+  mixins: [window.KbForm],
   data(){ return {
     activeTab: 0,
-    cursor: 0,
+    kbAutofocus: false,
     tabs: [
       { name:'task list', code:'amber', items:[
         { k:'j  /  k',       d:'move down / up (through subtasks too)' },
@@ -89,7 +92,7 @@ window.HelpModal = {
         <span class="mut" style="margin-left:auto;font-size:10px;">h/l tabs · j/k scroll</span>
       </div>
       <div class="modal-body" style="flex:1 1 auto;min-height:0;overflow-y:auto;">
-        <div v-for="(r,i) in current.items" :key="i" class="help-row" :class="{cur:i===cursor}">
+        <div v-for="(r,i) in current.items" :key="i" class="help-row" :class="kbCls('r'+i)">
           <span class="help-bullet">•</span>
           <code :class="current.code">{{ r.k }}</code>
           <span class="help-desc">{{ r.d }}</span>
@@ -98,18 +101,12 @@ window.HelpModal = {
     </div>
   </div>
   `,
-  mounted(){ document.addEventListener('keydown', this.onKey); },
-  beforeUnmount(){ document.removeEventListener('keydown', this.onKey); },
   methods: {
-    selectTab(i){ this.activeTab = i; this.cursor = 0; this.scrollCur(); },
-    onKey(e){
-      switch(e.key){
-        case 'l': case 'ArrowRight': e.preventDefault(); this.selectTab((this.activeTab+1)%this.tabs.length); break;
-        case 'h': case 'ArrowLeft':  e.preventDefault(); this.selectTab((this.activeTab+this.tabs.length-1)%this.tabs.length); break;
-        case 'j': case 'ArrowDown':  e.preventDefault(); this.cursor = Math.min(this.current.items.length-1, this.cursor+1); this.scrollCur(); break;
-        case 'k': case 'ArrowUp':    e.preventDefault(); this.cursor = Math.max(0, this.cursor-1); this.scrollCur(); break;
-      }
+    kbRows(){ return this.current.items.map((_,i)=>({ id:'r'+i, type:'static' })); },
+    kbTab(d){
+      this.activeTab = (this.activeTab + d + this.tabs.length) % this.tabs.length;
+      this.kbRow = 0; this.kbCell = 0; this.kbGoalCol = 0; this.kbScroll();
     },
-    scrollCur(){ this.$nextTick(()=>{ const el=document.querySelector('.help-row.cur'); if(el) el.scrollIntoView({block:'nearest'}); }); }
+    selectTab(i){ this.activeTab = i; this.kbRow = 0; this.kbCell = 0; this.kbGoalCol = 0; this.kbScroll(); }
   }
 };

@@ -1,7 +1,8 @@
 # Design: Unified keyboard-form framework — t_278
 
-> Status: **building — Phase 1** (mixin + grid; migrate the 3 edit modals + account screen).
-> Decisions below are settled.
+> Status: **built — P1 + P2 done.** P1: mixin + grid; the 3 edit modals + account
+> screen + task-detail drawer. P2: help modal (static rows + `kbTab` hook) and the
+> filter builder (restacked into rows). Sidebar (P3) stays bespoke. Decisions below are settled.
 
 ## Goal
 
@@ -99,8 +100,14 @@ So `Enter` is reserved for saving (with the multiline-newline exception), `i` is
   edit modals (`ProjectModal`, `SaveQueryModal`, `LabelModal`) and the **account screen** so
   color/glyph are finally keyboard-selectable and all modals behave identically. Closes the
   t_153 remainder. Generalize the **dirty-guard** confirm into the mixin here.
-- **P2:** retrofit the **help modal** (tabs = a row group) and the **filter builder** (groups
-  of chips) onto the mixin to delete their bespoke code.
+- **P2 (done):** retrofit the **help modal** and the **filter builder** onto the mixin.
+  - Help: body rows are read-only `type:'static'` rows (`j/k` highlight + scroll); the tab
+    strip switches via the new `kbTab(dir)` hook (`h/l` on a non-grid row switches tabs).
+  - Filter: **restacked from side-by-side columns into stacked full-width rows** — each group
+    is a `cols:99` grid row, so `j/k` move between groups and `h/l` within a group's chips
+    (magic column preserved). Driven from `index.html` (`kbAutoListen:false`); `space` toggles,
+    `i` raw query, `s` save, `x` clear, `Esc`/`Enter` exit. Deleted `finit`/`fmove`/
+    `ftoggleFocused`/`isFocused`/etc.
 - **P3 / maybe-never:** the **sidebar** — its `h/l` are tree semantics (expand/collapse/up) and
   it has move-mode; likely keep bespoke, or only adopt the cursor+highlight parts.
 
@@ -116,4 +123,4 @@ So `Enter` is reserved for saving (with the multiline-newline exception), `i` is
 4. **Insert:** only `i` (and click) enters a field; `Enter` no longer does.
 5. **Footer buttons** (save/cancel/delete) are rows in the list, reachable by `j/k`, and keep their direct shortcuts.
 6. **Dirty-guard:** generalized into the mixin (one shared "unsaved changes? keep editing" confirm).
-7. **Priority:** greenlit; Phase 1 in progress (P2 — help + filter builder — to follow).
+7. **Priority:** greenlit; **P1 + P2 built.** Sidebar (P3) remains bespoke.

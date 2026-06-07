@@ -193,9 +193,9 @@ input[type="number"]::-webkit-inner-spin-button { opacity: .6; }
   display: flex; gap: 10px; align-items: baseline; padding: 3px 6px;
   border-radius: var(--radius); color: var(--amber-dim);
 }
-.help-row.cur { background: var(--bg-2); color: var(--amber-hi); }
+.help-row.kfocus { background: var(--bg-2); color: var(--amber-hi); }
 .help-row .help-bullet { flex: 0 0 10px; text-align: center; color: var(--amber-faint); }
-.help-row.cur .help-bullet { color: var(--amber); text-shadow: var(--glow); }
+.help-row.kfocus .help-bullet { color: var(--amber); text-shadow: var(--glow); }
 .help-row code { flex: 0 0 132px; white-space: nowrap; }
 .help-row code.amber { color: var(--amber); }
 .help-row code.cyan { color: var(--cyan); }
@@ -277,7 +277,8 @@ input[type="number"]::-webkit-inner-spin-button { opacity: .6; }
   border-top: 1px solid var(--line);
   background: var(--bg-1);
   padding: 10px 12px 12px;
-  display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: flex-start;
+  /* groups are stacked full-width rows: j/k move between groups, h/l within a group */
+  display: flex; flex-direction: column; gap: 10px; align-items: stretch;
 }
 .bgroup { display: flex; flex-direction: column; gap: 4px; }
 .bgroup > .bg-label {

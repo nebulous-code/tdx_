@@ -196,7 +196,7 @@ const app = createApp({
       }
       if(this.promptState) return;   // the prompt input handles its own enter/esc
       // KbForm-driven modals are takeovers: each owns the keyboard while open
-      if(this.accountOpen || this.projectModal || this.saveModal || this.labelModal) return;
+      if(this.accountOpen || this.projectModal || this.saveModal || this.labelModal || this.helpOpen) return;
       const tag=(e.target.tagName||'').toLowerCase();
       const typing = tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable;
       // ⌘K / Ctrl+K everywhere
@@ -205,7 +205,6 @@ const app = createApp({
       // shortcuts are bare keys or shift-combos only
       if(e.ctrlKey||e.metaKey||e.altKey) return;
       if(e.key==='Escape'){
-        if(this.helpOpen){ this.helpOpen=false; return; }
         if(this.paletteOpen){ this.paletteOpen=false; return; }
         // project/save/label modals own Esc themselves (KbForm dirty-guard)
         if(this.store.detailOpen){ const a=document.activeElement; if(a && a.blur) a.blur(); this.store.detailOpen=false; return; }
@@ -227,7 +226,7 @@ const app = createApp({
       if(e.key==='?' && !typing){ e.preventDefault(); this.helpOpen=true; return; }
       // '@' (shift+2) opens the account screen
       if(e.key==='@' && !typing){ e.preventDefault(); this.openAccount(); return; }
-      if(typing || this.paletteOpen || this.helpOpen) return;
+      if(typing || this.paletteOpen) return;
 
       // filter builder: F collapses the panel, f focuses into it (from any window)
       if(e.key==='F'){ e.preventDefault(); this.toggleBuilder(); return; }
@@ -339,7 +338,7 @@ const app = createApp({
     enterFilter(){
       this.store.builderOpen=true;
       this.store.focusPane='filter';
-      this.$nextTick(()=>{ const qb=this.$refs.qbar; if(qb && qb.finit) qb.finit(); });
+      this.$nextTick(()=>{ const qb=this.$refs.qbar; if(qb){ qb.kbInit(); qb.kbFocusRow('status'); } });
     },
     exitFilter(){
       this.store.focusPane='list';
@@ -351,22 +350,16 @@ const app = createApp({
       if(!this.store.builderOpen && this.store.focusPane==='filter') this.exitFilter();
     },
     filterKey(e){
-      const qb=this.$refs.qbar;
+      const qb=this.$refs.qbar; if(!qb) return;
       switch(e.key){
-        case 'h': case 'l': case 'j': case 'k':
-        case 'ArrowLeft': case 'ArrowRight': case 'ArrowUp': case 'ArrowDown':
-          e.preventDefault(); qb && qb.fmove(e.key); break;
-        case ' ': case 'Enter':
-          e.preventDefault(); qb && qb.ftoggleFocused(); break;
-        case 'i':
-          e.preventDefault(); qb && qb.focus(); break;   // into the query editor
-        case 's':
-          e.preventDefault(); qb && qb.save(); break;     // save as smart view
-        case 'x':
-          e.preventDefault(); qb && qb.clearQuery(); break; // clear the query
-        case 'Escape':
-          e.preventDefault(); this.exitFilter(); break;
+        case 'i': e.preventDefault(); qb.focus(); return;        // into the raw query editor (from anywhere)
+        case 's': e.preventDefault(); qb.save(); return;         // save as smart view
+        case 'x': e.preventDefault(); qb.clearQuery(); return;   // clear the query
+        case 'Escape': e.preventDefault(); this.exitFilter(); return;
+        case 'Enter': e.preventDefault(); this.exitFilter(); return;  // apply & view results
       }
+      // j/k between groups · h/l within a group · space toggles — handled by KbForm
+      qb.kbKey(e);
     },
     sidebarKey(e){
       const items=this.store.sideItems();
