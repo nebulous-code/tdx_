@@ -29,6 +29,7 @@ window.HelpModal = {
         { k:'detail: j / k', d:'move between fields (i edits · space toggles)' },
         { k:'detail: J / K', d:'swap to the previous / next task (drawer stays open)' },
         { k:'detail: enter', d:'save & close · u / d duplicate / delete' },
+        { k:'detail: recur', d:'i enters the recurrence builder · esc exits' },
       ]},
       { name:'nav', code:'amber', items:[
         { k:'h  /  ←',     d:'collapse project · walk up the tree · toggle section (never leaves the nav)' },

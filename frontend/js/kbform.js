@@ -14,6 +14,8 @@
      kbRows()  (required) · kbSubmit() (Enter/save) · kbDirty() · kbOnClose() · kbAutofocus (data)
      kbTab(dir): if present, nav-mode h/l on a non-grid (1-cell) row switches tabs
        instead of moving cells. Only use where EVERY non-grid row should switch tabs.
+     kbDelegate(e): if present, called first in kbKey; return true to consume the
+       event (e.g. forward it to a nested KbForm sub-pane). See task-detail's recurrence.
 */
 window.KbForm = {
   data(){ return { kbRow:0, kbCell:0, kbGoalCol:0 }; },
@@ -120,6 +122,7 @@ window.KbForm = {
     },
     kbKey(e){
       if(this.store && (this.store.confirmState || this.store.promptState)) return;  // defer to root dialogs
+      if(this.kbDelegate && this.kbDelegate(e)) return;   // host may handle/forward (e.g. a nested sub-pane)
       const tag = (e.target.tagName||'').toLowerCase();
       if(tag==='input' || tag==='textarea' || tag==='select'){
         const multiline = tag==='textarea';

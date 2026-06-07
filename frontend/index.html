@@ -207,17 +207,26 @@ const app = createApp({
       if(e.key==='Escape'){
         if(this.paletteOpen){ this.paletteOpen=false; return; }
         // project/save/label modals own Esc themselves (KbForm dirty-guard)
-        if(this.store.detailOpen){ const a=document.activeElement; if(a && a.blur) a.blur(); this.store.detailOpen=false; return; }
+        if(this.store.detailOpen){
+          // inside the recurrence sub-pane, Esc pops out of it — not the whole drawer
+          if(this.$refs.detail && this.$refs.detail.recurActive){ this.$refs.detail.kbKey(e); return; }
+          const a=document.activeElement; if(a && a.blur) a.blur(); this.store.detailOpen=false; return;
+        }
       }
       // task-detail drawer: a captured pane. While open it owns nav-mode keys
       // (j/k fields · i edit · space toggle · enter save); J/K swap tasks; u/d
       // duplicate/delete. Typing in a field is left to the field's own handlers.
       if(this.store.focusPane==='detail'){
         if(typing) return;
-        if(e.key==='J'){ e.preventDefault(); this.detailSwap(1); return; }
-        if(e.key==='K'){ e.preventDefault(); this.detailSwap(-1); return; }
-        if(e.key==='u'){ e.preventDefault(); this.$refs.detail && this.$refs.detail.duplicate(); return; }
-        if(e.key==='d'){ e.preventDefault(); this.$refs.detail && this.$refs.detail.del(); return; }
+        // while inside the recurrence sub-pane, the detail's own shortcuts (swap /
+        // duplicate / delete) are suppressed — keys go to the builder instead
+        const inRecur = this.$refs.detail && this.$refs.detail.recurActive;
+        if(!inRecur){
+          if(e.key==='J'){ e.preventDefault(); this.detailSwap(1); return; }
+          if(e.key==='K'){ e.preventDefault(); this.detailSwap(-1); return; }
+          if(e.key==='u'){ e.preventDefault(); this.$refs.detail && this.$refs.detail.duplicate(); return; }
+          if(e.key==='d'){ e.preventDefault(); this.$refs.detail && this.$refs.detail.del(); return; }
+        }
         if(this.$refs.detail) this.$refs.detail.kbKey(e);
         return;
       }
@@ -528,6 +537,10 @@ const app = createApp({
           stateVersion = s.version || 0;
           this.applyState(s);
           this.loaded = true;   // writes are now allowed
+          // default to the top sidebar view (view isn't persisted) — honors the
+          // user's saved-query order rather than always landing on "Today"
+          const top = this.store.savedQueries[0];
+          if(top) this.store.openQueryView(top);
           return;
         }
         this.store.toast('load failed ('+res.status+') — read only');

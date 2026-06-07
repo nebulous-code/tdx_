@@ -70,9 +70,12 @@ window.TaskDetail = {
       </div>
 
       <!-- recurrence -->
-      <div class="field">
-        <label>recurrence</label>
-        <recurrence-builder v-model="task.recurrence" :anchor="task.due"></recurrence-builder>
+      <div class="field" :class="!recurActive ? kbCls('recur') : null">
+        <label>recurrence
+          <span class="mut" v-if="recurActive" style="font-size:11px;text-transform:none;">— editing · esc to exit</span>
+          <span class="mut" v-else-if="kbCls('recur').kfocus" style="font-size:11px;text-transform:none;">— i to edit</span>
+        </label>
+        <recurrence-builder ref="recur" v-model="task.recurrence" :anchor="task.due" :active="recurActive"></recurrence-builder>
       </div>
 
       <!-- notes -->
@@ -103,7 +106,7 @@ window.TaskDetail = {
     </div>
   </div>
   `,
-  data(){ return { subDraft:'', kbAutoListen:false, kbAutofocus:false }; },
+  data(){ return { subDraft:'', kbAutoListen:false, kbAutofocus:false, recurActive:false }; },
   computed: {
     task(){ return this.store.taskById(this.store.selectedTaskId); },
     parentTask(){ return this.task && this.task.parentId ? this.store.taskById(this.task.parentId) : null; },
@@ -135,6 +138,7 @@ window.TaskDetail = {
         { id:'labels',    type:'grid',   items:labels, cols:99,
           isOn:l=>this.task.labels.includes(l.id), select:l=>this.toggleLabel(l.id), when:()=>labels.length>0 },
         { id:'addlabel',  type:'button', activate:()=>this.addLabel() },
+        { id:'recur',     type:'static' },   // l/space/enter descends into the recurrence builder
         { id:'notes',     type:'input',  ref:'notes' },
         { id:'addsub',    type:'input',  ref:'addsub' },
         { id:'save',      type:'button', activate:()=>this.save() },
@@ -144,6 +148,38 @@ window.TaskDetail = {
     },
     kbSubmit(){ this.save(); },
     blurField(){ const a=document.activeElement; if(a && a.blur) a.blur(); },
+    // ---- recurrence sub-pane (a nested KbForm we delegate keys into) ----
+    enterRecur(){
+      const b=this.$refs.recur; if(!b) return;
+      this.recurActive=true;
+      b.kbRow=0; b.kbCell=0; b.kbGoalCol=0;   // land on the frequency row
+    },
+    exitRecur(){
+      this.recurActive=false;
+      const a=document.activeElement; if(a && a.blur) a.blur();   // drop out of any builder input
+    },
+    // called first by KbForm.kbKey: when inside the builder, forward keys to it
+    // (Esc — or h at the left edge — pops back out); otherwise l/space/enter descends in.
+    kbDelegate(e){
+      const b=this.$refs.recur;
+      if(this.recurActive){
+        if(e.key==='Escape'){ e.preventDefault(); this.exitRecur(); return true; }
+        if(b){
+          const r=b.kbCur && b.kbCur();
+          // h at a row's left edge pops out; j/k off the top/bottom flow back into the parent form
+          if((e.key==='h'||e.key==='ArrowLeft') && (!r || r.cellCount<=1 || b.kbCell===0)){ e.preventDefault(); this.exitRecur(); return true; }
+          if((e.key==='k'||e.key==='ArrowUp') && b.kbRow===0){ e.preventDefault(); this.exitRecur(); this.kbMove(-1); return true; }
+          if((e.key==='j'||e.key==='ArrowDown') && b.kbRow===b.kbNav.length-1){ e.preventDefault(); this.exitRecur(); this.kbMove(1); return true; }
+          b.kbKey(e);
+        }
+        return true;
+      }
+      const cur=this.kbCur();
+      if(cur && cur.id==='recur' && e.key==='i'){   // i = edit, like every other field
+        e.preventDefault(); this.enterRecur(); return true;
+      }
+      return false;
+    },
     close(){ this.store.detailOpen=false; },
     save(){
       const a=document.activeElement; if(a && a.blur) a.blur();   // release focus from any field (e.g. notes on ⌃/⌘+↵)
