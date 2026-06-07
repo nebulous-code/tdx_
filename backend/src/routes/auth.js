@@ -22,7 +22,8 @@ const COOKIE_OPTS = {
 };
 
 const ALLOWED_THEMES = ['amber', 'matrix', 'ice', 'paper', 'plasma', 'magenta'];
-const publicUser = (u) => ({ id: u.id, username: u.username, email: u.email, theme: u.theme || 'amber' });
+const WEEK_STARTS = [0, 1, 2, 3, 4, 5, 6];   // 0=Sun … 6=Sat
+const publicUser = (u) => ({ id: u.id, username: u.username, email: u.email, theme: u.theme || 'amber', week_start: u.week_start ?? 1 });
 
 async function routes(fastify) {
   // ---- login --------------------------------------------------------------
@@ -82,10 +83,15 @@ async function routes(fastify) {
     let email = current.email;
     let passwordHash = current.password_hash;
     let theme = current.theme || 'amber';
+    let weekStart = current.week_start ?? 1;
 
     if (body.theme !== undefined) {
       if (!ALLOWED_THEMES.includes(body.theme)) return reply.code(400).send({ error: 'unknown theme', field: 'theme' });
       theme = body.theme;
+    }
+    if (body.week_start !== undefined) {
+      if (!WEEK_STARTS.includes(Number(body.week_start))) return reply.code(400).send({ error: 'invalid week start', field: 'week_start' });
+      weekStart = Number(body.week_start);
     }
 
     if (body.username !== undefined) {
@@ -118,8 +124,8 @@ async function routes(fastify) {
 
     const now = new Date().toISOString();
     try {
-      db.prepare('UPDATE users SET username = ?, email = ?, password_hash = ?, theme = ?, updated_at = ? WHERE id = ?')
-        .run(username, email, passwordHash, theme, now, userId);
+      db.prepare('UPDATE users SET username = ?, email = ?, password_hash = ?, theme = ?, week_start = ?, updated_at = ? WHERE id = ?')
+        .run(username, email, passwordHash, theme, weekStart, now, userId);
     } catch (err) {
       // Backstop for the UNIQUE COLLATE NOCASE constraints if a race slips past the checks.
       if (/UNIQUE/.test(err.message)) return reply.code(409).send({ error: 'username or email already in use' });
@@ -133,7 +139,7 @@ async function routes(fastify) {
       auth.revokeUserSessions(userId, unsigned && unsigned.valid ? unsigned.value : null);
     }
 
-    return publicUser({ id: userId, username, email, theme });
+    return publicUser({ id: userId, username, email, theme, week_start: weekStart });
   });
 }
 

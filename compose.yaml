@@ -2,11 +2,18 @@ name: tdx
 
 services:
   tdx:
-    image: tdx-app:latest
+    # Published by CI to GHCR (.github/workflows/docker.yml). The host pulls this
+    # image (docker compose pull && up); Watchtower auto-updates it (compose.watchtower.yml).
+    image: ghcr.io/nebulous-code/tdx:latest
+    # build: is kept for local dev only — `docker compose up -d --build` rebuilds
+    # and tags the image above. The host never passes --build, so it uses the pulled image.
     build:
       context: .
       dockerfile: backend/Dockerfile
     restart: unless-stopped
+    labels:
+      # let the Watchtower instance auto-update this container
+      - "com.centurylinklabs.watchtower.enable=true"
     environment:
       - PORT=3000
       - HOST=0.0.0.0

@@ -1,0 +1,16 @@
+name: tdx-watchtower
+
+# Host-only: run this once on the deploy host to enable hands-off updates.
+#   docker compose -f compose.watchtower.yml up -d
+# Watchtower polls GHCR every 5 min and, when ghcr.io/nebulous-code/tdx:latest
+# changes, pulls it and restarts the labelled tdx container (data persists in ./data).
+# Kept out of compose.yaml so it doesn't churn local dev builds.
+services:
+  watchtower:
+    image: containrrr/watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # --label-enable: only touch containers labelled watchtower.enable=true (the tdx service)
+    # --cleanup: remove the old image after a successful update
+    command: --label-enable --cleanup --interval 300

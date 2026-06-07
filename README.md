@@ -61,9 +61,34 @@ is seeded with a single `inbox` project plus the built-in smart-views.
 
 ## Deploy (Docker)
 
+**Local / dev** — build and run from source:
+
 ```sh
 docker compose up -d --build
 ```
+
+**Host / production** — pull the image CI publishes to GHCR (no local build):
+
+```sh
+docker compose pull && docker compose up -d
+```
+
+CI (`.github/workflows/docker.yml`) builds and pushes `ghcr.io/nebulous-code/tdx:latest`
+(plus a per-commit `:<sha>` tag) on every push to `main`. `compose.yaml` references that
+image; the `build:` block is only used when you pass `--build` locally.
+
+> One-time: after the first workflow run, set the GHCR **tdx** package visibility to
+> **Public** (GitHub → your packages → tdx → Package settings) so the host can pull it
+> without credentials.
+
+**Hands-off updates** — run Watchtower once on the host:
+
+```sh
+docker compose -f compose.watchtower.yml up -d
+```
+
+It polls GHCR every 5 minutes and auto-pulls/restarts the `tdx` container when a new
+`:latest` is published (data in `./data` is untouched).
 
 The container publishes port 3000 on all interfaces, so reach it at
 `http://<host-ip>:3000` from any device on the same LAN or tailnet. Data persists in

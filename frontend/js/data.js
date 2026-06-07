@@ -139,7 +139,8 @@
   });
 
   // ---- derived helpers (plain functions; components call them) ----
-  store.ctx = () => ({ projects: store.projects, tasks: store.tasks, labels: store.labels });
+  store.ctx = () => ({ projects: store.projects, tasks: store.tasks, labels: store.labels,
+    weekStart: (store.currentUser && store.currentUser.week_start) ?? 1 });
   store.projectById = (id) => store.projects.find(p=>p.id===id);
   store.labelById = (id) => store.labels.find(l=>l.id===id);
   // priority 0 (none) … 5 (very high)
@@ -417,6 +418,16 @@
     if(lab) return lab;
     lab = { id: uid('l'), name: clean };
     store.labels.push(lab); return lab;
+  };
+  // fold one label into another: reassign every task's id (dedupe) then drop the source
+  store.mergeLabels = (fromId, toId) => {
+    if(fromId===toId) return;
+    store.tasks.forEach(t => {
+      if(t.labels && t.labels.includes(fromId))
+        t.labels = [...new Set(t.labels.map(id => id===fromId ? toId : id))];
+    });
+    const i = store.labels.findIndex(l => l.id===fromId);
+    if(i>=0) store.labels.splice(i,1);
   };
 
   // After loading state from the server, raise the id counter above every id

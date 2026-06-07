@@ -115,6 +115,19 @@ window.LabelModal = {
           <input ref="name" class="input" v-model="name" placeholder="label-name" spellcheck="false" autocapitalize="off" @focus="kbFocusRow('name')" />
         </div>
         <div class="field"><span class="mut" style="font-size:11px;">renaming updates this label on every task that uses it</span></div>
+
+        <div v-if="hasOtherLabels" class="field" :class="kbCls('mergeInto')" style="border-top:1px solid var(--line);padding-top:10px;">
+          <label>merge into</label>
+          <div style="display:flex;gap:6px;">
+            <select ref="mergeInto" class="input" style="flex:1;" v-model="mergeInto" @focus="kbFocusRow('mergeInto')">
+              <option value="">— choose a label —</option>
+              <option v-for="l in otherLabels" :key="l.id" :value="l.id">#{{ l.name }}</option>
+            </select>
+            <button class="btn" :class="kbCls('merge')" :disabled="!mergeInto" @click="merge">merge</button>
+          </div>
+          <span class="mut" style="font-size:11px;">moves every task onto the chosen label, then deletes this one</span>
+        </div>
+
         <div class="acct-error" v-if="error">{{ error }}</div>
       </div>
       <div class="modal-foot">
@@ -124,12 +137,18 @@ window.LabelModal = {
     </div>
   </div>
   `,
-  data(){ return { name: this.model.label.name, error:'' }; },
+  data(){ return { name: this.model.label.name, mergeInto:'', error:'' }; },
+  computed: {
+    otherLabels(){ return this.store.sortedLabels().filter(l=>l.id!==this.model.label.id); },
+    hasOtherLabels(){ return this.otherLabels.length>0; }
+  },
   methods: {
     kbRows(){ return [
-      { id:'name',   type:'input',  ref:'name' },
-      { id:'save',   type:'button', activate:()=>this.save() },
-      { id:'cancel', type:'button', activate:()=>this.$emit('close') },
+      { id:'name',      type:'input',  ref:'name' },
+      { id:'mergeInto', type:'input',  ref:'mergeInto', when:()=>this.hasOtherLabels },
+      { id:'merge',     type:'button', activate:()=>this.merge(), when:()=>this.hasOtherLabels },
+      { id:'cancel',    type:'button', activate:()=>this.$emit('close') },
+      { id:'save',      type:'button', activate:()=>this.save() },
     ]; },
     kbSubmit(){ this.save(); },
     kbDirty(){ return this.name.trim() !== this.model.label.name; },
@@ -141,6 +160,17 @@ window.LabelModal = {
       this.model.label.name = nm;   // referenced by id, so this updates every task
       this.store.toast('✓ label renamed');
       this.$emit('close');
+    },
+    async merge(){
+      const to = this.store.labelById(this.mergeInto);
+      if(!to) return;
+      if(await this.store.askConfirm('Merge #'+this.model.label.name+' into #'+to.name+'? This can\'t be undone.')){
+        this.store.mergeLabels(this.model.label.id, to.id);
+        // if we were viewing the now-deleted label, fall back to the top view
+        if(this.store.view.id==='label_'+this.model.label.id) this.store.openQueryView(this.store.savedQueries[0]);
+        this.store.toast('✓ merged into #'+to.name);
+        this.$emit('close');
+      }
     }
   }
 };

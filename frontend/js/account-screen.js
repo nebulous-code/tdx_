@@ -11,12 +11,18 @@ window.AccountScreen = {
   data(){
     const u = this.store.currentUser || {};
     const theme = u.theme || 'amber';
+    const weekStart = u.week_start ?? 1;
     return {
       username: u.username || '',
       email: u.email || '',
       oldPassword: '', newPassword: '', confirmPassword: '',
       theme,
-      init: { username: u.username || '', email: u.email || '', theme },
+      weekStart,
+      weekDays: [
+        {v:0,n:'Sunday'},{v:1,n:'Monday'},{v:2,n:'Tuesday'},{v:3,n:'Wednesday'},
+        {v:4,n:'Thursday'},{v:5,n:'Friday'},{v:6,n:'Saturday'},
+      ],
+      init: { username: u.username || '', email: u.email || '', theme, weekStart },
       kbAutofocus: false,   // start in nav, not in the username field
       themes: [
         { key:'amber',   name:'amber',   bg:'#0b0a07', accent:'#ffb000' },
@@ -54,6 +60,14 @@ window.AccountScreen = {
           </span>
         </div>
 
+        <div class="acct-sep">preferences</div>
+        <div class="acct-row" :class="kbCls('weekStart')" @click="$refs.weekStart.focus()">
+          <span class="acct-label">week starts</span>
+          <select ref="weekStart" class="input" style="flex:1;" v-model.number="weekStart" @focus="kbFocusRow('weekStart')">
+            <option v-for="d in weekDays" :key="d.v" :value="d.v">{{ d.n }}</option>
+          </select>
+        </div>
+
         <div class="acct-sep">change password <span class="mut">(optional)</span></div>
         <div class="acct-row" :class="kbCls('oldPassword')" @click="$refs.oldPassword.focus()">
           <span class="acct-label">current</span>
@@ -80,7 +94,7 @@ window.AccountScreen = {
   computed: {
     dirty(){
       return this.username !== this.init.username || this.email !== this.init.email ||
-        this.theme !== this.init.theme ||
+        this.theme !== this.init.theme || this.weekStart !== this.init.weekStart ||
         !!this.oldPassword || !!this.newPassword || !!this.confirmPassword;
     }
   },
@@ -90,6 +104,7 @@ window.AccountScreen = {
       { id:'email',           type:'input',  ref:'email' },
       { id:'theme',           type:'grid',   items:this.themes, cols:6, previewOnFocus:true,
         isOn:t=>this.theme===t.key, select:t=>this.selectTheme(t.key) },
+      { id:'weekStart',       type:'input',  ref:'weekStart' },
       { id:'oldPassword',     type:'input',  ref:'oldPassword' },
       { id:'newPassword',     type:'input',  ref:'newPassword' },
       { id:'confirmPassword', type:'input',  ref:'confirmPassword' },
@@ -114,7 +129,7 @@ window.AccountScreen = {
     async save(){
       if(this.busy) return;
       this.error='';
-      const payload = { theme: this.theme };
+      const payload = { theme: this.theme, week_start: this.weekStart };
       const uname = this.username.trim();
       if(!uname || uname.length>32){ this.error='username must be 1–32 characters'; return; }
       payload.username = uname;

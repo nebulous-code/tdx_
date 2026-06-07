@@ -136,7 +136,7 @@
         else if(t.value==='overdue') res = d!==null && d<0;
         else if(t.value==='week') res = d!==null && d>=0 && d<=7;
         else if(t.value==='month') res = d!==null && d>=0 && d<=31;
-        else if(/^[mtwrfsu]+$/.test(t.value)) res = !!task.due && dueWindow(weekdaySet(t.value)).includes(task.due.slice(0,10));
+        else if(/^[mtwrfsu]+$/.test(t.value)) res = !!task.due && dueWindow(weekdaySet(t.value), ctx.weekStart).includes(task.due.slice(0,10));
         else res = cmpDate(d, t.value);
         break;
       }
