@@ -24,7 +24,7 @@ window.TaskDetail = {
         <div class="field" :class="kbCls('project')">
           <label>project</label>
           <select ref="project" class="input" v-model="task.projectId" @focus="kbFocusRow('project')" @keydown.esc.stop.prevent="blurField">
-            <option v-for="p in store.projects" :key="p.id" :value="p.id">{{ indent(p) }}{{ p.name }}</option>
+            <option v-for="({p,depth}) in projectOptions" :key="p.id" :value="p.id">{{ depth ? '↳ ' : '' }}{{ p.name }}</option>
           </select>
         </div>
         <div class="field">
@@ -81,7 +81,7 @@ window.TaskDetail = {
       <!-- notes -->
       <div class="field">
         <label>notes</label>
-        <textarea ref="notes" class="d-notes" :class="kbCls('notes')" v-model="task.notes" placeholder="# markdown-ish notes… (⌃/⌘+↵ saves)" @focus="kbFocusRow('notes')" @keydown.enter.ctrl.prevent="save" @keydown.enter.meta.prevent="save" @keydown.esc.stop.prevent="blurField"></textarea>
+        <textarea ref="notes" class="d-notes" :class="kbCls('notes')" v-model="task.notes" placeholder="# markdown-ish notes… (⌘+↵ saves)" @focus="kbFocusRow('notes')" @keydown.enter.ctrl.prevent="save" @keydown.enter.meta.prevent="save" @keydown.esc.stop.prevent="blurField"></textarea>
       </div>
 
       <!-- subtasks -->
@@ -109,6 +109,7 @@ window.TaskDetail = {
   data(){ return { subDraft:'', kbAutoListen:false, kbAutofocus:false, recurActive:false }; },
   computed: {
     task(){ return this.store.taskById(this.store.selectedTaskId); },
+    projectOptions(){ return this.store.projectTree(); },   // tree-ordered for the project select
     parentTask(){ return this.task && this.task.parentId ? this.store.taskById(this.task.parentId) : null; },
     subs(){ return this.task ? this.store.subtasks(this.task.id) : []; },
     doneSubs(){ return this.subs.filter(s=>s.done).length; },
@@ -122,7 +123,14 @@ window.TaskDetail = {
   },
   watch: {
     'store.selectedTaskId'(){ this.$nextTick(this.autosize); },
-    'store.detailOpen'(v){ if(v) this.$nextTick(this.kbInit); }
+    'store.detailOpen'(v){ if(v) this.$nextTick(()=>{
+      this.kbInit();
+      if(this.store.pendingNotesFocus){   // quick-add Shift+Enter: land in the notes field
+        this.store.pendingNotesFocus = false;
+        this.kbFocusRow('notes');
+        const el=this.$refs.notes; if(el) el.focus();
+      }
+    }); }
   },
   methods: {
     // ---- KbForm config (the app routes keys here via onKey; see header) ----

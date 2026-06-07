@@ -15,8 +15,12 @@ window.ProjectModal = {
           <label>name</label>
           <input ref="name" class="input" v-model="name" placeholder="project-name" @focus="kbFocusRow('name')" />
         </div>
-        <div v-if="model.parentId || (model.project && model.project.parentId)" class="field">
-          <span class="mut" style="font-size:11px;">↳ under {{ parentName }}</span>
+        <div class="field" :class="kbCls('parent')">
+          <label>parent</label>
+          <select ref="parent" class="input" v-model="parentId" @focus="kbFocusRow('parent')">
+            <option value="">— none (top level) —</option>
+            <option v-for="({p,depth}) in parentOptions" :key="p.id" :value="p.id">{{ depth ? '↳ ' : '' }}{{ p.name }}</option>
+          </select>
         </div>
         <div class="field">
           <label>color</label>
@@ -46,17 +50,22 @@ window.ProjectModal = {
     const name = p?p.name:'';
     const color = p?p.color:this.store.COLORS[0];
     const glyph = p?p.glyph:this.store.GLYPHS[1];
-    return { name, color, glyph, _orig:{ name, color, glyph } };
+    const parentId = p ? (p.parentId||'') : (this.model.parentId||'');
+    return { name, color, glyph, parentId, _orig:{ name, color, glyph, parentId } };
   },
   computed: {
-    parentName(){
-      const pid=this.model.parentId || (this.model.project&&this.model.project.parentId);
-      const p=this.store.projectById(pid); return p?p.name:'';
+    // tree-ordered parents, excluding self + descendants (no cycles)
+    parentOptions(){
+      const self=this.model.project;
+      const excluded=new Set();
+      if(self){ const walk=(p)=>{ excluded.add(p); this.store.childProjects(p).forEach(c=>walk(c.id)); }; walk(self.id); }
+      return this.store.projectTree().filter(({p})=>!excluded.has(p.id));
     }
   },
   methods: {
     kbRows(){ return [
       { id:'name',   type:'input',  ref:'name' },
+      { id:'parent', type:'input',  ref:'parent' },
       { id:'color',  type:'grid',   items:this.store.COLORS, cols:10, isOn:c=>c===this.color, select:c=>{ this.color=c; } },
       { id:'glyph',  type:'grid',   items:this.store.GLYPHS, cols:10, isOn:g=>g===this.glyph, select:g=>{ this.glyph=g; } },
       { id:'delete', type:'button', activate:()=>this.remove(), when:()=>this.model.mode==='edit' },
@@ -64,15 +73,16 @@ window.ProjectModal = {
       { id:'save',   type:'button', activate:()=>this.save() },
     ]; },
     kbSubmit(){ this.save(); },
-    kbDirty(){ return this.name!==this._orig.name || this.color!==this._orig.color || this.glyph!==this._orig.glyph; },
+    kbDirty(){ return this.name!==this._orig.name || this.color!==this._orig.color || this.glyph!==this._orig.glyph || this.parentId!==this._orig.parentId; },
     save(){
       const nm=this.name.trim()||'untitled';
       if(this.model.mode==='new'){
-        const p=this.store.addProject({ name:nm, color:this.color, glyph:this.glyph, parentId:this.model.parentId });
+        const p=this.store.addProject({ name:nm, color:this.color, glyph:this.glyph, parentId:this.parentId||null });
         this.store.openProjectView(p);
         this.store.toast('▣ project created');
       } else {
         const p=this.model.project; p.name=nm; p.color=this.color; p.glyph=this.glyph;
+        this.store.reparentProject(p, this.parentId);
         this.store.toast('✓ project saved');
       }
       this.$emit('close');

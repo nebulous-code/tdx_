@@ -133,6 +133,7 @@
     focusPane: 'list',       // 'list' | 'side' | 'filter' — which window the keyboard drives
     sideFocusId: null,       // id of the keyboard-focused sidebar item
     moveId: null,            // id of the sidebar item being reordered (m = move mode)
+    pendingNotesFocus: false,// set by quick-add Shift+Enter → detail opens focused in notes
     toasts: [],
     currentUser: null,       // { id, username, email } once authenticated; null = logged out
   });
@@ -147,6 +148,15 @@
   // slug (lowercase, no spaces); storage order is left untouched.
   store.sortedLabels = () => [...store.labels].sort((a,b)=> Q.slug(a.name).localeCompare(Q.slug(b.name)));
   store.childProjects = (pid) => store.projects.filter(p=>p.parentId===pid);
+  // flat, depth-tagged list in tree order (parent then its children) — for ordered
+  // project pickers (task detail select, project-modal parent select)
+  store.projectTree = () => {
+    const out = [];
+    const walk = (p, depth) => { out.push({ p, depth }); store.childProjects(p.id).forEach(c=>walk(c, depth+1)); };
+    store.projects.filter(p=>!p.parentId).forEach(r=>walk(r, 0));
+    return out;
+  };
+  store.reparentProject = (p, parentId) => { p.parentId = parentId || null; };
   store.subtasks = (tid) => store.tasks.filter(t=>t.parentId===tid);
   store.taskById = (id) => store.tasks.find(t=>t.id===id);
 

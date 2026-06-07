@@ -82,7 +82,7 @@ window.TaskList = {
     <!-- quick add -->
     <div class="quickadd">
       <span class="prompt" :class="{ warn }" :data-tip="warnTip">{{ warn ? '⚠' : '+' }}</span>
-      <input ref="qa" v-model="draft" :placeholder="addPlaceholder" @keydown.enter="commitAdd" @keydown.esc="escAdd" />
+      <input ref="qa" v-model="draft" :placeholder="addPlaceholder" @keydown.enter.exact.prevent="commitAdd" @keydown.enter.shift.prevent="commitAddToNotes" @keydown.esc="escAdd" />
       <span class="mut" style="font-size:11px;">↵ add</span>
     </div>
 
@@ -111,9 +111,9 @@ window.TaskList = {
     addPlaceholder(){
       if(this.store.view.kind==='project'){
         const p = this.store.projectById(this.store.view.id);
-        return 'add to '+(p?p.name:'project')+'…  (try: buy milk #errand)';
+        return 'add to '+(p?p.name:'project')+'…  (try: Call Mom #fun !5)';
       }
-      return 'add task…  (lands in '+ (this.store.projectById(this.store.currentProjectId())||{}).name +')';
+      return 'add task…  (try: Call Mom #fun !5)';
     },
     matched(){
       const ctx = this.store.ctx();
@@ -139,9 +139,11 @@ window.TaskList = {
       const f=this.store.sortField;
       this.store.sortDirs[f] = this.store.sortDirs[f]==='desc' ? 'asc' : 'desc';
     },
-    commitAdd(){
+    // parse the draft, create the task (inheriting the view's filters), clear the
+    // box, select it. Returns the task (or null if the box was empty).
+    addFromDraft(){
       const text = this.draft.trim();
-      if(!text) return;
+      if(!text) return null;
       const { title, labels, priority } = this.parseQuickAdd(text);
       // inherit the current view's filters (status/due/labels/project) so the new
       // task stays visible; merge any #tags typed in the box with the view's labels
@@ -153,7 +155,17 @@ window.TaskList = {
       });
       this.draft = '';
       this.store.selectedTaskId = t.id;
-      this.store.toast('+ task added');
+      return t;
+    },
+    commitAdd(){
+      if(this.addFromDraft()) this.store.toast('+ task added');
+    },
+    // Shift+Enter: create the task and jump into its detail, focused in notes
+    commitAddToNotes(){
+      const t = this.addFromDraft();
+      if(!t) return;
+      this.store.pendingNotesFocus = true;
+      this.store.detailOpen = true;
     },
     parseQuickAdd(text){
       const labels=[];
