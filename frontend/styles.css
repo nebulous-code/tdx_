@@ -104,6 +104,7 @@ input[type="number"]::-webkit-inner-spin-button { opacity: .6; }
 *::-webkit-scrollbar-thumb:hover { background: var(--amber-mut); }
 
 /* ---- app shell ------------------------------------------------------ */
+html, body { overflow-x: hidden; }   /* never let the page scroll wider than the device */
 #app { height: 100%; }
 .shell {
   display: grid;
@@ -562,7 +563,9 @@ input[type="number"]::-webkit-inner-spin-button { opacity: .6; }
 .mobile-only { display: none; }
 
 @media (max-width: 860px) {
-  .shell { grid-template-columns: 1fr; grid-template-areas: "topbar" "main" "status"; }
+  /* minmax(0,1fr): the single column can't grow to its widest no-wrap content
+     (which was stretching the whole app past the screen) — it stays viewport-wide */
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-areas: "topbar" "main" "status"; }
   .sidebar {
     position: fixed; top: 28px; bottom: 22px; left: 0; width: 80vw; max-width: 300px;
     z-index: 50; transform: translateX(-100%); transition: transform .16s ease;
@@ -572,6 +575,28 @@ input[type="number"]::-webkit-inner-spin-button { opacity: .6; }
   .detail { width: 100%; }
   .mobile-only { display: inline-flex; }
   :root { --detail-w: 100%; }
+
+  /* keep the full-width bars inside the phone: clip overflow + shed lowest-value items */
+  .topbar, .statusbar, .list-head { min-width: 0; }
+  .topbar { gap: 8px; overflow: hidden; }
+  .topbar .t-clock { display: none; }              /* the phone already shows the time */
+  .topbar .right { gap: 8px; min-width: 0; }
+  .topbar .right .qbtn { max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list-head { flex-wrap: wrap; height: auto; row-gap: 4px; }   /* sort/completed wrap, don't clip */
+  .statusbar { overflow: hidden; }
+  .statusbar .s-cmdk, .statusbar .s-version { display: none; }  /* no keyboard / version line on a phone */
+  .view-title .view-q { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/* Detail drawer goes FULL-SCREEN on phones/tablets (both orientations) — the 860px
+   layout breakpoint leaves a phone in landscape on the desktop 380px drawer (a 40%
+   strip with a black gap). Use all the width here; desktop (>1024px) keeps the side
+   drawer. X out to return to the task list. */
+@media (max-width: 1024px) {
+  .detail {
+    position: fixed; top: 28px; left: 0; right: 0; bottom: 22px;
+    width: auto; border-left: none; z-index: 60;
+  }
 }
 
 /* ---- auth: login screen + account popup ----------------------------- */

@@ -33,7 +33,7 @@
       <span class="mobile-only qbtn" style="padding:1px 7px;" @click="store.sidebarOpen=!store.sidebarOpen">≡</span>
       <span class="brand">tdx<b>_</b></span>
       <span class="sep">│</span>
-      <span class="mut nowrap">{{ clock }} {{ today }}</span>
+      <span class="mut nowrap t-clock">{{ clock }} {{ today }}</span>
       <div class="right">
         <span class="dim">{{ openCount }} open</span>
         <span class="sep">│</span>
@@ -58,7 +58,7 @@
       <query-bar ref="qbar" :store="store" @save-query="openSave"></query-bar>
       <div class="view-title" style="display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--line);background:var(--bg);">
         <span class="hi" style="font-family:var(--crt);font-size:18px;line-height:1;">{{ store.view.title }}</span>
-        <span class="mut" style="font-size:11px;" v-if="store.currentQuery()">› {{ store.currentQuery() }}</span>
+        <span class="mut view-q" style="font-size:11px;" v-if="store.currentQuery()">› {{ store.currentQuery() }}</span>
       </div>
       <task-list ref="list" :store="store"></task-list>
       <task-detail ref="detail" :store="store"></task-detail>
@@ -80,8 +80,8 @@
       </template>
       <div class="right">
         <span class="qbtn" @click="helpOpen=true" title="keyboard shortcuts & query syntax">? help</span>
-        <span class="qbtn" @click="openPalette" title="command palette">⌘K</span>
-        <span class="mut">v1.0</span>
+        <span class="qbtn s-cmdk" @click="openPalette" title="command palette">⌘K</span>
+        <span class="mut s-version">v1.0</span>
       </div>
     </footer>
   </div>
