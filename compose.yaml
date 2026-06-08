@@ -1,4 +1,4 @@
-name: tdx
+name: tdx-dev
 
 services:
   tdx:
