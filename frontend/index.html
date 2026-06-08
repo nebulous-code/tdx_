@@ -6,13 +6,15 @@
 <title>tdx // terminal todo</title>
 <link rel="stylesheet" href="styles.css" />
 <link rel="stylesheet" href="themes.css" />
-<link rel="icon" href="/icons/icon-192.png" />
-<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" href="/icons/icon-192.png?v=3" />
+<link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=3" />
 <meta name="theme-color" content="#0b0a07" />
-<!-- iOS "Add to Home Screen": use the apple-touch-icon above, run standalone, short label -->
+<!-- iOS "Add to Home Screen": classic apple-touch-icon path (the >_ tile) + standalone.
+     NO web manifest on purpose — with a manifest iOS enters "web app" mode and pulls the
+     home-screen icon from the manifest, which it was failing to load (white letter tile).
+     The apple-touch-icon path is the one proven to render the orange >_. ?v= busts iOS's
+     sticky icon cache. A copy is also served at the site root for iOS auto-discovery. -->
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="tdx" />
 </head>
