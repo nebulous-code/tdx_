@@ -123,6 +123,8 @@
     selectedTaskId: null,
     detailOpen: false,
     showCompleted: false,
+    searchActive: false,     // vim '/' free-text search is showing its results
+    searchTerm: '',          // the current search string (remembered across view switches)
     sortField: 'due',        // due | created | title | project | priority | tag
     // per-field direction. 'asc' = ^, 'desc' = v.
     sortDirs: { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', tag:'asc' },
@@ -201,7 +203,30 @@
     const v = store.view;
     return v.kind==='project' ? 'project:'+v.id : (v.query||'');
   };
+  // vim '/' search: title+notes substring across ALL tasks (ignores the active
+  // view), respecting the completed toggle, including subtasks (surfacing parents),
+  // relevance-ordered. Drives both the render and j/k nav via visibleRoots.
+  store.searchRoots = () => {
+    const term = (store.searchTerm||'').trim().toLowerCase();
+    if(!term) return [];
+    let matched = store.tasks.filter(t =>
+      (t.title||'').toLowerCase().includes(term) || (t.notes||'').toLowerCase().includes(term));
+    if(!store.showCompleted) matched = matched.filter(t=>!t.done);
+    const roots = []; const seen = new Set();
+    for(const t of matched){
+      let r=t; while(r.parentId){ const p=store.taskById(r.parentId); if(!p) break; r=p; }
+      if(!seen.has(r.id)){ seen.add(r.id); roots.push(r); }
+    }
+    const rank = t => {
+      const ti=(t.title||'').toLowerCase();
+      if(ti.startsWith(term)) return 0;
+      if(ti.includes(term))   return 1;
+      return 2;   // notes-only, or surfaced because a subtask matched
+    };
+    return roots.sort((a,b)=> rank(a)-rank(b) || a.title.localeCompare(b.title));
+  };
   store.visibleRoots = () => {
+    if(store.searchActive) return store.searchRoots();
     const ctx = store.ctx();
     const q = store.currentQuery();
     let matched = Q.run(q, ctx);
@@ -310,6 +335,7 @@
 
   store.setView = (v) => {
     store.view = v; store.selectedTaskId = null; store.sidebarOpen = false;
+    store.searchActive = false;   // switching views exits search (the term is kept for the next '/')
   };
   store.openQueryView = (sv) => {
     store.setView({ kind:'query', id:sv.id, title:sv.name, query:sv.query });

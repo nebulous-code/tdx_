@@ -101,7 +101,9 @@ window.TaskList = {
         <pre>  ┌─────────────┐
   │   no tasks   │
   └─────────────┘</pre>
-        <div style="margin-top:10px;">query returned 0 rows.</div>
+        <div v-if="store.searchActive && store.searchTerm" style="margin-top:10px;">no matches for "{{ store.searchTerm }}".</div>
+        <div v-else-if="store.searchActive" style="margin-top:10px;">type to search…</div>
+        <div v-else style="margin-top:10px;">query returned 0 rows.</div>
         <div class="mut" style="margin-top:4px;">press <span class="kbd">n</span> to add · <span class="kbd">/</span> to search</div>
       </div>
     </div>

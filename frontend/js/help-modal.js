@@ -21,7 +21,7 @@ window.HelpModal = {
         { k:'S',             d:'sort config (reorder m · disable d · direction ^)' },
         { k:'c',             d:'show / hide completed tasks' },
         { k:'!',             d:'cycle priority (none → very high → none)' },
-        { k:'/',             d:'focus the query bar' },
+        { k:'/',             d:'search tasks (title + notes, across everything)' },
         { k:'f',             d:'focus the filter builder' },
         { k:'n',             d:'show / hide the nav' },
         { k:'@',             d:'account screen' },

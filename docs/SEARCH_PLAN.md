@@ -71,7 +71,45 @@ clean separation: **filter = shape the view; search = find a task anywhere**.
 
 ---
 
-## Open decisions (for your review)
+## Final design (all decisions resolved — ready to build)
+
+**Behavior**
+- **`/`** activates search (its old query-bar-focus binding is removed; the query bar is reachable
+  via `f`+`i`). It focuses a search input in the statusbar showing `/<term> — <count>`.
+- **Live/incremental:** as you type, the task list shows matches across **all tasks in every
+  project/view** (ignores the active view's filters), matched by **title + notes** substring,
+  case-insensitive. **Respects the completed toggle** (`c` / `showCompleted`) — open-only by
+  default. **Includes subtasks**, surfacing their parent (like the normal list). **Relevance order:**
+  title starts-with → title contains → notes contains.
+- **`Enter`** drops focus into the results list (cursor on the first match); results stay shown.
+  Normal list keys work (`j/k`, `e`/`Enter` to open, etc.). Pressing **`/`** again re-focuses the
+  field with the current term to refine it.
+- **Editing from results:** opening a task detail/modal behaves normally; *its* `Esc` closes it
+  first and returns you to the results list (existing detail Esc handling wins).
+- **Exit / remember (two bits of state: `searchActive`, `searchTerm`):**
+  - `Esc` in the results list (nothing else open) → **clear & forget**: `searchActive=false`,
+    `searchTerm=''`, restore the underlying view. Next `/` opens empty.
+  - **Switching to a view/project** (any `store.setView`) → `searchActive=false` but **keep**
+    `searchTerm`. Next `/` re-shows that search.
+- **Rows** render exactly like the normal task list (no project tag). **Empty state** reuses the
+  filter's existing no-results render. **No backend / no persistence** — search is ephemeral.
+
+**Implementation**
+- `data.js`: add `searchActive`/`searchTerm`; a `store.searchRoots()` (and matching nav rows) that
+  runs the `query.js` `text` matcher over **all** tasks (ignoring `store.view`), respects
+  `showCompleted`, includes subtasks (surfacing parents), relevance-sorted. Thread search into the
+  set that **both** `visibleRoots()` (render) and `visibleRows()` (keyboard nav) build on, so the
+  list and `j/k` agree. In `store.setView`, set `searchActive=false` (keep `searchTerm`).
+- `index.html`: statusbar search `<input>` (the `/<term> — N` readout); `onKey` `/` → activate +
+  focus it (remove the old `/`→`qbar.focus`); input `@input` updates `searchTerm` live, `@keydown.enter`
+  → focus the list, `@keydown.esc` → clear & forget + restore view. `Esc` in the list (nav) clears too.
+- `query.js`: optionally expose `Q.textMatch(task, term)` for the matcher + a relevance ranker.
+- CSS: the statusbar input + a "searching" affordance. Help: replace the `/` "focus query bar" entry
+  with `/` = search.
+
+---
+
+## Open decisions (resolved — kept as the record)
 1. **What does search match?** Title only (the note says "Mom in the name"), or title **+ notes**
    (the existing `text` term already does both), or also **labels / project name**? Recommendation:
    title + notes (reuse the existing matcher), title-matches ranked first (#7).

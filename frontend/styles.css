@@ -158,6 +158,13 @@ input[type="number"]::-webkit-inner-spin-button { opacity: .6; }
 .statusbar .spark { color: var(--green); animation: blink 1.1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 .statusbar .right { margin-left: auto; display: flex; gap: 16px; }
+/* '/' search field in the bottom bar */
+.statusbar .search-prompt { color: var(--amber); font-weight: 600; }
+.statusbar .searchbar {
+  flex: 1; max-width: 420px; background: transparent; border: none; outline: none;
+  color: var(--amber-hi); font-family: var(--mono); font-size: 12px; caret-color: var(--amber);
+}
+.statusbar .searchbar::placeholder { color: var(--amber-mut); }
 
 /* ---- sidebar -------------------------------------------------------- */
 .sidebar {

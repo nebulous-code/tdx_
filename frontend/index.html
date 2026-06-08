@@ -57,9 +57,18 @@
 
     <!-- status bar -->
     <footer class="statusbar">
-      <span><span class="spark">●</span> READY</span>
-      <span class="sep">│</span>
-      <span class="mut">{{ store.visibleRoots().length }} rows</span>
+      <template v-if="store.searchActive">
+        <span class="search-prompt">/</span>
+        <input ref="search" class="searchbar" v-model="store.searchTerm" spellcheck="false"
+               placeholder="search title + notes…"
+               @keydown.enter.stop.prevent="commitSearch" @keydown.esc.stop.prevent="clearSearch" />
+        <span class="mut">{{ store.visibleRoots().length }} match{{ store.visibleRoots().length===1?'':'es' }}</span>
+      </template>
+      <template v-else>
+        <span><span class="spark">●</span> READY</span>
+        <span class="sep">│</span>
+        <span class="mut">{{ store.visibleRoots().length }} rows</span>
+      </template>
       <div class="right">
         <span class="qbtn" @click="helpOpen=true" title="keyboard shortcuts & query syntax">? help</span>
         <span class="qbtn" @click="openPalette" title="command palette">⌘K</span>
@@ -189,6 +198,17 @@ const app = createApp({
       this.promptState=null; r(val || null);
     },
     openAccount(){ this.accountOpen = true; },
+    // ---- search ('/'): live free-text across all tasks ----
+    openSearch(){ this.store.searchActive = true; this.$nextTick(()=>{ this.$refs.search && this.$refs.search.focus(); }); },
+    commitSearch(){   // Enter: drop into the results list, cursor on the first match
+      const rows = this.store.visibleRows();
+      if(rows.length) this.store.selectedTaskId = rows[0].id;
+      if(this.$refs.search) this.$refs.search.blur();
+    },
+    clearSearch(){   // Esc: forget the term and restore the underlying view
+      this.store.searchActive = false; this.store.searchTerm = '';
+      if(this.$refs.search) this.$refs.search.blur();
+    },
     // ---- keyboard ----
     onKey(e){
       // app-styled confirm / prompt take priority over every other shortcut
@@ -218,6 +238,8 @@ const app = createApp({
           if(this.$refs.detail && this.$refs.detail.recurActive){ this.$refs.detail.kbKey(e); return; }
           const a=document.activeElement; if(a && a.blur) a.blur(); this.store.detailOpen=false; return;
         }
+        // a task detail opened from search closes first (above); a second Esc clears the search
+        if(this.store.searchActive){ e.preventDefault(); this.clearSearch(); return; }
       }
       // task-detail drawer: a captured pane. While open it owns nav-mode keys
       // (j/k fields · i edit · space toggle · enter save); J/K swap tasks; u/d
@@ -243,6 +265,8 @@ const app = createApp({
       if(e.key==='@' && !typing){ e.preventDefault(); this.openAccount(); return; }
       // 'S' (shift+s) opens the sort-preferences popup
       if(e.key==='S' && !typing){ e.preventDefault(); this.sortOpen=true; return; }
+      // '/' opens the bottom-bar search (free-text across all tasks)
+      if(e.key==='/' && !typing){ e.preventDefault(); this.openSearch(); return; }
       if(typing || this.paletteOpen) return;
 
       // filter builder: F collapses the panel, f focuses into it (from any window)
@@ -292,8 +316,6 @@ const app = createApp({
           if(curId){ e.preventDefault(); this.store.detailOpen=true; } break;
         case 'i':
           e.preventDefault(); this.newTask(); break;
-        case '/':
-          e.preventDefault(); this.$refs.qbar && this.$refs.qbar.focus(); break;
         case 's':
           e.preventDefault(); this.$refs.list && this.$refs.list.cycleSort(); break;
         case '^':
