@@ -2,127 +2,98 @@
 
 Reconciled against the **tdx** project tasks (`p_146`) in the live DB (DB = source of truth).
 Completed/checked work is cleared out; only open items remain below. I did **not** touch the DB
-(read-only query of `data/tdx.db`).
+(read-only query of `data/tdx.db`). Current: **25 done / 12 open**.
 
 ## DISCREPENCIES
 
-This round reflects the keyboard-framework work landing. Three deltas vs. the last reconciliation:
+A lot shipped since last time. **Checked & verified real this round:** t_274 (GH Action), t_314
+(PWA icon), t_316 (mobile layout), t_318 (add-hint), t_323 (project-dropdown order), t_328
+(Shift-Enter→notes), t_332 (search `/`), t_351 (start-of-week), t_415 (reparent project), t_421
+(sort config). Plus prior: t_148/153/157/160/164/214/221/228/236/242/278/286/292/325.
 
-- **t_278 "Unified keyboard-form framework" is now checked & shipped.** P1 (the `KbForm` mixin +
-  the 3 edit modals + account screen + task-detail drawer), P2 (help modal + filter builder), and
-  the task-detail **recurrence builder** are all keyboard-navigable now. The **sidebar (P3) was
-  intentionally left bespoke** (tree `h/l` semantics + move-mode don't fit a rows model) — that was
-  a conscious decision, not an unfinished slice, and there is no separate sidebar task. Design +
-  decisions: `docs/KEYBOARD_FRAMEWORK.md` (status: built). So t_278 being checked is correct.
-- **t_325 "Land on Top View" is now checked & shipped.** On load the app defaults the active view
-  to the top saved query (`hydrate()` in `index.html` → `store.openQueryView(savedQueries[0])`),
-  not the hardcoded "Today." Closes the deferred half of t_157.
-- **NEW: t_415 "Editing a project should let you change its parent"** exists in the DB (open, p4) but
-  wasn't in the prior plan. Added under *Small / well-scoped* below.
+Three things to flag:
 
-No contradictions found (nothing checked-but-unbuilt, nothing open-but-already-shipped).
+- **t_273 "Combine Labels" — DB says OPEN, but it's shipped on `main`** (commit a3267f2: the
+  `LabelModal` "merge into…" picker + `store.mergeLabels`, with the can't-be-undone confirm; you
+  confirmed "merging works well"). So it's effectively **done but unchecked** — just needs its box
+  ticked in the app. Omitted from the open list below since no work remains.
+- **t_314 (PWA icon): fully on `origin/main`** (commit `5cb85a4` — classic `apple-touch-icon` path,
+  no web manifest, `?v=` cache-bust, root icon). Done and released.
+- **t_316 (mobile layout): committed (`7573dee`) on local `main` and `mobile_layout`, but NOT pushed
+  to `origin/main`** (local `main` is 1 commit ahead). Nothing's lost — a `git push origin main`
+  lands it remotely and triggers the GHCR build. (Per your workflow I'm not pushing.)
+- **t_432 "new defect" is a test task** (testing the #bug/#defect label merge) — disregard.
 
-Checked & verified real: **t_148, t_153, t_157, t_160, t_164, t_214, t_221, t_228, t_236, t_242,
-t_278, t_286, t_292, t_325**. (t_153's keyboard-nav remainder was folded into t_278, now also done.)
+**New tasks since last sync:** t_422 (attachments) and t_450 (open-symbol shape) — added below.
 
-One **partial** worth noting (not a discrepancy — correctly still open): **t_239 "Task Creation
-Language"** — `#label` and `!N` priority ship and are on the help screen; due-date/recurrence
-keywords don't yet.
+One **partial** still correctly open: **t_239 "Task Creation Language"** — `#label` + `!N` priority
+ship; due-date/recurrence quick-add keywords don't yet.
 
 ---
 
 ## Reusable building blocks (for any of the below)
-- **`KbForm` mixin (`frontend/js/kbform.js`)** — the shipped keyboard framework. A screen declares
-  `kbRows()` (input/button/grid/static rows) and the mixin owns the cursor, `h/l` magic-column,
-  `kfocus` highlight, and dirty-guard. Hooks: `kbSubmit`/`kbDirty`/`kbOnClose`/`kbTab`/`kbDelegate`
-  + `kbAutoListen`/`kbAutofocus`. Use it for any new modal/screen instead of hand-rolling keys.
-- App-styled dialogs: `store.askConfirm(msg)` / `store.askPrompt(label)` (Promise-based, in
-  `index.html`) — never native `confirm()`/`prompt()`.
-- Edit modals with color+glyph pickers: `ProjectModal` / `SaveQueryModal` / `LabelModal` in `modals.js`.
-- Snapshot persistence is automatic for `tasks/projects/labels/savedQueries` fields; a new column
-  needs a migration + `state.js` read/write (+ `ORDER BY position` for ordered tables) — see how
-  `priority`/`position`/`theme` were added.
-- Quick-add parsing (`#label`, `!N` priority) lives in `tasklist.js` `parseQuickAdd`; field defaults
-  from the active view in `data.js` `viewDefaults`. Project tree helpers: `store.childProjects(id)`,
-  `store.projectById(id)`, `store.openProjectView(p)`.
-- Sidebar keyboard nav stays bespoke: `index.html` `sidebarKey(e)` + `store.sideItems()`.
+- **`KbForm` mixin (`frontend/js/kbform.js`)** — keyboard framework. A screen declares `kbRows()`
+  (input/button/grid/static) and the mixin owns cursor, `h/l` magic-column, `kfocus`, dirty-guard.
+  Hooks: `kbSubmit`/`kbDirty`/`kbOnClose`/`kbTab`/`kbDelegate` + `kbAutoListen`/`kbAutofocus`. The
+  Shift+S **sort config** (`sort-modal.js`) is the latest example (move-mode via `kbDelegate`).
+- **Per-user prefs** (`theme`, `week_start`): pattern = migration adds a `users` column → `auth.js`
+  SELECT + `routes/auth.js` `publicUser`/validate/UPDATE → `account-screen.js` control →
+  `index.html` applies on login. **Sort prefs** use the same path but store JSON (`users.sort_prefs`,
+  `store.normalizeSortPrefs`/`applySortPrefs`).
+- **Search** (`/`): `store.searchRoots()` runs the `query.js` `text` matcher over all tasks (ignores
+  the view), feeding `visibleRoots`/`visibleRows`; `store.searchActive`/`searchTerm`; `store.setView`
+  clears it. Design: `docs/SEARCH_PLAN.md`.
+- **Projects:** `store.projectTree()` (tree-ordered, depth-tagged), `store.reparentProject`,
+  `store.childProjects`/`projectById`. **Labels:** `store.mergeLabels(fromId,toId)`.
+- App-styled dialogs `store.askConfirm`/`askPrompt` (never native). Edit modals in `modals.js`.
+- **Persistence:** snapshot auto-saves `tasks/projects/labels/savedQueries`; a new column needs a
+  migration + `state.js` read/write (+ `ORDER BY position`). The snapshot stores JSON-able data only —
+  **binary attachments (t_422) need a new storage mechanism** (no blob store today).
+- **Schema authority / sharing groundwork:** `docs/SHARED_SCHEMA_PLAN.md` (backend validation is the
+  prerequisite for a 2nd frontend and t_320).
+- **Mobile:** layout stacks at `≤860px` (`minmax(0,1fr)` so the column can't blow out; sidebar→overlay);
+  the detail drawer goes full-screen at `≤1024px` (both phone orientations); global `overflow-x:hidden`.
+- **PWA icon:** classic `apple-touch-icon` path (no web manifest — iOS web-app mode mis-loaded it);
+  copy served at the site root + `?v=` cache-bust.
 
 ---
 
 ## Open backlog
 
 ### Small / well-scoped
-> A batch plan for knocking several of these out together lives in `docs/SMALL_TASKS_PLAN.md`.
-
-**t_318 — Add-hint copy.** Update the quick-add placeholder in `tasklist.js` `addPlaceholder` to
-show the label + priority syntax (e.g. `try: Call Mom #fun !5`). One-liner.
-
-**t_323 — Project dropdown order in task detail (bug).** The detail's project `<select>`
-(`task-detail.js`, iterates `store.projects` in position order) scatters subprojects away from
-their parents. Fix: order the options as a tree (parent then children) or alphabetically, reusing
-`indent(p)`.
-
-**t_415 — Change a project's parent when editing.** `ProjectModal` (`modals.js`) has no parent
-picker. Add a parent `<select>` (tree-ordered; exclude the project itself and its descendants to
-avoid cycles) + a `data.js` reparent that sets `parentId` (and drops `position` to the end of the
-new sibling group). `parentId` already round-trips through the snapshot.
-
-**t_328 — Shift-Enter on create → notes.** In the quick-add (`tasklist.js`), make `Shift+Enter`
-create the task **and** open its detail focused in the notes field (instead of staying in the add
-box). Split the `@keydown.enter` handler into `.exact` vs `.shift`.
-
-**t_273 — Combine (merge) labels.** Extend the label edit flow with a "merge into…" picker + the
-styled *"can't be undone"* confirm; reassign every task's folded label id → target, drop the folded
-label. Client-side (`modals.js` `LabelModal`, a `data.js` `mergeLabels` helper).
-
-**t_274 — GH Action: build & push Docker image.** `.github/workflows/docker.yml` → build from repo
-root + `backend/Dockerfile`, push to GHCR on `main`; host `compose.yaml` references the image and
-Watchtower auto-pulls. No app code.
-
-**t_351 — Start-of-week as a user setting.** Add a `week_start` per-user pref (column +
-`state.js`/account-screen control, like `theme`) and pass it into `query.js` `dueWindow(…, weekStart)`
-(already parameterized). Unblocks non-Monday weekday filters.
+**t_450 — Open symbol a box, not a circle.** The open-status glyph in the task list (the `○`) should
+be a box to match the aesthetic. Tiny CSS/markup change in the task row (`tasklist.js` / `styles.css`).
 
 ### Medium
-
 **t_239 (remainder) — task-creation keywords.** Extend `parseQuickAdd` with a due-date shorthand
-(`^fri`/`^tomorrow`/`^2026-06-10`) then recurrence; document each on the help "new task" tab. Keep
-"unparseable → left as text."
+then recurrence; document each on the help "new task" tab. Keep "unparseable → left as text."
 
 **t_254 — Duration estimate field.** Same shape as priority: column + `state.js`, a detail control,
 optional row badge, a `dur:` query token, a sort field. Decide units (hours vs sizing).
 
 **t_217 — Archive (soft-delete) projects.** `archived` flag on `projects` (migration + `state.js`);
-archived projects leave the sidebar/queries (`query.js`/`visibleRoots` guard); toggle from the
-project edit modal. No hard delete.
+archived projects leave the sidebar/queries; toggle from the project edit modal. No hard delete.
 
-**t_288 — Pin a view to the header.** A `pinned` flag on `saved_queries`; render pinned views
-lowercase with live counts in the topbar; rework the existing open/overdue counts as default-pinned
-system views.
-
-**t_332 — Search tasks (`/`).** A text search distinct from filtering — a search field in the bottom
-bar (vim-style `/`) matching title/notes substrings. (Note: `/` currently focuses the query bar;
-reconcile that.)
-
-**t_314 — PWA favicon (bug).** App icon/favicon not showing — check `manifest.webmanifest` icon
-paths + `apple-touch-icon`/`<link rel=icon>` in `index.html`. Likely small once diagnosed.
+**t_288 — Pin a view to the header.** A `pinned` flag on `saved_queries`; render pinned views with
+live counts in the topbar; rework the existing open/overdue counts as default-pinned system views.
 
 **t_321 — Database backups.** Scheduled, WAL-aware copy of the SQLite file (checkpoint then copy,
 with retention). Backend cron/script + a documented restore. Devops-flavored.
 
 ### Large / own spec
+**t_422 — Add attachments to a task.** Attach files/images. **Needs a design first:** the backend is
+a JSON snapshot with no binary storage — requires a file-store (disk volume or object storage), an
+upload/download endpoint, per-user scoping, and a way to reference attachments from a task. Biggest
+unknown of the open set.
 
 **t_224 — Data export/import (CSV).** Idempotent upsert-by-name, per-project vs account-wide,
 pre-import warnings, semicolon-separated labels. Own spec before coding.
 
-**t_320 — Multi-account project sharing.** Share a project across users — touches the multi-tenant
-model (ownership, per-user vs shared rows, permissions). Epic; needs a design pass.
+**t_320 — Multi-account project sharing.** Share a project across users — ownership/permissions on
+the multi-tenant model. Epic; prerequisite is backend schema validation (`docs/SHARED_SCHEMA_PLAN.md`).
 
 ### Epics / maybe-not
-
-**t_316 — Make mobile nav better.** Responsive overhaul of the nav/layout for small screens. Broad.
-
 **t_246 — Kanban board.** Alternate project view; large, "probably not."
 
 **t_249 — Template projects.** Project duplication + `{field}` placeholder prompting + a creation
-workflow. Big lift; suits the workflow but is its own project.
+workflow. Big lift; its own project.
