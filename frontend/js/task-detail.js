@@ -31,7 +31,7 @@ window.TaskDetail = {
           <label>status · priority</label>
           <div style="display:flex;gap:6px;">
             <button class="btn" style="flex:1;justify-content:center;" :class="[{primary: task.done}, kbCls('status')]" @click="store.toggleDone(task)">
-              {{ task.done ? '✓ done' : '○ open' }}
+              {{ task.done ? '✓ done' : '☐ open' }}
             </button>
             <select ref="priority" class="input" style="flex:1;" :class="kbCls('priority')" v-model.number="task.priority" @focus="kbFocusRow('priority')" @keydown.esc.stop.prevent="blurField">
               <option :value="5">5 v.high</option>
