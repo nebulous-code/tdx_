@@ -61,7 +61,7 @@
         <span class="search-prompt">/</span>
         <input ref="search" class="searchbar" v-model="store.searchTerm" spellcheck="false"
                placeholder="search title + notes…"
-               @keydown.enter.stop.prevent="commitSearch" @keydown.esc.stop.prevent="clearSearch" />
+               @keydown.enter.stop.prevent="commitSearch" @keydown.esc.stop.prevent="commitSearch" />
         <span class="mut">{{ store.visibleRoots().length }} match{{ store.visibleRoots().length===1?'':'es' }}</span>
       </template>
       <template v-else>
