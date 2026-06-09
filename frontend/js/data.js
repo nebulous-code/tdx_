@@ -210,7 +210,8 @@
     const term = (store.searchTerm||'').trim().toLowerCase();
     if(!term) return [];
     let matched = store.tasks.filter(t =>
-      (t.title||'').toLowerCase().includes(term) || (t.notes||'').toLowerCase().includes(term));
+      (t.title||'').toLowerCase().includes(term) || (t.notes||'').toLowerCase().includes(term) ||
+      (t.id||'').toLowerCase().includes(term));
     if(!store.showCompleted) matched = matched.filter(t=>!t.done);
     const roots = []; const seen = new Set();
     for(const t of matched){
@@ -218,10 +219,11 @@
       if(!seen.has(r.id)){ seen.add(r.id); roots.push(r); }
     }
     const rank = t => {
+      if((t.id||'').toLowerCase()===term) return -1;   // exact id hit → top
       const ti=(t.title||'').toLowerCase();
       if(ti.startsWith(term)) return 0;
       if(ti.includes(term))   return 1;
-      return 2;   // notes-only, or surfaced because a subtask matched
+      return 2;   // notes-only, id-substring, or surfaced because a subtask matched
     };
     return roots.sort((a,b)=> rank(a)-rank(b) || a.title.localeCompare(b.title));
   };
@@ -323,9 +325,11 @@
   };
 
   // True when the current view filters on parameters we can't apply to a new task
-  // (Flags or free text) — drives the quick-add warning indicator.
+  // (Flags or free text) — drives the quick-add warning indicator. `has:no-labels`
+  // ("no tag") is exempt: a brand-new task has no labels, so it already satisfies it.
   store.viewWarn = () =>
-    Q.parse(store.currentQuery()).terms.some(t => !APPLIED_FIELDS.has(t.field));
+    Q.parse(store.currentQuery()).terms.some(t =>
+      !APPLIED_FIELDS.has(t.field) && !(t.field==='has' && t.value==='no-labels'));
 
   // ---- mutations ----
   store.toast = (msg) => {
@@ -415,10 +419,24 @@
           labels: [...t.labels], rec: t.recurrence, notes: t.notes, priority: t.priority,
         });
         store.tasks.push(clone);
+        cloneSubtree(t.id, clone.id);   // regenerate the whole subtask subtree, fresh/unchecked
         store.toast('↻ next: '+Rec.ymd(nxt));
       }
     }
   };
+  // Recreate every descendant of `origParentId` under `newParentId`, reset to
+  // unchecked (mk() defaults done:false / completedAt:null). Recurses to any depth,
+  // so a recurring parent's checklist comes back fresh each occurrence.
+  function cloneSubtree(origParentId, newParentId){
+    for(const s of store.subtasks(origParentId)){
+      const sc = mk(uid('t'), s.projectId, newParentId, s.title, {
+        due: s.due, reminder: s.reminder, labels: [...s.labels],
+        rec: s.recurrence, notes: s.notes, priority: s.priority,
+      });
+      store.tasks.push(sc);
+      cloneSubtree(s.id, sc.id);
+    }
+  }
   function shiftReminder(t, nextDue){
     if(!t.reminder || !t.due) return null;
     // reminder is a 'YYYY-MM-DDTHH:MM' timestamp; preserve its time-of-day and

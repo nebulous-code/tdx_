@@ -75,7 +75,7 @@ window.TaskDetail = {
           <span class="mut" v-if="recurActive" style="font-size:11px;text-transform:none;">— editing · esc to exit</span>
           <span class="mut" v-else-if="kbCls('recur').kfocus" style="font-size:11px;text-transform:none;">— i to edit</span>
         </label>
-        <recurrence-builder ref="recur" v-model="task.recurrence" :anchor="task.due" :active="recurActive"></recurrence-builder>
+        <recurrence-builder ref="recur" :model-value="task.recurrence" @update:model-value="onRecurrenceInput" :anchor="task.due" :active="recurActive"></recurrence-builder>
       </div>
 
       <!-- notes -->
@@ -106,7 +106,7 @@ window.TaskDetail = {
     </div>
   </div>
   `,
-  data(){ return { subDraft:'', kbAutoListen:false, kbAutofocus:false, recurActive:false }; },
+  data(){ return { subDraft:'', kbAutoListen:false, kbAutofocus:false, recurActive:false, recurTouched:false }; },
   computed: {
     task(){ return this.store.taskById(this.store.selectedTaskId); },
     projectOptions(){ return this.store.projectTree(); },   // tree-ordered for the project select
@@ -122,15 +122,27 @@ window.TaskDetail = {
     }
   },
   watch: {
-    'store.selectedTaskId'(){ this.$nextTick(this.autosize); },
-    'store.detailOpen'(v){ if(v) this.$nextTick(()=>{
-      this.kbInit();
-      if(this.store.pendingNotesFocus){   // quick-add Shift+Enter: land in the notes field
-        this.store.pendingNotesFocus = false;
-        this.kbFocusRow('notes');
-        const el=this.$refs.notes; if(el) el.focus();
-      }
-    }); }
+    'store.selectedTaskId'(_now, was){
+      this.$nextTick(this.autosize);
+      // J/K-swapping to another task while the drawer is open ends this task's edit
+      // session — infer for the task we're leaving if its recurrence was changed.
+      if(was && this.recurTouched) this.inferDueFromRecurrence(this.store.taskById(was));
+      this.recurTouched = false;   // new task = fresh session
+    },
+    'store.detailOpen'(v){
+      if(v){ this.recurTouched = false; this.$nextTick(()=>{
+        this.kbInit();
+        if(this.store.pendingNotesFocus){   // quick-add Shift+Enter: land in the notes field
+          this.store.pendingNotesFocus = false;
+          this.kbFocusRow('notes');
+          const el=this.$refs.notes; if(el) el.focus();
+        }
+      }); }
+      // Closing the drawer ends the edit session — infer the due date from the FINAL
+      // recurrence rule (only if it was actually changed this session). Works for mouse
+      // and keyboard alike; due stays null through editing so MWF→TR lands on Tue.
+      else { if(this.recurTouched) this.inferDueFromRecurrence(); this.recurTouched = false; }
+    }
   },
   methods: {
     // ---- KbForm config (the app routes keys here via onKey; see header) ----
@@ -189,7 +201,19 @@ window.TaskDetail = {
       return false;
     },
     close(){ this.store.detailOpen=false; },
+    // recurrence-builder changed — remember it (so we only infer a due date when the
+    // rule was actually edited this session, not merely viewed).
+    onRecurrenceInput(val){ if(this.task){ this.task.recurrence = val; this.recurTouched = true; } },
+    // fill an empty due date from the recurrence rule; respect an existing due.
+    inferDueFromRecurrence(task){
+      const t = task || this.task;
+      if(!t || !t.recurrence || t.due) return;
+      const today = Rec.ymd(new Date());
+      const occ = Rec.nextOccurrences(t.recurrence, { from: today, anchor: today, count:1, inclusive:true })[0];
+      if(occ) t.due = Rec.ymd(occ);   // today if today matches, else the next match
+    },
     save(){
+      if(this.recurTouched) this.inferDueFromRecurrence();   // persist the inferred due in this same write
       const a=document.activeElement; if(a && a.blur) a.blur();   // release focus from any field (e.g. notes on ⌃/⌘+↵)
       if(this.store.saveNow) this.store.saveNow();   // flush the debounced write now
       this.store.toast('✓ saved');

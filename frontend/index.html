@@ -70,7 +70,9 @@
         <span class="search-prompt">/</span>
         <input ref="search" class="searchbar" v-model="store.searchTerm" spellcheck="false"
                placeholder="search title + notes…"
+               @blur="commitSearch"
                @keydown.enter.stop.prevent="commitSearch" @keydown.esc.stop.prevent="commitSearch" />
+        <span class="search-x" @mousedown.prevent="clearSearch" title="clear search">✕</span>
         <span class="mut">{{ store.visibleRoots().length }} match{{ store.visibleRoots().length===1?'':'es' }}</span>
       </template>
       <template v-else>
@@ -79,6 +81,7 @@
         <span class="mut">{{ store.visibleRoots().length }} rows</span>
       </template>
       <div class="right">
+        <span class="qbtn" @click="openSearch" title="search (/)">/ search</span>
         <span class="qbtn" @click="helpOpen=true" title="keyboard shortcuts & query syntax">? help</span>
         <span class="qbtn s-cmdk" @click="openPalette" title="command palette">⌘K</span>
         <span class="mut s-version">v1.0</span>
@@ -319,8 +322,8 @@ const app = createApp({
         case 'h': case 'ArrowLeft': {
           e.preventDefault();
           const t=this.store.taskById(curId);
-          if(t && t.parentId){ this.store.selectedTaskId=t.parentId; this.scrollSelIntoView(); break; } // up to parent
-          if(t && !t.collapsed && this.store.subtasks(t.id).length){ t.collapsed=true; break; }         // collapse root
+          if(t && !t.collapsed && this.store.subtasks(t.id).length){ t.collapsed=true; break; }         // collapse own subtree first (any depth)
+          if(t && t.parentId){ this.store.selectedTaskId=t.parentId; this.scrollSelIntoView(); break; } // then up to parent
           this.enterSidebar(); break;                                                                   // leaf root → sidebar
         }
         case 'x': case ' ':

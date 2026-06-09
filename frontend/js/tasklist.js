@@ -82,6 +82,7 @@ window.TaskList = {
     <!-- quick add -->
     <div class="quickadd">
       <span class="prompt" :class="{ warn }" :data-tip="warnTip">{{ warn ? '⚠' : '+' }}</span>
+      <span class="qa-caret">❯</span>
       <input ref="qa" v-model="draft" :placeholder="addPlaceholder" @keydown.enter.exact.prevent="commitAdd" @keydown.enter.shift.prevent="commitAddToNotes" @keydown.esc="escAdd" />
       <span class="mut" style="font-size:11px;">↵ add</span>
     </div>
@@ -104,7 +105,7 @@ window.TaskList = {
         <div v-if="store.searchActive && store.searchTerm" style="margin-top:10px;">no matches for "{{ store.searchTerm }}".</div>
         <div v-else-if="store.searchActive" style="margin-top:10px;">type to search…</div>
         <div v-else style="margin-top:10px;">query returned 0 rows.</div>
-        <div class="mut" style="margin-top:4px;">press <span class="kbd">n</span> to add · <span class="kbd">/</span> to search</div>
+        <div class="mut" style="margin-top:4px;">press <span class="kbd">i</span> to add · <span class="kbd">/</span> to search</div>
       </div>
     </div>
   </div>
@@ -127,8 +128,17 @@ window.TaskList = {
     // show matched root tasks; if a subtask matches but parent doesn't, surface parent too
     rootTasks(){ return this.store.visibleRoots(); },
     doneCount(){ return this.matched.filter(t=>t.done && !t.parentId).length; },
-    // current view filters on params we can't apply to a new task (flags / free text)
-    warn(){ return this.store.viewWarn(); },
+    // current view filters on params we can't apply to a new task (flags / free text),
+    // plus a draft-aware case: "no tag" is selected but the user typed a #tag — the
+    // task is still created (tag respected), it just won't show in this view.
+    hasNoTagFilter(){ return Q.parse(this.store.currentQuery()).terms.some(t => t.field==='has' && t.value==='no-labels' && !t.neg); },
+    noTagConflict(){ return this.hasNoTagFilter && /#\S/.test(this.draft); },
+    warn(){ return this.store.viewWarn() || this.noTagConflict; },
+    warnTip(){
+      return this.noTagConflict
+        ? "\"no tag\" is selected, but this task has a #tag — it'll be created and kept, just hidden from this view."
+        : "This filter has parameters that can't be applied to new tasks. New tasks may fall out of this query.";
+    },
     sortFieldLabel(){ const o=SORTS.find(o=>o.key===this.store.sortField); return o ? o.label : this.store.sortField; },
     sortDirSymbol(){ return this.store.sortDirs[this.store.sortField]==='desc' ? 'v' : '^'; }
   },
@@ -198,6 +208,5 @@ window.TaskList = {
   },
   data(){ return {
     draft:'',
-    warnTip: "This filter has parameters that can't be applied to new tasks. New tasks may fall out of this query.",
   }; }
 };

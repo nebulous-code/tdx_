@@ -60,7 +60,10 @@ window.QueryBar = {
             ...this.dueOpts.map(o=>({field:'due',value:o.v,text:o.t,exclusive:true})),
             ...this.dueDays.map((d,i)=>({field:'due',value:d.l,text:d.t,dueDay:true,sepBefore:i===0})),
           ] },
-        { key:'label', label:'labels', chips:this.store.sortedLabels().map(l=>({field:'label',value:l.name,text:'#'+l.name,exclusive:false})) },
+        { key:'label', label:'labels', chips:[
+            ...this.store.sortedLabels().map(l=>({field:'label',value:l.name,text:'#'+l.name,exclusive:false})),
+            {field:'has',value:'no-labels',text:'no tag',untag:true,sepBefore:true},
+          ] },
         { key:'project', label:'project', chips:this.store.projects.map(p=>({field:'project',value:p.name,text:p.name,glyph:p.glyph,color:p.color,exclusive:true})) },
         { key:'flags', label:'flags', chips:[
             {field:'recurring',value:'true',text:'↻ recurring',exclusive:true},
@@ -95,8 +98,24 @@ window.QueryBar = {
     chipOn(c){ return c.dueDay ? this.hasDueDay(c.value) : this.has(c.field,c.value); },
     chipToggle(c){
       if(c.dueDay) this.toggleDueWeekday(c.value);
+      else if(c.untag) this.toggleUntagged();
       else if(c.exclusive) this.toggleExclusive(c.field,c.value);
+      else if(c.field==='label'){
+        // selecting a #label clears the mutually-exclusive "no tag" filter, in one update
+        const v = this.normValue(c.field,c.value);
+        let terms = this.terms.filter(t => !(t.field==='has'&&t.value==='no-labels'));
+        const i = terms.findIndex(t=>t.field==='label' && t.value===v);
+        if(i>=0) terms.splice(i,1); else terms.push({field:'label',value:v,neg:false});
+        this.setTerms(terms);
+      }
       else this.toggle(c.field,c.value);
+    },
+    // "no tag": show only untagged tasks. Mutually exclusive with every #label chip.
+    toggleUntagged(){
+      const on = this.has('has','no-labels');
+      let terms = this.terms.filter(t => t.field!=='label' && !(t.field==='has'&&t.value==='no-labels'));
+      if(!on) terms.push({field:'has',value:'no-labels',neg:false});
+      this.setTerms(terms);
     },
     // ---- query mutation ----
     has(field,value){

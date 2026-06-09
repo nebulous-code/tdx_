@@ -162,6 +162,7 @@
       case 'has':
         if(t.value==='subtasks') res = (ctx.tasks||[]).some(x=>x.parentId===task.id);
         else if(t.value==='label') res = labelsOf.length>0;
+        else if(t.value==='no-labels') res = labelsOf.length===0;
         else if(t.value==='due') res = !!task.due;
         break;
       default:
