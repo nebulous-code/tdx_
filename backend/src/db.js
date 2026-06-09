@@ -64,14 +64,17 @@ function seedUserDefaults(userId) {
       'INSERT INTO projects (user_id, id, parent_id, name, color, glyph, collapsed, position) VALUES (?, ?, ?, ?, ?, ?, 0, 0)'
     ).run(userId, 'p_inbox', null, 'inbox', '#ffb000', '⌂');
 
+    // system smart-views. "open" + "overdue" are pinned to the header by default;
+    // "today" stays first so it remains the default landing view (savedQueries[0]).
     const sv = db.prepare(
-      'INSERT INTO saved_queries (user_id, id, name, glyph, query, system, position) VALUES (?, ?, ?, ?, ?, 1, ?)'
+      'INSERT INTO saved_queries (user_id, id, name, glyph, query, system, position, pinned) VALUES (?, ?, ?, ?, ?, 1, ?, ?)'
     );
-    sv.run(userId, 'sv_today',   'Today',     '☉', 'status:open due:today',      0);
-    sv.run(userId, 'sv_overdue', 'Overdue',   '!', 'status:overdue',             1);
-    sv.run(userId, 'sv_week',    'This week', '☰', 'status:open due:week',       2);
-    sv.run(userId, 'sv_rec',     'Recurring', '↻', 'recurring:true status:open', 3);
-    sv.run(userId, 'sv_nodate',  'No date',   '∅', 'due:none status:open',       4);
+    sv.run(userId, 'sv_today',   'Today',     '☉', 'status:open due:today',      0, 0);
+    sv.run(userId, 'sv_open',    'Open',      '○', 'status:open',                1, 1);
+    sv.run(userId, 'sv_overdue', 'Overdue',   '!', 'status:overdue',             2, 1);
+    sv.run(userId, 'sv_week',    'This week', '☰', 'status:open due:week',       3, 0);
+    sv.run(userId, 'sv_rec',     'Recurring', '↻', 'recurring:true status:open', 4, 0);
+    sv.run(userId, 'sv_nodate',  'No date',   '∅', 'due:none status:open',       5, 0);
   });
   seed();
 }

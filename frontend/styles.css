@@ -142,6 +142,19 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .topbar .brand b { color: var(--amber-hi); }
 .topbar .sep { color: var(--line-2); }
 .topbar .right { margin-left: auto; display: flex; gap: 14px; align-items: center; }
+/* pinned views in the header — clickable, lowercased, live count */
+.pin-view { cursor: pointer; }
+.pin-view:hover { color: var(--amber); }
+.pin-view.active { color: var(--amber-hi); text-shadow: var(--glow); }
+/* sidebar marker for a view that's pinned to the header (diamond, theme-colored) */
+.pin-mark { color: var(--amber); font-size: 11px; margin-left: 4px; }
+/* "pin to header" checkbox in the save/edit-view modal */
+.pin-check {
+  width: 16px; height: 16px; border: 1px solid var(--amber-mut); border-radius: 2px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--amber-hi); font-size: 11px; flex: 0 0 auto;
+}
+.pin-check.on { background: var(--amber); color: var(--on-accent); border-color: var(--amber); }
 .kbd {
   border: 1px solid var(--line-2); border-radius: var(--radius);
   padding: 0 5px; font-size: 10px; color: var(--amber-dim);

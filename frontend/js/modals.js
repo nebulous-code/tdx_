@@ -209,8 +209,12 @@ window.SaveQueryModal = {
                   :style="glyph===g?{color:color}:{}" @click="kbPick('glyph', i)">{{ g }}</span>
           </div>
         </div>
+        <div class="field" :class="kbCls('pin')" @click="pinned=!pinned" style="cursor:pointer;display:flex;align-items:center;gap:8px;">
+          <label style="margin:0;">pin to header</label>
+          <span class="pin-check" :class="{on:pinned}">{{ pinned ? '✓' : '' }}</span>
+        </div>
         <div class="field">
-          <span class="mut" style="font-size:11px;">matches {{ count }} task(s) right now · pinned to sidebar views</span>
+          <span class="mut" style="font-size:11px;">matches {{ count }} task(s) right now</span>
         </div>
       </div>
       <div class="modal-foot">
@@ -227,7 +231,8 @@ window.SaveQueryModal = {
     const q = v ? v.query : (this.model.query||'');
     const color = v ? (v.color || this.store.COLORS[0]) : this.store.COLORS[0];
     const glyph = v ? v.glyph : '◆';
-    return { name, q, color, glyph, _orig:{ name, q, color, glyph } };
+    const pinned = v ? !!v.pinned : false;
+    return { name, q, color, glyph, pinned, _orig:{ name, q, color, glyph, pinned } };
   },
   computed: { count(){ try { return this.store.queryCount(this.q); } catch(e){ return 0; } } },
   methods: {
@@ -236,23 +241,24 @@ window.SaveQueryModal = {
       { id:'query',  type:'input',  ref:'query' },
       { id:'color',  type:'grid',   items:this.store.COLORS, cols:10, isOn:c=>c===this.color, select:c=>{ this.color=c; } },
       { id:'glyph',  type:'grid',   items:this.store.GLYPHS, cols:10, isOn:g=>g===this.glyph, select:g=>{ this.glyph=g; } },
+      { id:'pin',    type:'button', activate:()=>{ this.pinned=!this.pinned; } },
       { id:'delete', type:'button', activate:()=>this.remove(), when:()=>this.model.mode==='edit' },
       { id:'cancel', type:'button', activate:()=>this.$emit('close') },
       { id:'save',   type:'button', activate:()=>this.save() },
     ]; },
     kbSubmit(){ this.save(); },
-    kbDirty(){ const o=this._orig; return this.name!==o.name || this.q!==o.q || this.color!==o.color || this.glyph!==o.glyph; },
+    kbDirty(){ const o=this._orig; return this.name!==o.name || this.q!==o.q || this.color!==o.color || this.glyph!==o.glyph || this.pinned!==o.pinned; },
     save(){
       const nm=this.name.trim(); if(!nm){ this.kbFocusRow('name'); this.$refs.name.focus(); return; }
       const qq=this.q.trim();
       if(this.model.mode==='edit'){
         const v=this.model.view;
-        v.name=nm; v.query=qq; v.glyph=this.glyph; v.color=this.color;
+        v.name=nm; v.query=qq; v.glyph=this.glyph; v.color=this.color; v.pinned=this.pinned;
         // refresh the active view's title if we just edited it
         if(this.store.view.kind==='query' && this.store.view.id===v.id) this.store.openQueryView(v);
         this.store.toast('✓ view saved');
       } else {
-        this.store.saveQuery(nm, qq, this.glyph, this.color);
+        this.store.saveQuery(nm, qq, this.glyph, this.color, this.pinned);
         this.store.toast('★ saved view "'+nm+'"');
       }
       this.$emit('close');

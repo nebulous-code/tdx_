@@ -106,13 +106,14 @@
   }
 
   const savedQueries = [
-    { id:'sv_today',   name:'Today',     glyph:'☉', query:'status:open due:today',     system:true },
-    { id:'sv_overdue', name:'Overdue',   glyph:'!', query:'status:overdue',            system:true },
-    { id:'sv_week',    name:'This week', glyph:'☰', query:'status:open due:week',      system:true },
-    { id:'sv_rec',     name:'Recurring', glyph:'↻', query:'recurring:true status:open',system:true },
-    { id:'sv_nodate',  name:'No date',   glyph:'∅', query:'due:none status:open',      system:true },
-    { id:'sv_urgent',  name:'Urgent',    glyph:'★', query:'label:urgent status:open',  system:false },
-    { id:'sv_quick',   name:'Quick wins',glyph:'⚡', query:'label:quick status:open',   system:false },
+    { id:'sv_today',   name:'Today',     glyph:'☉', query:'status:open due:today',     system:true,  pinned:false },
+    { id:'sv_open',    name:'Open',      glyph:'○', query:'status:open',               system:true,  pinned:true  },
+    { id:'sv_overdue', name:'Overdue',   glyph:'!', query:'status:overdue',            system:true,  pinned:true  },
+    { id:'sv_week',    name:'This week', glyph:'☰', query:'status:open due:week',      system:true,  pinned:false },
+    { id:'sv_rec',     name:'Recurring', glyph:'↻', query:'recurring:true status:open',system:true,  pinned:false },
+    { id:'sv_nodate',  name:'No date',   glyph:'∅', query:'due:none status:open',      system:true,  pinned:false },
+    { id:'sv_urgent',  name:'Urgent',    glyph:'★', query:'label:urgent status:open',  system:false, pinned:false },
+    { id:'sv_quick',   name:'Quick wins',glyph:'⚡', query:'label:quick status:open',   system:false, pinned:false },
   ];
 
   const store = reactive({
@@ -197,6 +198,9 @@
     return store.tasks.filter(t=>!t.done && !t.parentId && ids.has(t.projectId)).length;
   };
   store.queryCount = (q) => Q.run(q, store.ctx()).filter(t=>!t.parentId).length;
+  // saved views pinned to the top header (rendered in savedQueries array order)
+  store.pinnedViews = () => store.savedQueries.filter(s=>s.pinned);
+  store.togglePin = (sv) => { sv.pinned = !sv.pinned; };   // reactive → autosave fires
 
   // the visible, sorted root tasks for the current view (shared by list + keyboard nav)
   store.currentQuery = () => {
@@ -471,8 +475,8 @@
     if(i>=0) store.projects.splice(i,1);
   };
 
-  store.saveQuery = (name, query, glyph, color) => {
-    const sv = { id: uid('sv'), name, glyph: glyph || '◆', color: color || COLORS[0], query, system:false };
+  store.saveQuery = (name, query, glyph, color, pinned) => {
+    const sv = { id: uid('sv'), name, glyph: glyph || '◆', color: color || COLORS[0], query, system:false, pinned: !!pinned };
     store.savedQueries.push(sv);
     store.openQueryView(sv);
     return sv;

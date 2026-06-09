@@ -35,10 +35,11 @@
       <span class="sep">│</span>
       <span class="mut nowrap t-clock">{{ clock }} {{ today }}</span>
       <div class="right">
-        <span class="dim">{{ openCount }} open</span>
-        <span class="sep">│</span>
-        <span class="dim">{{ overdueCount }} overdue</span>
-        <span class="sep">│</span>
+        <template v-for="pv in store.pinnedViews()" :key="pv.id">
+          <span class="dim pin-view" :class="{ active: store.view.kind==='query' && store.view.id===pv.id }"
+                @click="store.openQueryView(pv)" :title="pv.query">{{ store.queryCount(pv.query) }} {{ pv.name.toLowerCase() }}</span>
+          <span class="sep">│</span>
+        </template>
         <span class="qbtn" @click="openAccount" title="account (@)">{{ store.currentUser && store.currentUser.username }}</span>
       </div>
     </header>
@@ -178,9 +179,7 @@ const app = createApp({
     loaded: false,   // true once we've successfully loaded server state; gates writes
   }; },
   computed: {
-    today(){ return new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'2-digit'}); },
-    openCount(){ return this.store.tasks.filter(t=>!t.done).length; },
-    overdueCount(){ return this.store.tasks.filter(t=>!t.done && this.isOverdue(t)).length; }
+    today(){ return new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'2-digit'}); }
   },
   watch: {
     // the detail drawer is its own captured pane while open; restore the list when it closes
@@ -190,7 +189,6 @@ const app = createApp({
     }
   },
   methods: {
-    isOverdue(t){ return t.due && Rec.daysBetween(Rec.startOfDay(new Date()), Rec.parseYMD(t.due))<0; },
     openPalette(){ this.paletteOpen=true; },
     newTask(){ this.$nextTick(()=>{ this.$refs.list && this.$refs.list.focusAdd(); }); },
     openProjectModal(mode, parentId, project){
@@ -472,6 +470,15 @@ const app = createApp({
           e.preventDefault();
           const it=items[idx];
           if(it.kind==='query') this.deleteView(it.ref);
+          break;
+        }
+        case 'p': {   // pin / unpin the focused view to the header
+          e.preventDefault();
+          const it=items[idx];
+          if(it && it.kind==='query'){
+            this.store.togglePin(it.ref);
+            this.store.toast(it.ref.pinned ? '★ pinned "'+it.ref.name+'"' : 'unpinned "'+it.ref.name+'"');
+          }
           break;
         }
         case 'a': {   // add a sub-project under the focused project

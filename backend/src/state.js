@@ -76,7 +76,7 @@ function readState(userId) {
     .map((l) => ({ id: l.id, name: l.name }));
 
   const savedQueries = db
-    .prepare('SELECT id, name, glyph, query, system, color FROM saved_queries WHERE user_id = ? ORDER BY position, id')
+    .prepare('SELECT id, name, glyph, query, system, color, pinned FROM saved_queries WHERE user_id = ? ORDER BY position, id')
     .all(userId)
     .map((s) => ({
       id: s.id,
@@ -85,6 +85,7 @@ function readState(userId) {
       query: s.query,
       system: !!s.system,
       color: s.color || null,
+      pinned: !!s.pinned,
     }));
 
   return { projects, tasks, labels, savedQueries, version: getVersion(userId) };
@@ -123,7 +124,7 @@ function writeState(userId, snapshot, expectedVersion) {
     'INSERT OR IGNORE INTO task_labels (user_id, task_id, label_id) VALUES (?, ?, ?)'
   );
   const insSaved = db.prepare(
-    'INSERT INTO saved_queries (user_id, id, name, glyph, query, system, color, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO saved_queries (user_id, id, name, glyph, query, system, color, pinned, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
 
   const delTaskLabels = db.prepare('DELETE FROM task_labels WHERE user_id = ?');
@@ -168,7 +169,7 @@ function writeState(userId, snapshot, expectedVersion) {
       }
     }
     savedQueries.forEach((s, i) => {
-      insSaved.run(userId, s.id, s.name, s.glyph, s.query, s.system ? 1 : 0, s.color ?? null, i);
+      insSaved.run(userId, s.id, s.name, s.glyph, s.query, s.system ? 1 : 0, s.color ?? null, s.pinned ? 1 : 0, i);
     });
 
     const next = current + 1;

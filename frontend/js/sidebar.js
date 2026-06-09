@@ -18,6 +18,7 @@ window.AppSidebar = {
            @contextmenu.prevent="$emit('edit-query', sv)">
         <span class="glyph" :style="{color: glyphColor(sv)}">{{ sv.glyph }}</span>
         <span class="label">{{ sv.name }}</span>
+        <span v-if="sv.pinned" class="pin-mark" title="pinned to header">✦</span>
         <span class="add" title="Delete view (x)" @click.stop="$emit('delete-query', sv)">✕</span>
         <span class="add" title="Edit view (e)" @click.stop="$emit('edit-query', sv)">›</span>
         <span class="count">{{ store.queryCount(sv.query) }}</span>
