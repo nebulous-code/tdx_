@@ -3,7 +3,7 @@
 # Uses SQLite's online backup API → a consistent standalone .db even while tools/dev.sh
 # is running and writing. Snapshots live in data/snapshots/ (gitignored).
 #
-#   tools/snapshot.sh NAME     save data/dev.db → data/snapshots/NAME.db
+#   tools/snapshot.sh NAME     save data/tdx.db → data/snapshots/NAME.db
 #   tools/snapshot.sh          save with a timestamp name (snap-YYYYmmdd-HHMMSS)
 #   tools/snapshot.sh --list   list saved snapshots (newest first)
 #
@@ -21,7 +21,7 @@ if [[ "${1:-}" == "--list" || "${1:-}" == "-l" ]]; then
   exit 0
 fi
 
-SRC=data/dev.db
+SRC=data/tdx.db
 [[ -f "$SRC" ]] || { echo "✗ no $SRC yet — start it once with tools/dev.sh"; exit 1; }
 
 NAME="${1:-snap-$(date +%Y%m%d-%H%M%S)}"

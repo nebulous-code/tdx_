@@ -99,7 +99,9 @@
   <label-modal v-if="labelModal" :store="store" :model="labelModal" @close="labelModal=null"></label-modal>
   <help-modal v-if="helpOpen" @close="helpOpen=false"></help-modal>
   <account-screen v-if="accountOpen" :store="store"
-    @close="accountOpen=false" @saved="onAccountSaved" @logout="onLogout"></account-screen>
+    @close="accountOpen=false" @saved="onAccountSaved" @logout="onLogout"
+    @open-backups="accountOpen=false; backupOpen=true"></account-screen>
+  <backup-screen v-if="backupOpen" :store="store" @close="backupOpen=false"></backup-screen>
   <sort-modal v-if="sortOpen" :store="store" @close="sortOpen=false"></sort-modal>
 
   <!-- app-styled confirm (store.askConfirm) -->
@@ -149,6 +151,7 @@
 <script src="js/help-modal.js"></script>
 <script src="js/login-screen.js"></script>
 <script src="js/account-screen.js"></script>
+<script src="js/backup-screen.js"></script>
 <script src="js/sort-modal.js"></script>
 <script>
 const { createApp } = Vue;
@@ -164,6 +167,7 @@ const app = createApp({
     selIndex: 0,
     helpOpen: false,
     accountOpen: false,
+    backupOpen: false,
     sortOpen: false,
     labelModal: null,
     confirmState: null,   // { msg, resolve } for store.askConfirm
@@ -231,7 +235,7 @@ const app = createApp({
       }
       if(this.promptState) return;   // the prompt input handles its own enter/esc
       // KbForm-driven modals are takeovers: each owns the keyboard while open
-      if(this.accountOpen || this.sortOpen || this.projectModal || this.saveModal || this.labelModal || this.helpOpen) return;
+      if(this.accountOpen || this.backupOpen || this.sortOpen || this.projectModal || this.saveModal || this.labelModal || this.helpOpen) return;
       const tag=(e.target.tagName||'').toLowerCase();
       const typing = tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable;
       // ⌘K / Ctrl+K everywhere
@@ -687,6 +691,7 @@ app.component('label-modal', window.LabelModal);
 app.component('help-modal', window.HelpModal);
 app.component('login-screen', window.LoginScreen);
 app.component('account-screen', window.AccountScreen);
+app.component('backup-screen', window.BackupScreen);
 app.component('sort-modal', window.SortModal);
 app.mount('#app');
 </script>

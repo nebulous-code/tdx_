@@ -1,6 +1,7 @@
 # Backup feature — design
 
-Status: **proposed** (review before implementation). No code has been written yet.
+Status: **implemented**. This doc is both the design and the operational reference
+(see §8 for the restore runbook).
 
 ## 1. Goal
 
@@ -32,8 +33,8 @@ replication. We are not rebuilding any of that.
 
 ### Why the app makes the copy (not `cp`/rsync/cron)
 The DB runs in WAL mode. A plain file copy of the live `.db` while the server is
-writing yields a stale or corrupt file (the exact `SQLITE_CORRUPT` we hit building
-`dev.db`). `better-sqlite3` exposes `db.backup(dest)` — an **online backup** off the
+writing yields a stale or corrupt file (the exact `SQLITE_CORRUPT` we hit seeding
+the dev DB). `better-sqlite3` exposes `db.backup(dest)` — an **online backup** off the
 live handle that is consistent even mid-write and does not block readers. Because the
 app already owns the DB handle, it is the one place that can make a clean copy with
 zero ceremony (no checkpoint dance, no WAL gotcha). This is the core reason the
@@ -187,19 +188,11 @@ the other modals.
 
 ## 8. Restore — CLI runbook, **not** a UI button
 
-Restoring overwrites the live DB; doing that under the running process corrupts it.
-Restore stays an operator runbook (same shape as `tools/dev.sh` / `tools/snapshot.sh`):
-
-```bash
-# prod, in ~/docker/tdx
-docker compose stop tdx
-cp /the_agency/home_lab/tdx_/tdx-YYYYMMDD-HHmmss.db ./data/tdx.db
-rm -f ./data/tdx.db-wal ./data/tdx.db-shm     # clear stale WAL/shm
-docker compose start tdx
-```
-The UI *lists and downloads* backups; the swap is this documented procedure. This will
-be added to `docs/PROD_MIGRATION.md`, and we test one real restore after rollout — a
-backup that's never been restored isn't a backup.
+Restoring overwrites the live DB; doing that under the running process corrupts it, so
+it stays a stop → swap-file → start operator step (same shape as `tools/dev.sh` /
+`tools/snapshot.sh`). The step-by-step user-facing procedure lives at the repo root in
+**[`RESTORE.md`](../RESTORE.md)** — that's what the UI links to. Test one real restore
+after rollout; a backup that's never been restored isn't a backup.
 
 ## 9. Failure alarm — external staleness check
 

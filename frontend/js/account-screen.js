@@ -6,7 +6,7 @@
    preview), Enter saves, Esc exits with the shared dirty-guard. */
 window.AccountScreen = {
   props: ['store'],
-  emits: ['close', 'saved', 'logout'],
+  emits: ['close', 'saved', 'logout', 'open-backups'],
   mixins: [window.KbForm],
   data(){
     const u = this.store.currentUser || {};
@@ -68,6 +68,13 @@ window.AccountScreen = {
           </select>
         </div>
 
+        <div v-if="isAdmin" class="acct-sep">admin</div>
+        <div v-if="isAdmin" class="acct-row" :class="kbCls('backups')" @click="openBackups" style="cursor:pointer;">
+          <span class="acct-label">backups</span>
+          <span style="flex:1;" class="mut">scheduled database backups</span>
+          <span class="acct-chevron">›</span>
+        </div>
+
         <div class="acct-sep">change password <span class="mut">(optional)</span></div>
         <div class="acct-row" :class="kbCls('oldPassword')" @click="$refs.oldPassword.focus()">
           <span class="acct-label">current</span>
@@ -92,6 +99,7 @@ window.AccountScreen = {
   </div>
   `,
   computed: {
+    isAdmin(){ return !!(this.store.currentUser && this.store.currentUser.is_admin); },
     dirty(){
       return this.username !== this.init.username || this.email !== this.init.email ||
         this.theme !== this.init.theme || this.weekStart !== this.init.weekStart ||
@@ -105,6 +113,7 @@ window.AccountScreen = {
       { id:'theme',           type:'grid',   items:this.themes, cols:6, previewOnFocus:true,
         isOn:t=>this.theme===t.key, select:t=>this.selectTheme(t.key) },
       { id:'weekStart',       type:'input',  ref:'weekStart' },
+      { id:'backups',         type:'button', when:()=>this.isAdmin, activate:()=>this.openBackups() },
       { id:'oldPassword',     type:'input',  ref:'oldPassword' },
       { id:'newPassword',     type:'input',  ref:'newPassword' },
       { id:'confirmPassword', type:'input',  ref:'confirmPassword' },
@@ -114,6 +123,12 @@ window.AccountScreen = {
     kbSubmit(){ this.save(); },
     kbDirty(){ return this.dirty; },
     kbOnClose(){ this.revertTheme(); },   // discarding restores the pre-edit theme
+    // open the admin backups screen; guard unsaved account edits first
+    openBackups(){
+      const go = () => this.$emit('open-backups');
+      if(this.dirty){ this.store.askConfirm('Discard account changes?').then(ok=>{ if(ok){ this.revertTheme(); go(); } }); }
+      else go();
+    },
     // ---- theme picker (live preview) ----
     selectTheme(key){ this.theme = key; window.applyTheme(key); },
     revertTheme(){ window.applyTheme(this.init.theme); },

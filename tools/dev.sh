@@ -3,19 +3,23 @@
 # so nothing here can touch prod (~/docker/tdx on :3000).
 #
 #   tools/dev.sh                 start the dev server  (Ctrl+C to stop)
-#   tools/dev.sh --refresh       rebuild fresh sample data (tools/seed-dev.js), reset data/dev.db, start
-#   tools/dev.sh --refresh NAME  reset data/dev.db from snapshot data/snapshots/NAME.db, then start
+#   tools/dev.sh --refresh       rebuild fresh sample data (tools/seed-dev.js), reset data/tdx.db, start
+#   tools/dev.sh --refresh NAME  reset data/tdx.db from snapshot data/snapshots/NAME.db, then start
 #
-# Snapshot the current dev.db before a test with:   tools/snapshot.sh NAME
+# The dev DB is data/tdx.db — the SAME filename prod uses (db.js default, compose
+# DB_PATH=/data/tdx.db) — so restore steps are identical to production. This repo
+# holds dev data only; prod runs from ~/docker/tdx.
+#
+# Snapshot the current DB before a test with:   tools/snapshot.sh NAME
 #
 # Dev login:  username  dev     password  DevPass!23
 #
 set -euo pipefail
 cd "$(dirname "$0")/.."            # repo root (this script lives in tools/)
 
-DB=data/dev.db
+DB=data/tdx.db
 
-# (Re)build/restore the dev DB on --refresh, or the first time if dev.db is missing.
+# (Re)build/restore the dev DB on --refresh, or the first time if it's missing.
 if [[ "${1:-}" == "--refresh" || ! -f "$DB" ]]; then
   SNAP="${2:-}"
   if [[ -n "$SNAP" ]]; then

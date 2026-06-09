@@ -25,6 +25,12 @@ services:
       - SESSION_SECRET=${SESSION_SECRET:?set SESSION_SECRET in the repo-root .env}
     volumes:
       - ./data:/data            # SQLite file persists across rebuilds
+      # Scheduled backups land here (admin → account → backups in the UI). Point the
+      # HOST side at a durable, offsite-replicated location — e.g. a ZFS dataset:
+      #   - /tank/backups/tdx:/backups
+      # The UI's "directory" must match the CONTAINER side (default /backups). See
+      # docs/BACKUP_DESIGN.md.
+      - ./backups:/backups
     ports:
       # Published on all interfaces — reach it at http://<host-ip>:3000 over the
       # LAN or tailnet. Restrict to "127.0.0.1:3000:3000" if you front it yourself.

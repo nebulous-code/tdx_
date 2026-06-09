@@ -642,6 +642,30 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .account-modal .acct-row input:focus { border-color: var(--amber-mut); }
 .account-modal .acct-sep { margin: 14px 0 8px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--amber-mut); border-top: 1px solid var(--line); padding-top: 10px; }
 .account-modal .acct-error { color: var(--red); font-size: 12px; margin-top: 10px; min-height: 1em; }
+/* backups screen */
+.account-modal .acct-chevron { color: var(--amber-mut); font-size: 14px; }
+.account-modal .acct-hint { font-size: 10px; line-height: 1.4; padding: 2px 0 6px; }
+.account-modal .bk-toggle { flex: 0 0 16px; text-align: center; color: var(--amber); border: 1px solid var(--line); border-radius: 3px; height: 16px; line-height: 14px; font-size: 11px; }
+.account-modal .bk-toggle.on { border-color: var(--amber); }
+.account-modal .bk-status { font-size: 11px; line-height: 1.7; padding: 2px 0; }
+.account-modal .bk-ok { color: var(--amber-hi); }
+.account-modal .bk-err { color: var(--red); }
+.account-modal .bk-dl { color: var(--amber-mut); font-size: 11px; text-decoration: none; border-bottom: 1px dotted var(--amber-mut); }
+.account-modal .bk-dl:hover { color: var(--amber-hi); border-color: var(--amber-hi); }
+/* directory browser */
+.account-modal .bk-browse { flex: 0 0 auto; background: transparent; border: 1px solid var(--line); color: var(--amber-mut); font-family: var(--mono); font-size: 11px; padding: 4px 8px; border-radius: var(--radius); cursor: pointer; }
+.account-modal .bk-browse:hover, .account-modal .bk-browse.kfocus { color: var(--amber-hi); border-color: var(--amber-mut); }
+.account-modal .bk-browser { border: 1px solid var(--line); border-radius: var(--radius); margin: 4px 0 8px; background: var(--bg-2); }
+.account-modal .bk-browser-head { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.account-modal .bk-browser-path { flex: 1; font-family: var(--mono); font-size: 11px; color: var(--amber-hi); word-break: break-all; }
+.account-modal .bk-browser-list { max-height: 200px; overflow-y: auto; padding: 2px 0; }
+.account-modal .bk-entry { display: flex; align-items: center; gap: 8px; padding: 3px 8px; font-family: var(--mono); font-size: 12px; }
+.account-modal .bk-entry-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.account-modal .bk-entry-size { font-size: 11px; }
+.account-modal .bk-dir { color: var(--amber-hi); cursor: pointer; }
+.account-modal .bk-dir:hover { background: var(--bg-3); }
+.account-modal .bk-file { color: var(--amber-mut); }
+.account-modal .bk-browser-foot { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; border-top: 1px solid var(--line); }
 /* sort-preferences popup rows */
 .account-modal .sort-row { cursor: default; gap: 10px; }
 .account-modal .sort-row .sort-check { flex: 0 0 16px; text-align: center; color: var(--amber); }

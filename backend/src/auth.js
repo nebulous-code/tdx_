@@ -55,7 +55,7 @@ function resolveSession(rawToken) {
   }
   db.prepare('UPDATE sessions SET expires_at = ?, last_seen = ? WHERE id = ?')
     .run(new Date(now.getTime() + SESSION_TTL_MS).toISOString(), now.toISOString(), sid);
-  return db.prepare('SELECT id, username, email, theme, week_start, sort_prefs FROM users WHERE id = ?').get(sess.user_id) || null;
+  return db.prepare('SELECT id, username, email, theme, week_start, sort_prefs, is_admin FROM users WHERE id = ?').get(sess.user_id) || null;
 }
 
 const revokeSession = (rawToken) =>
@@ -126,6 +126,16 @@ async function authenticate(request, reply) {
   request.user = user;
 }
 
+// Admin-only guard: authenticate first, then require is_admin. Used by the
+// instance-level backup routes (a backup is the whole multi-tenant DB).
+async function authenticateAdmin(request, reply) {
+  await authenticate(request, reply);
+  if (reply.sent) return;                 // authenticate already replied 401
+  if (!request.user || !request.user.is_admin) {
+    return reply.code(403).send({ error: 'forbidden' });
+  }
+}
+
 module.exports = {
   COOKIE_NAME,
   SESSION_TTL_MS,
@@ -143,4 +153,5 @@ module.exports = {
   recordFailure,
   clearFailures,
   authenticate,
+  authenticateAdmin,
 };

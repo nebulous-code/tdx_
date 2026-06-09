@@ -12,9 +12,11 @@ const fastifyStatic = require('@fastify/static');
 const fastifyCookie = require('@fastify/cookie');
 
 require('./db'); // opens DB, runs migrations
-const { authenticate } = require('./auth');
+const { authenticate, authenticateAdmin } = require('./auth');
+const backup = require('./backup');
 const stateRoutes = require('./routes/state');
 const authRoutes = require('./routes/auth');
+const backupRoutes = require('./routes/backup');
 
 // Cookie signing needs a stable secret; without it sessions can't be trusted.
 const SESSION_SECRET = process.env.SESSION_SECRET;
@@ -36,13 +38,15 @@ async function main() {
 
   // Cookie support (signed session cookie). Registered first so routes can use it.
   await fastify.register(fastifyCookie, { secret: SESSION_SECRET });
-  // `authenticate` preHandler used to guard protected routes.
+  // `authenticate` / `authenticateAdmin` preHandlers guard protected routes.
   fastify.decorate('authenticate', authenticate);
+  fastify.decorate('authenticateAdmin', authenticateAdmin);
 
   // API routes (registered before static; the specific /api/* paths take
   // precedence over the static wildcard).
   await fastify.register(authRoutes);
   await fastify.register(stateRoutes);
+  await fastify.register(backupRoutes);
 
   // Static frontend. `index: 'index.html'` serves the app at '/'.
   await fastify.register(fastifyStatic, {
@@ -51,6 +55,10 @@ async function main() {
   });
 
   await fastify.listen({ port: PORT, host: HOST });
+
+  // Arm the daily backup scheduler (and run a catch-up if a scheduled run was
+  // missed while the container was down). Safe no-op when backups are disabled.
+  backup.init();
 }
 
 main().catch((err) => {

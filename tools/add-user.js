@@ -76,10 +76,11 @@ async function main() {
   const isFirstUser = db.prepare('SELECT COUNT(*) AS n FROM users').get().n === 0;
 
   const create = db.transaction(() => {
+    // The first user is the instance admin (gates backups + future admin features).
     db.prepare(
-      `INSERT INTO users (id, username, email, password_hash, state_version, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 0, ?, ?)`
-    ).run(id, u.value, e.value, passwordHash, now, now);
+      `INSERT INTO users (id, username, email, password_hash, state_version, is_admin, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 0, ?, ?, ?)`
+    ).run(id, u.value, e.value, passwordHash, isFirstUser ? 1 : 0, now, now);
 
     if (isFirstUser) {
       let adopted = 0;

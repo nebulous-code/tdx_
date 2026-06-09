@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // seed-dev.js — (re)build data/seed.db: a sample database with one dev user and a
 // realistic set of projects/tasks/labels, with due dates relative to *today* so it
-// always looks fresh. tools/dev.sh --refresh runs this and copies it over data/dev.db.
+// always looks fresh. tools/dev.sh --refresh runs this and copies it over data/tdx.db.
 //
 //   Login:  username  dev     password  DevPass!23
 //
@@ -25,8 +25,8 @@ const now = today.toISOString();
   const passwordHash = await auth.hashPassword('DevPass!23');
 
   const build = db.transaction(() => {
-    db.prepare(`INSERT INTO users (id, username, email, password_hash, state_version, created_at, updated_at)
-                VALUES (?, ?, ?, ?, 0, ?, ?)`).run(USER, 'dev', 'dev@local.test', passwordHash, now, now);
+    db.prepare(`INSERT INTO users (id, username, email, password_hash, state_version, is_admin, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 0, 1, ?, ?)`).run(USER, 'dev', 'dev@local.test', passwordHash, now, now);
     db.seedUserDefaults(USER);   // p_inbox + the 5 system smart-views
 
     // ---- labels ----

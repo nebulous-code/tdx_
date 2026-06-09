@@ -39,7 +39,7 @@ function cleanSortPrefs(p) {
   if (!SORT_KEYS.some(k => enabled[k])) return undefined;   // at least one must stay enabled
   return { order, enabled, dirs };
 }
-const publicUser = (u) => ({ id: u.id, username: u.username, email: u.email, theme: u.theme || 'amber', week_start: u.week_start ?? 1, sort_prefs: u.sort_prefs ? JSON.parse(u.sort_prefs) : null });
+const publicUser = (u) => ({ id: u.id, username: u.username, email: u.email, theme: u.theme || 'amber', week_start: u.week_start ?? 1, sort_prefs: u.sort_prefs ? JSON.parse(u.sort_prefs) : null, is_admin: !!u.is_admin });
 
 async function routes(fastify) {
   // ---- login --------------------------------------------------------------
@@ -161,7 +161,7 @@ async function routes(fastify) {
       auth.revokeUserSessions(userId, unsigned && unsigned.valid ? unsigned.value : null);
     }
 
-    return publicUser({ id: userId, username, email, theme, week_start: weekStart, sort_prefs: sortPrefs });
+    return publicUser({ id: userId, username, email, theme, week_start: weekStart, sort_prefs: sortPrefs, is_admin: current.is_admin });
   });
 }
 
