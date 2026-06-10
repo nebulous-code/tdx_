@@ -248,10 +248,16 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
   cursor: pointer; user-select: none;
 }
 .nav-item .twist:hover { color: var(--amber); }
-/* inline add/edit affordances (+ and ›): always visible so touch users can tap */
+/* inline add/edit affordances (› + ✕): hidden so the name fills the row up to the
+   count; revealed on hover, keyboard focus (.kfocus), or the selected row (.active,
+   which covers touch — tapping a row selects it and exposes its helpers). */
 .nav-item .add {
+  display: none;
   color: var(--amber-mut); cursor: pointer; padding: 0 2px; font-weight: 700;
 }
+.nav-item:hover .add,
+.nav-item.kfocus .add,
+.nav-item.active .add { display: inline; }
 .nav-item .add:hover { color: var(--amber-hi); text-shadow: var(--glow); }
 
 /* project tree depth */

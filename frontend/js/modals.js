@@ -131,6 +131,7 @@ window.LabelModal = {
         <div class="acct-error" v-if="error">{{ error }}</div>
       </div>
       <div class="modal-foot">
+        <button class="btn danger" :class="kbCls('delete')" style="margin-right:auto;" @click="del">delete</button>
         <button class="btn" :class="kbCls('cancel')" @click="$emit('close')">cancel</button>
         <button class="btn primary" :class="kbCls('save')" @click="save">save ↵</button>
       </div>
@@ -147,6 +148,7 @@ window.LabelModal = {
       { id:'name',      type:'input',  ref:'name' },
       { id:'mergeInto', type:'input',  ref:'mergeInto', when:()=>this.hasOtherLabels },
       { id:'merge',     type:'button', activate:()=>this.merge(), when:()=>this.hasOtherLabels },
+      { id:'delete',    type:'button', activate:()=>this.del() },
       { id:'cancel',    type:'button', activate:()=>this.$emit('close') },
       { id:'save',      type:'button', activate:()=>this.save() },
     ]; },
@@ -169,6 +171,20 @@ window.LabelModal = {
         // if we were viewing the now-deleted label, fall back to the top view
         if(this.store.view.id==='label_'+this.model.label.id) this.store.openQueryView(this.store.savedQueries[0]);
         this.store.toast('✓ merged into #'+to.name);
+        this.$emit('close');
+      }
+    },
+    async del(){
+      const id = this.model.label.id;
+      const n = this.store.tasks.filter(t => (t.labels||[]).includes(id)).length;
+      const msg = n
+        ? 'Delete #'+this.model.label.name+'? It will be removed from '+n+' task'+(n===1?'':'s')+' (the tasks stay). This can\'t be undone.'
+        : 'Delete #'+this.model.label.name+'?';
+      if(await this.store.askConfirm(msg)){
+        // if we were viewing this label, fall back to the top view before it's gone
+        if(this.store.view.id==='label_'+id) this.store.openQueryView(this.store.savedQueries[0]);
+        this.store.deleteLabel(id);
+        this.store.toast('✓ label deleted');
         this.$emit('close');
       }
     }

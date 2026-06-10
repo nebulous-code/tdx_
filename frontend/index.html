@@ -204,6 +204,16 @@ const app = createApp({
         this.store.deleteQuery(sv);
       }
     },
+    async deleteLabel(l){
+      const n = this.store.tasks.filter(t => (t.labels||[]).includes(l.id)).length;
+      const msg = n ? 'Delete #'+l.name+'? It will be removed from '+n+' task'+(n===1?'':'s')+' (the tasks stay).'
+                    : 'Delete #'+l.name+'?';
+      if(await this.store.askConfirm(msg)){
+        if(this.store.view.id==='label_'+l.id) this.store.openQueryView(this.store.savedQueries[0]);
+        this.store.deleteLabel(l.id);
+        this.store.toast('✓ label deleted');
+      }
+    },
     resolveConfirm(v){ if(this.confirmState){ const r=this.confirmState.resolve; this.confirmState=null; r(v); } },
     resolvePrompt(ok){
       if(!this.promptState) return;
@@ -327,7 +337,11 @@ const app = createApp({
         case 'x': case ' ':
           if(curId){ e.preventDefault(); const t=this.store.taskById(curId); if(t) this.store.toggleDone(t); } break;
         case 'e': case 'Enter':
-          if(curId){ e.preventDefault(); this.store.detailOpen=true; } break;
+          if(curId){
+            e.preventDefault();
+            if(e.key==='Enter' && e.shiftKey) this.store.pendingNotesFocus=true;   // Shift+Enter → land in Notes
+            this.store.detailOpen=true;
+          } break;
         case 'i':
           e.preventDefault(); this.newTask(); break;
         case 's':
@@ -420,6 +434,14 @@ const app = createApp({
       let idx=items.findIndex(i=>i.id===this.store.sideFocusId);
       if(idx<0) idx=0;
 
+      // which section the focused row belongs to — drives a/A "add the right kind"
+      const sectionOf=(it)=> !it ? 'project'
+        : it.kind==='head'  ? it.section
+        : it.kind==='query' ? 'query'
+        : it.kind==='label' ? 'label'
+        : 'project';
+      const addLabelPrompt=()=> this.store.askPrompt('New label name').then(nm=>{ if(nm && nm.trim()) this.store.addLabel(nm.trim()); });
+
       // move mode: j/k reorder the held item; m/enter/esc drop it
       if(this.store.moveId){
         const moved=items.find(i=>i.id===this.store.moveId);
@@ -466,10 +488,11 @@ const app = createApp({
           else if(it.kind==='label') this.openLabelEdit(it.ref);
           break;
         }
-        case 'x': {   // delete the focused view
+        case 'x': {   // delete the focused view / label
           e.preventDefault();
           const it=items[idx];
           if(it.kind==='query') this.deleteView(it.ref);
+          else if(it.kind==='label') this.deleteLabel(it.ref);
           break;
         }
         case 'p': {   // pin / unpin the focused view to the header
@@ -481,14 +504,24 @@ const app = createApp({
           }
           break;
         }
-        case 'a': {   // add a sub-project under the focused project
+        case 'a': {   // add the right kind under / within the focused section
           e.preventDefault();
           const it=items[idx];
-          if(it.kind==='project') this.openProjectModal('new', it.ref.id);
+          const sect=sectionOf(it);
+          if(sect==='query') this.openSave('');
+          else if(sect==='label') addLabelPrompt();
+          else if(it && it.kind==='project') this.openProjectModal('new', it.ref.id);  // subproject under the focused project
+          else this.openProjectModal('new', null);                                     // projects header → top-level
           break;
         }
-        case 'A':     // add a top-level project
-          e.preventDefault(); this.openProjectModal('new', null); break;
+        case 'A': {   // add a top-level item in the focused section
+          e.preventDefault();
+          const sect=sectionOf(items[idx]);
+          if(sect==='query') this.openSave('');
+          else if(sect==='label') addLabelPrompt();
+          else this.openProjectModal('new', null);
+          break;
+        }
         case 'm': {   // enter move mode on the focused view / project
           e.preventDefault();
           const it=items[idx];

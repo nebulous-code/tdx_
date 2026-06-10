@@ -191,12 +191,10 @@
   store.taskById = (id) => store.tasks.find(t=>t.id===id);
 
   // count open tasks for a project incl. subprojects
-  store.projectCount = (pid) => {
-    const ids = new Set();
-    const walk = (p)=>{ ids.add(p); store.childProjects(p).forEach(c=>walk(c.id)); };
-    walk(pid);
-    return store.tasks.filter(t=>!t.done && !t.parentId && ids.has(t.projectId)).length;
-  };
+  // exact: a project's count is its own open root tasks, not its subprojects'
+  // (matches the project view / `project:` token, which no longer cascade)
+  store.projectCount = (pid) =>
+    store.tasks.filter(t=>!t.done && !t.parentId && t.projectId===pid).length;
   store.queryCount = (q) => Q.run(q, store.ctx()).filter(t=>!t.parentId).length;
   // saved views pinned to the top header (rendered in savedQueries array order)
   store.pinnedViews = () => store.savedQueries.filter(s=>s.pinned);
@@ -501,6 +499,14 @@
         t.labels = [...new Set(t.labels.map(id => id===fromId ? toId : id))];
     });
     const i = store.labels.findIndex(l => l.id===fromId);
+    if(i>=0) store.labels.splice(i,1);
+  };
+  // delete a label: strip it from every task (the tasks stay), then drop the label
+  store.deleteLabel = (id) => {
+    store.tasks.forEach(t => {
+      if(t.labels && t.labels.includes(id)) t.labels = t.labels.filter(x => x !== id);
+    });
+    const i = store.labels.findIndex(l => l.id===id);
     if(i>=0) store.labels.splice(i,1);
   };
 

@@ -3,7 +3,7 @@
    Attached to window.Q.
    ------------------------------------------------------------
    Grammar (space-separated terms, implicit AND):
-     project:work            (matches project OR any of its subprojects)
+     project:work            (matches that project only, not its subprojects)
      label:urgent            (comma list = OR -> label:urgent,bug)
      status:open|done|overdue|today
      due:today|tomorrow|overdue|week|none|set|<7d|>7d|=0d|<=3d
@@ -43,7 +43,8 @@
     return { terms, ok:true };
   }
 
-  // resolve a project token (id or slug of name) -> set of project ids incl. subprojects
+  // resolve a project token (id or slug of name) -> set of matching project ids only
+  // (exact: subprojects are NOT included, so a parent's view/count shows just its own tasks)
   function resolveProjects(value, ctx){
     const projects = ctx.projects || [];
     const match = projects.filter(p =>
@@ -51,13 +52,7 @@
       slug(p.name) === slug(value) ||
       slug(p.name).includes(slug(value))
     );
-    const ids = new Set();
-    const addWithChildren = (pid) => {
-      ids.add(pid);
-      projects.filter(p=>p.parentId===pid).forEach(c=>addWithChildren(c.id));
-    };
-    match.forEach(p=>addWithChildren(p.id));
-    return ids;
+    return new Set(match.map(p => p.id));
   }
   function slug(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,''); }
 
