@@ -51,7 +51,8 @@
       @delete-query="deleteView"
       @new-project="openProjectModal('new', $event)"
       @edit-project="openProjectModal('edit', null, $event)"
-      @edit-label="openLabelEdit"></app-sidebar>
+      @edit-label="openLabelEdit"
+      @delete-label="deleteLabel"></app-sidebar>
     <div class="scrim" :class="{ show: store.sidebarOpen }" @click="store.sidebarOpen=false"></div>
 
     <!-- main -->

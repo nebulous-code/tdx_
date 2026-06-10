@@ -132,10 +132,10 @@ window.TaskDetail = {
     'store.detailOpen'(v){
       if(v){ this.recurTouched = false; this.$nextTick(()=>{
         this.kbInit();
-        if(this.store.pendingNotesFocus){   // quick-add Shift+Enter: land in the notes field
+        if(this.store.pendingNotesFocus){   // quick-add / list Shift+Enter: land in the notes field
           this.store.pendingNotesFocus = false;
           this.kbFocusRow('notes');
-          const el=this.$refs.notes; if(el) el.focus();
+          this.focusNotesAfterOpen();
         }
       }); }
       // Closing the drawer ends the edit session — infer the due date from the FINAL
@@ -240,6 +240,20 @@ window.TaskDetail = {
       this.store.toast('⧉ duplicated');
     },
     async del(){ if(await this.store.askConfirm('Delete this task'+(this.subs.length?' and its subtasks':'')+'?')) this.store.deleteTask(this.task); },
-    autosize(){ const el=this.$refs.title; if(el){ el.style.height='auto'; el.style.height=el.scrollHeight+'px'; } }
+    autosize(){ const el=this.$refs.title; if(el){ el.style.height='auto'; el.style.height=el.scrollHeight+'px'; } },
+    // Focus notes only AFTER the drawer's slide-in finishes. Focusing mid-transition
+    // makes the browser scroll the still-off-screen textarea into view while the panel
+    // is translating, which reads as a bounce/re-render. Wait for the transform's
+    // transitionend (with a timeout fallback), then focus without scrolling and reveal.
+    focusNotesAfterOpen(){
+      const root = this.$el;
+      const go = () => { const el=this.$refs.notes; if(el){ el.focus({ preventScroll:true }); el.scrollIntoView({ block:'nearest' }); } };
+      if(!root || !root.addEventListener){ go(); return; }
+      let done = false;
+      const finish = () => { if(done) return; done=true; root.removeEventListener('transitionend', onEnd); go(); };
+      const onEnd = (e) => { if(e.target===root && e.propertyName==='transform') finish(); };
+      root.addEventListener('transitionend', onEnd);
+      setTimeout(finish, 220);   // fallback if the transition is disabled / doesn't fire
+    }
   }
 };

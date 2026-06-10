@@ -53,6 +53,7 @@ window.AppSidebar = {
            @click="openLabel(l)">
         <span class="glyph mut">#</span>
         <span class="label">{{ l.name }}</span>
+        <span class="add" title="Delete label (x)" @click.stop="$emit('delete-label', l)">✕</span>
         <span class="add" title="Edit label (e)" @click.stop="$emit('edit-label', l)">›</span>
         <span class="count">{{ labelCount(l) }}</span>
       </div>
