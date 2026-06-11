@@ -109,17 +109,24 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .shell {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
-  grid-template-rows: 28px 1fr 22px;
+  /* bars are content-sized (auto) so they grow when the pinned chips wrap; the middle
+     row takes whatever's left, shrinking the sidebar/main/detail to fit — bars are
+     always present, never overlaid. min-height on each bar keeps the unwrapped size. */
+  grid-template-rows: auto 1fr auto;
   grid-template-areas:
     "topbar topbar"
     "side   main"
     "status status";
   height: 100vh;
 }
-.shell.detail-open { grid-template-columns: var(--sidebar-w) 1fr; }
 /* nav toggled off (n): collapse the sidebar column. Desktop only — on mobile the
-   sidebar is an overlay driven by sidebarOpen, so leave it alone there. */
+   sidebar is an overlay driven by sidebarOpen, so leave it alone there. The
+   detail-open column rule must also stay desktop-scoped: on mobile the shell is a
+   single column and the drawer is a full-width fixed overlay, so forcing two
+   columns here would cram the bars into the sidebar width and leave an empty
+   (black) second column. */
 @media (min-width: 861px) {
+  .shell.detail-open { grid-template-columns: var(--sidebar-w) 1fr; }
   .shell.nav-collapsed { grid-template-columns: 0 1fr; }
   .shell.nav-collapsed.detail-open { grid-template-columns: 0 1fr; }
   .shell.nav-collapsed .sidebar { display: none; }
@@ -129,6 +136,7 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .topbar {
   grid-area: topbar;
   display: flex; align-items: center; gap: 14px;
+  min-height: 28px;
   padding: 0 12px;
   background: var(--bg-1);
   border-bottom: 1px solid var(--line);
@@ -141,7 +149,9 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 }
 .topbar .brand b { color: var(--amber-hi); }
 .topbar .sep { color: var(--line-2); }
-.topbar .right { margin-left: auto; display: flex; gap: 14px; align-items: center; }
+/* pinned chips live in the center and wrap as needed; the username corner stays put */
+.topbar .pin-flow { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 14px; }
+.topbar .right { display: flex; gap: 14px; align-items: center; }
 /* pinned views in the header — clickable, lowercased, live count */
 .pin-view { cursor: pointer; }
 .pin-view:hover { color: var(--amber); }
@@ -165,6 +175,7 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .statusbar {
   grid-area: status;
   display: flex; align-items: center; gap: 16px;
+  min-height: 22px;
   padding: 0 12px;
   background: var(--bg-1); border-top: 1px solid var(--line);
   font-size: 11px; color: var(--amber-mut); user-select: none;
@@ -547,16 +558,17 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .modal-foot { padding: 10px 14px; border-top: 1px solid var(--line); display: flex; gap: 8px; justify-content: flex-end; }
 
 /* color + glyph picker grids */
-/* fixed 10-col grid so keyboard nav (cols:10) matches the visual rows */
-.swatches { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; }
+/* fixed 11-col grid (10 colors + the system swatch) so keyboard nav (cols:11) matches
+   the visual row, and all swatches stay on a single line */
+.swatches { display: grid; grid-template-columns: repeat(11, 1fr); gap: 5px; justify-items: center; }
 .swatch {
-  width: 22px; height: 22px; border-radius: var(--radius); cursor: pointer;
+  width: 100%; max-width: 22px; height: 22px; border-radius: var(--radius); cursor: pointer;
   border: 1px solid rgba(255,255,255,.08); position: relative;
 }
 .swatch.on { box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 3px currentColor; }
 .swatch.kfocus { box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 3px var(--amber-hi); }
-/* the system (theme-following) swatch looks like amber today — mark it with an inner ring */
-.swatch.swatch-system::after { content: ''; position: absolute; inset: 4px; border-radius: 50%; border: 1.5px solid var(--bg-1); }
+/* the system (theme-following) swatch looks like amber today — mark it with the § glyph (matches the default project icon) */
+.swatch.swatch-system::after { content: '§'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: var(--bg-1); }
 .glyphgrid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
 .glyphpick {
   aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
@@ -604,11 +616,11 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
      (which was stretching the whole app past the screen) — it stays viewport-wide */
   .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr auto; grid-template-areas: "topbar" "main" "status"; }
   .sidebar {
-    position: fixed; top: 28px; bottom: 22px; left: 0; width: 80vw; max-width: 300px;
+    position: fixed; top: var(--topbar-h, 28px); bottom: var(--statusbar-h, 22px); left: 0; width: 80vw; max-width: 300px;
     z-index: 50; transform: translateX(-100%); transition: transform .16s ease;
   }
   .sidebar.open { transform: translateX(0); box-shadow: 16px 0 40px rgba(0,0,0,.6); }
-  .scrim.show { display: block; position: fixed; inset: 28px 0 22px 0; background: rgba(0,0,0,.5); z-index: 40; }
+  .scrim.show { display: block; position: fixed; inset: var(--topbar-h, 28px) 0 var(--statusbar-h, 22px) 0; background: rgba(0,0,0,.5); z-index: 40; }
   .detail { width: 100%; }
   .mobile-only { display: inline-flex; }
   :root { --detail-w: 100%; }
@@ -618,11 +630,13 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
   .topbar, .statusbar, .list-head { min-width: 0; }
   .topbar { gap: 8px; flex-wrap: wrap; height: auto; min-height: 28px; row-gap: 4px; }
   .topbar .t-clock { display: none; }              /* the phone already shows the time */
-  .topbar .right { gap: 8px; min-width: 0; flex-wrap: wrap; }
+  .topbar .pin-flow { gap: 8px; row-gap: 4px; }    /* only the pinned chips wrap; corners stay put */
+  .topbar .right { gap: 8px; min-width: 0; }
   .list-head { flex-wrap: wrap; height: auto; row-gap: 4px; }   /* sort/completed wrap, don't clip */
   .statusbar { flex-wrap: wrap; height: auto; min-height: 22px; row-gap: 4px; }
-  .statusbar .right { flex-wrap: wrap; min-width: 0; }
-  .statusbar .s-cmdk, .statusbar .s-version { display: none; }  /* no keyboard / version line on a phone */
+  /* keep every control reachable on a phone (esp. the ⌘K palette — there's no keyboard
+     shortcut on touch); the right group wraps but stays right-aligned */
+  .statusbar .right { flex-wrap: wrap; justify-content: flex-end; min-width: 0; row-gap: 4px; }
   .view-title .view-q { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
@@ -632,7 +646,7 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
    drawer. X out to return to the task list. */
 @media (max-width: 1024px) {
   .detail {
-    position: fixed; top: 28px; left: 0; right: 0; bottom: 22px;
+    position: fixed; top: var(--topbar-h, 28px); left: 0; right: 0; bottom: var(--statusbar-h, 22px);
     width: auto; border-left: none; z-index: 60;
   }
 }

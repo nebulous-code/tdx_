@@ -34,7 +34,7 @@
       <span class="brand">tdx<b>_</b></span>
       <span class="sep">│</span>
       <span class="mut nowrap t-clock">{{ clock }} {{ today }}</span>
-      <div class="right">
+      <div class="pin-flow">
         <template v-for="pv in store.pinnedViews()" :key="pv.id">
           <span class="dim pin-view" :class="{ active: store.view.kind==='query' && store.view.id===pv.id }"
                 @click="store.openQueryView(pv)" :title="pv.query">{{ store.queryCount(pv.query) }} {{ pv.name.toLowerCase() }}</span>
@@ -45,6 +45,8 @@
                 @click="store.openLabelView(pl)" :title="'label:'+pl.name">{{ store.queryCount('label:'+pl.name+' status:open') }} {{ pl.name }}</span>
           <span class="sep">│</span>
         </template>
+      </div>
+      <div class="right">
         <span class="qbtn" @click="openAccount" title="account (@)">{{ store.currentUser && store.currentUser.username }}</span>
       </div>
     </header>
@@ -192,7 +194,10 @@ const app = createApp({
     'store.detailOpen'(v){
       if(v){ this.store.focusPane='detail'; }
       else if(this.store.focusPane==='detail'){ this.store.focusPane='list'; }
-    }
+    },
+    // the shell (with its bars) only exists once logged in — (re)attach the bar-height
+    // observer when it mounts so the mobile overlays track the live bar sizes
+    'store.currentUser'(u){ if(u) this.$nextTick(()=>this._observeBars && this._observeBars()); }
   },
   methods: {
     openPalette(){ this.paletteOpen=true; },
@@ -275,7 +280,12 @@ const app = createApp({
       // (j/k fields · i edit · space toggle · enter save); J/K swap tasks; u/d
       // duplicate/delete. Typing in a field is left to the field's own handlers.
       if(this.store.focusPane==='detail'){
-        if(typing) return;
+        // j/k inside an open <select> step its options (KbForm handles it); any other
+        // typing in a field stays the field's own business.
+        if(typing){
+          if(tag==='select' && (e.key==='j'||e.key==='k') && this.$refs.detail) this.$refs.detail.kbKey(e);
+          return;
+        }
         // while inside the recurrence sub-pane, the detail's own shortcuts (swap /
         // duplicate / delete) are suppressed — keys go to the builder instead
         const inRecur = this.$refs.detail && this.$refs.detail.recurActive;
@@ -704,6 +714,25 @@ const app = createApp({
       this.promptState={ label, value, resolve:res };
       this.$nextTick(()=>{ const el=this.$refs.promptInput; if(el){ el.focus(); el.select(); } });
     });
+    // Mobile overlays (sidebar / scrim / full-screen detail) are offset by the bar
+    // heights. Those bars now grow when their pinned chips wrap, so publish the live
+    // heights as CSS vars (--topbar-h / --statusbar-h) and keep them current with a
+    // ResizeObserver — the overlay offsets read the vars instead of hardcoded 28/22.
+    this._measureBars=()=>{
+      const root=document.documentElement;
+      const tb=document.querySelector('.topbar'), sb=document.querySelector('.statusbar');
+      if(tb) root.style.setProperty('--topbar-h', tb.offsetHeight+'px');
+      if(sb) root.style.setProperty('--statusbar-h', sb.offsetHeight+'px');
+    };
+    this._barRO = ('ResizeObserver' in window) ? new ResizeObserver(()=>this._measureBars()) : null;
+    this._observeBars=()=>{
+      if(!this._barRO){ this._measureBars(); return; }
+      this._barRO.disconnect();
+      const tb=document.querySelector('.topbar'), sb=document.querySelector('.statusbar');
+      if(tb) this._barRO.observe(tb);
+      if(sb) this._barRO.observe(sb);
+      this._measureBars();
+    };
     window.addEventListener('pagehide', this._flush);
     this._onVis=()=>{ if(document.visibilityState==='hidden') this._flush(); };
     document.addEventListener('visibilitychange', this._onVis);
@@ -720,6 +749,7 @@ const app = createApp({
   },
   beforeUnmount(){
     document.removeEventListener('keydown', this.onKey);
+    if(this._barRO) this._barRO.disconnect();
     clearInterval(this._timer);
     window.removeEventListener('pagehide', this._flush);
     document.removeEventListener('visibilitychange', this._onVis);

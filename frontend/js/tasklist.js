@@ -85,7 +85,7 @@ window.TaskList = {
       <span class="qa-caret">❯</span>
       <span class="qa-input-wrap">
         <input ref="qa" v-model="draft" :placeholder="addPlaceholder" @keydown.enter.exact.prevent="commitAdd" @keydown.enter.shift.prevent="commitAddToNotes" @keydown.esc="escAdd" @keydown.tab="acceptTag" @keydown.right="acceptTag" />
-        <span v-if="tagGhost" class="qa-ghost" aria-hidden="true"><span class="qa-ghost-pre">{{ draft }}</span>{{ tagGhost }}<span class="qa-ghost-hint"> ↹</span></span>
+        <span v-if="tagGhost" class="qa-ghost" aria-hidden="true"><span class="qa-ghost-pre">{{ draft }}</span>{{ tagGhost }}<span class="qa-ghost-hint"> →</span></span>
       </span>
       <span class="mut" style="font-size:11px;">↵ add</span>
     </div>

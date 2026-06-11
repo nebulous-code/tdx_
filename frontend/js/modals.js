@@ -67,7 +67,7 @@ window.ProjectModal = {
     kbRows(){ return [
       { id:'name',   type:'input',  ref:'name' },
       { id:'parent', type:'input',  ref:'parent' },
-      { id:'color',  type:'grid',   items:this.colorOptions, cols:10, isOn:c=>c===this.color, select:c=>{ this.color=c; } },
+      { id:'color',  type:'grid',   items:this.colorOptions, cols:11, isOn:c=>c===this.color, select:c=>{ this.color=c; } },
       { id:'glyph',  type:'grid',   items:this.store.GLYPHS, cols:10, isOn:g=>g===this.glyph, select:g=>{ this.glyph=g; } },
       { id:'delete', type:'button', activate:()=>this.remove(), when:()=>this.model.mode==='edit' },
       { id:'cancel', type:'button', activate:()=>this.$emit('close') },
@@ -266,7 +266,7 @@ window.SaveQueryModal = {
     kbRows(){ return [
       { id:'name',   type:'input',  ref:'name' },
       { id:'query',  type:'input',  ref:'query' },
-      { id:'color',  type:'grid',   items:this.colorOptions, cols:10, isOn:c=>c===this.color, select:c=>{ this.color=c; } },
+      { id:'color',  type:'grid',   items:this.colorOptions, cols:11, isOn:c=>c===this.color, select:c=>{ this.color=c; } },
       { id:'glyph',  type:'grid',   items:this.store.GLYPHS, cols:10, isOn:g=>g===this.glyph, select:g=>{ this.glyph=g; } },
       { id:'pin',    type:'button', activate:()=>{ this.pinned=!this.pinned; } },
       { id:'delete', type:'button', activate:()=>this.remove(), when:()=>this.model.mode==='edit' },
