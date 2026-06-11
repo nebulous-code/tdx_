@@ -1,5 +1,8 @@
 # Template / Duplicate Projects — Design Doc (t_249)
 
+> **Phase 1 (duplicate) is now planned in `ARCHIVE_AND_DUPLICATE.md`** (t_878). This doc remains the home
+> for the parked long-term template vision: marking templates + `{placeholder}` prompting (Phases 2–3).
+
 > Status: **proposal for review.** No code written yet.
 
 ## Intent (from the backlog)
