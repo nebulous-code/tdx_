@@ -24,7 +24,7 @@ window.TaskRow = {
         <div class="ttitle">{{ task.title }}</div>
         <div class="tmeta">
           <span v-if="depth===0 && proj" class="m tproj">
-            <span :style="{color: proj.color}">{{ proj.glyph }}</span>{{ proj.name }}
+            <span :style="{color: store.resolveColor(proj.color)}">{{ proj.glyph }}</span>{{ proj.name }}
           </span>
           <span v-if="task.priority" class="m prio" :class="'prio'+task.priority" :title="'priority: '+prioName">⚑ {{ prioName }}</span>
           <span v-if="task.due" class="m" :class="dueClass">◷ {{ dueLabel }}</span>
@@ -83,7 +83,10 @@ window.TaskList = {
     <div class="quickadd">
       <span class="prompt" :class="{ warn }" :data-tip="warnTip">{{ warn ? '⚠' : '+' }}</span>
       <span class="qa-caret">❯</span>
-      <input ref="qa" v-model="draft" :placeholder="addPlaceholder" @keydown.enter.exact.prevent="commitAdd" @keydown.enter.shift.prevent="commitAddToNotes" @keydown.esc="escAdd" />
+      <span class="qa-input-wrap">
+        <input ref="qa" v-model="draft" :placeholder="addPlaceholder" @keydown.enter.exact.prevent="commitAdd" @keydown.enter.shift.prevent="commitAddToNotes" @keydown.esc="escAdd" @keydown.tab="acceptTag" @keydown.right="acceptTag" />
+        <span v-if="tagGhost" class="qa-ghost" aria-hidden="true"><span class="qa-ghost-pre">{{ draft }}</span>{{ tagGhost }}<span class="qa-ghost-hint"> ↹</span></span>
+      </span>
       <span class="mut" style="font-size:11px;">↵ add</span>
     </div>
 
@@ -140,7 +143,17 @@ window.TaskList = {
         : "This filter has parameters that can't be applied to new tasks. New tasks may fall out of this query.";
     },
     sortFieldLabel(){ const o=SORTS.find(o=>o.key===this.store.sortField); return o ? o.label : this.store.sortField; },
-    sortDirSymbol(){ return this.store.sortDirs[this.store.sortField]==='desc' ? 'v' : '^'; }
+    sortDirSymbol(){ return this.store.sortDirs[this.store.sortField]==='desc' ? 'v' : '^'; },
+    // tag autofill: the trailing `#fragment` being typed (null if the draft doesn't end in one)
+    tagFragment(){ const m=/#([^\s#]*)$/.exec(this.draft); return m ? m[1] : null; },
+    // the grey completion of the first existing label whose name extends the fragment
+    tagGhost(){
+      const f=this.tagFragment;
+      if(f===null || f==='') return '';
+      const fl=f.toLowerCase();
+      const hit=this.store.sortedLabels().find(l=> l.name.toLowerCase()!==fl && l.name.toLowerCase().startsWith(fl));
+      return hit ? hit.name.slice(f.length) : '';
+    }
   },
   methods: {
     cycleSort(){
@@ -192,6 +205,15 @@ window.TaskList = {
       t = t.replace(/#(\S+)/g, (_,n)=>{ const l=this.store.addLabel(n); labels.push(l.id); return ''; });
       const title = t.replace(/\s+/g,' ').trim();
       return { title: title||text, labels, priority };
+    },
+    // Tab / → completes the trailing #fragment with the grey ghost suggestion.
+    // For → only when the caret is at the very end (don't hijack cursor movement);
+    // when there's no ghost, fall through so Tab/→ keep their normal behavior.
+    acceptTag(e){
+      if(!this.tagGhost) return;
+      if(e.key==='ArrowRight'){ const el=this.$refs.qa; if(el && el.selectionStart!==el.value.length) return; }
+      e.preventDefault();
+      this.draft += this.tagGhost;
     },
     focusAdd(){ this.$refs.qa && this.$refs.qa.focus(); },
     // Esc out of the quick-add box: clear it, blur, and drop the keyboard into

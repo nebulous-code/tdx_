@@ -53,6 +53,7 @@ window.AppSidebar = {
            @click="openLabel(l)">
         <span class="glyph mut">#</span>
         <span class="label">{{ l.name }}</span>
+        <span v-if="l.pinned" class="pin-mark" title="pinned to header">✦</span>
         <span class="add" title="Delete label (x)" @click.stop="$emit('delete-label', l)">✕</span>
         <span class="add" title="Edit label (e)" @click.stop="$emit('edit-label', l)">›</span>
         <span class="count">{{ labelCount(l) }}</span>
@@ -64,7 +65,7 @@ window.AppSidebar = {
     roots(){ return this.store.projects.filter(p=>!p.parentId); }
   },
   methods: {
-    glyphColor(sv){ return sv.color ? sv.color : (sv.system ? '' : 'var(--amber)'); },
+    glyphColor(sv){ return sv.color ? this.store.resolveColor(sv.color) : (sv.system ? '' : 'var(--amber)'); },
     isLabelView(l){ return this.store.view.kind==='query' && this.store.view.query==='label:'+l.name+' status:open'; },
     labelCount(l){ return this.store.queryCount('label:'+l.name+' status:open'); },
     openLabel(l){ this.store.openLabelView(l); }
@@ -84,7 +85,7 @@ window.TreeRow = {
          @contextmenu.prevent="$emit('edit', project)">
       <span v-if="kids.length" class="twist" @click.stop="project.collapsed=!project.collapsed">{{ project.collapsed ? '▸' : '▾' }}</span>
       <span v-else class="twist"> </span>
-      <span class="glyph" :style="{ color: project.color }">{{ project.glyph }}</span>
+      <span class="glyph" :style="{ color: store.resolveColor(project.color) }">{{ project.glyph }}</span>
       <span class="label">{{ project.name }}</span>
       <span class="add" title="Edit project (e)" @click.stop="$emit('edit', project)">›</span>
       <span class="add" title="Add subproject" @click.stop="$emit('new-sub', project.id)">+</span>

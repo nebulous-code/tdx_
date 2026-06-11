@@ -39,7 +39,7 @@ window.CommandPalette = {
       out.push({ key:'toggle-done', cat:'actions', glyph:'☑', label:(s.showCompleted?'Hide':'Show')+' completed', desc:'', run:()=>s.showCompleted=!s.showCompleted });
       ['due','created','title','project'].forEach(by=>out.push({ key:'sort-'+by, cat:'sort', glyph:'⇅', label:'Sort by '+by, desc:'', run:()=>s.sortBy=by }));
       s.savedQueries.forEach(sv=>out.push({ key:'view-'+sv.id, cat:'views', glyph:sv.glyph, label:sv.name, desc:sv.query, run:()=>s.openQueryView(sv) }));
-      const walk=(p,pre)=>{ out.push({ key:'proj-'+p.id, cat:'projects', glyph:p.glyph, color:p.color, label:pre+p.name, desc:s.projectCount(p.id)+' open', run:()=>s.openProjectView(p) }); s.childProjects(p.id).forEach(c=>walk(c,pre+'↳ ')); };
+      const walk=(p,pre)=>{ out.push({ key:'proj-'+p.id, cat:'projects', glyph:p.glyph, color:s.resolveColor(p.color), label:pre+p.name, desc:s.projectCount(p.id)+' open', run:()=>s.openProjectView(p) }); s.childProjects(p.id).forEach(c=>walk(c,pre+'↳ ')); };
       s.projects.filter(p=>!p.parentId).forEach(p=>walk(p,''));
       return out;
     },

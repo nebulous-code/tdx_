@@ -71,9 +71,9 @@ function readState(userId) {
     }));
 
   const labels = db
-    .prepare('SELECT id, name FROM labels WHERE user_id = ?')
+    .prepare('SELECT id, name, pinned FROM labels WHERE user_id = ?')
     .all(userId)
-    .map((l) => ({ id: l.id, name: l.name }));
+    .map((l) => ({ id: l.id, name: l.name, pinned: !!l.pinned }));
 
   const savedQueries = db
     .prepare('SELECT id, name, glyph, query, system, color, pinned FROM saved_queries WHERE user_id = ? ORDER BY position, id')
@@ -119,7 +119,7 @@ function writeState(userId, snapshot, expectedVersion) {
                         recurrence, notes, priority, created_at, completed_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
-  const insLabel = db.prepare('INSERT INTO labels (user_id, id, name) VALUES (?, ?, ?)');
+  const insLabel = db.prepare('INSERT INTO labels (user_id, id, name, pinned) VALUES (?, ?, ?, ?)');
   const insTaskLabel = db.prepare(
     'INSERT OR IGNORE INTO task_labels (user_id, task_id, label_id) VALUES (?, ?, ?)'
   );
@@ -145,7 +145,7 @@ function writeState(userId, snapshot, expectedVersion) {
       insProject.run(userId, p.id, p.parentId ?? null, p.name, p.color, p.glyph, p.collapsed ? 1 : 0, i);
     });
     for (const l of labels) {
-      insLabel.run(userId, l.id, l.name);
+      insLabel.run(userId, l.id, l.name, l.pinned ? 1 : 0);
     }
     const knownLabels = new Set(labels.map((l) => l.id));
     for (const t of tasks) {

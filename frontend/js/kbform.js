@@ -133,6 +133,14 @@ window.KbForm = {
           if(multiline){ if(e.ctrlKey||e.metaKey){ e.preventDefault(); this.kbSubmit && this.kbSubmit(); } }
           else { e.preventDefault(); this.kbSubmit && this.kbSubmit(); }
         } else if(e.key==='Escape'){ e.preventDefault(); e.target.blur(); }
+        else if(tag==='select' && (e.key==='j' || e.key==='k')){   // j/k step an open select like ↑/↓
+          e.preventDefault();
+          const sel=e.target, n=sel.options.length;
+          if(n){ const dir = e.key==='j' ? 1 : -1;
+            sel.selectedIndex = Math.max(0, Math.min(n-1, sel.selectedIndex + dir));
+            sel.dispatchEvent(new Event('change', { bubbles:true }));   // keep v-model in sync
+          }
+        }
         return;   // otherwise let the field handle the key
       }
       switch(e.key){

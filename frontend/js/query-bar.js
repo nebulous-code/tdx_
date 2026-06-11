@@ -64,7 +64,7 @@ window.QueryBar = {
             ...this.store.sortedLabels().map(l=>({field:'label',value:l.name,text:'#'+l.name,exclusive:false})),
             {field:'has',value:'no-labels',text:'no tag',untag:true,sepBefore:true},
           ] },
-        { key:'project', label:'project', chips:this.store.projects.map(p=>({field:'project',value:p.name,text:p.name,glyph:p.glyph,color:p.color,exclusive:true})) },
+        { key:'project', label:'project', chips:this.store.projects.map(p=>({field:'project',value:p.name,text:p.name,glyph:p.glyph,color:this.store.resolveColor(p.color),exclusive:true})) },
         { key:'flags', label:'flags', chips:[
             {field:'recurring',value:'true',text:'↻ recurring',exclusive:true},
             {field:'reminder',value:'set',text:'◔ has reminder',exclusive:false},

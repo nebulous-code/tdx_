@@ -149,6 +149,9 @@
     weekStart: (store.currentUser && store.currentUser.week_start) ?? 1 });
   store.projectById = (id) => store.projects.find(p=>p.id===id);
   store.labelById = (id) => store.labels.find(l=>l.id===id);
+  // 'system' is a sentinel color that follows the active theme accent instead of a
+  // fixed hex; resolve it wherever a project/view color is applied to a style.
+  store.resolveColor = (c) => c==='system' ? 'var(--amber)' : c;
   // priority 0 (none) … 5 (very high)
   store.priorityLabel = (p) => ['','very low','low','medium','high','very high'][p] || '';
   // labels rendered everywhere (nav, filter, task detail) sorted alphabetically by
@@ -198,7 +201,9 @@
   store.queryCount = (q) => Q.run(q, store.ctx()).filter(t=>!t.parentId).length;
   // saved views pinned to the top header (rendered in savedQueries array order)
   store.pinnedViews = () => store.savedQueries.filter(s=>s.pinned);
-  store.togglePin = (sv) => { sv.pinned = !sv.pinned; };   // reactive → autosave fires
+  // labels pinned to the header (after the views); same toggle works on either
+  store.pinnedLabels = () => store.labels.filter(l=>l.pinned);
+  store.togglePin = (item) => { item.pinned = !item.pinned; };   // reactive → autosave fires
 
   // the visible, sorted root tasks for the current view (shared by list + keyboard nav)
   store.currentQuery = () => {

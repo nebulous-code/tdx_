@@ -25,15 +25,15 @@ window.ProjectModal = {
         <div class="field">
           <label>color</label>
           <div class="swatches">
-            <span v-for="(c,i) in store.COLORS" :key="c" class="swatch" :class="[{on: color===c}, kbCls('color', i)]"
-                  :style="{ background:c, color:c }" @click="kbPick('color', i)"></span>
+            <span v-for="(c,i) in colorOptions" :key="c" class="swatch" :class="[{on: color===c, 'swatch-system': c==='system'}, kbCls('color', i)]"
+                  :style="{ background:store.resolveColor(c), color:store.resolveColor(c) }" :title="c==='system' ? 'system — follows theme' : ''" @click="kbPick('color', i)"></span>
           </div>
         </div>
         <div class="field">
-          <label>icon <span class="mut">— preview <span :style="{color:color}">{{ glyph }}</span></span></label>
+          <label>icon <span class="mut">— preview <span :style="{color:store.resolveColor(color)}">{{ glyph }}</span></span></label>
           <div class="glyphgrid">
             <span v-for="(g,i) in store.GLYPHS" :key="g" class="glyphpick" :class="[{on: glyph===g}, kbCls('glyph', i)]"
-                  :style="glyph===g?{color:color}:{}" @click="kbPick('glyph', i)">{{ g }}</span>
+                  :style="glyph===g?{color:store.resolveColor(color)}:{}" @click="kbPick('glyph', i)">{{ g }}</span>
           </div>
         </div>
       </div>
@@ -48,12 +48,13 @@ window.ProjectModal = {
   data(){
     const p=this.model.project;
     const name = p?p.name:'';
-    const color = p?p.color:this.store.COLORS[0];
+    const color = p?p.color:'system';   // new projects follow the theme accent by default
     const glyph = p?p.glyph:this.store.GLYPHS[1];
     const parentId = p ? (p.parentId||'') : (this.model.parentId||'');
     return { name, color, glyph, parentId, _orig:{ name, color, glyph, parentId } };
   },
   computed: {
+    colorOptions(){ return ['system', ...this.store.COLORS]; },
     // tree-ordered parents, excluding self + descendants (no cycles)
     parentOptions(){
       const self=this.model.project;
@@ -66,7 +67,7 @@ window.ProjectModal = {
     kbRows(){ return [
       { id:'name',   type:'input',  ref:'name' },
       { id:'parent', type:'input',  ref:'parent' },
-      { id:'color',  type:'grid',   items:this.store.COLORS, cols:10, isOn:c=>c===this.color, select:c=>{ this.color=c; } },
+      { id:'color',  type:'grid',   items:this.colorOptions, cols:10, isOn:c=>c===this.color, select:c=>{ this.color=c; } },
       { id:'glyph',  type:'grid',   items:this.store.GLYPHS, cols:10, isOn:g=>g===this.glyph, select:g=>{ this.glyph=g; } },
       { id:'delete', type:'button', activate:()=>this.remove(), when:()=>this.model.mode==='edit' },
       { id:'cancel', type:'button', activate:()=>this.$emit('close') },
@@ -116,6 +117,11 @@ window.LabelModal = {
         </div>
         <div class="field"><span class="mut" style="font-size:11px;">renaming updates this label on every task that uses it</span></div>
 
+        <div class="field" :class="kbCls('pin')" @click="pinned=!pinned" style="cursor:pointer;display:flex;align-items:center;gap:8px;">
+          <label style="margin:0;">pin to header</label>
+          <span class="pin-check" :class="{on:pinned}">{{ pinned ? '✓' : '' }}</span>
+        </div>
+
         <div v-if="hasOtherLabels" class="field" :class="kbCls('mergeInto')" style="border-top:1px solid var(--line);padding-top:10px;">
           <label>merge into</label>
           <div style="display:flex;gap:6px;">
@@ -138,7 +144,7 @@ window.LabelModal = {
     </div>
   </div>
   `,
-  data(){ return { name: this.model.label.name, mergeInto:'', error:'' }; },
+  data(){ return { name: this.model.label.name, pinned: !!this.model.label.pinned, mergeInto:'', error:'' }; },
   computed: {
     otherLabels(){ return this.store.sortedLabels().filter(l=>l.id!==this.model.label.id); },
     hasOtherLabels(){ return this.otherLabels.length>0; }
@@ -146,6 +152,7 @@ window.LabelModal = {
   methods: {
     kbRows(){ return [
       { id:'name',      type:'input',  ref:'name' },
+      { id:'pin',       type:'button', activate:()=>{ this.pinned=!this.pinned; } },
       { id:'mergeInto', type:'input',  ref:'mergeInto', when:()=>this.hasOtherLabels },
       { id:'merge',     type:'button', activate:()=>this.merge(), when:()=>this.hasOtherLabels },
       { id:'delete',    type:'button', activate:()=>this.del() },
@@ -153,14 +160,15 @@ window.LabelModal = {
       { id:'save',      type:'button', activate:()=>this.save() },
     ]; },
     kbSubmit(){ this.save(); },
-    kbDirty(){ return this.name.trim() !== this.model.label.name; },
+    kbDirty(){ return this.name.trim() !== this.model.label.name || this.pinned !== !!this.model.label.pinned; },
     save(){
       const nm = this.name.replace(/^#/,'').trim().toLowerCase();
       if(!nm){ this.error='enter a name'; return; }
       const clash = this.store.labels.find(l=>l.id!==this.model.label.id && Q.slug(l.name)===Q.slug(nm));
       if(clash){ this.error='a label "'+clash.name+'" already exists'; return; }
-      this.model.label.name = nm;   // referenced by id, so this updates every task
-      this.store.toast('✓ label renamed');
+      this.model.label.name = nm;       // referenced by id, so this updates every task
+      this.model.label.pinned = this.pinned;
+      this.store.toast('✓ label saved');
       this.$emit('close');
     },
     async merge(){
@@ -214,15 +222,15 @@ window.SaveQueryModal = {
         <div class="field">
           <label>color</label>
           <div class="swatches">
-            <span v-for="(c,i) in store.COLORS" :key="c" class="swatch" :class="[{on: color===c}, kbCls('color', i)]"
-                  :style="{ background:c, color:c }" @click="kbPick('color', i)"></span>
+            <span v-for="(c,i) in colorOptions" :key="c" class="swatch" :class="[{on: color===c, 'swatch-system': c==='system'}, kbCls('color', i)]"
+                  :style="{ background:store.resolveColor(c), color:store.resolveColor(c) }" :title="c==='system' ? 'system — follows theme' : ''" @click="kbPick('color', i)"></span>
           </div>
         </div>
         <div class="field">
-          <label>icon <span class="mut">— preview <span :style="{color:color}">{{ glyph }}</span></span></label>
+          <label>icon <span class="mut">— preview <span :style="{color:store.resolveColor(color)}">{{ glyph }}</span></span></label>
           <div class="glyphgrid">
             <span v-for="(g,i) in store.GLYPHS" :key="g" class="glyphpick" :class="[{on: glyph===g}, kbCls('glyph', i)]"
-                  :style="glyph===g?{color:color}:{}" @click="kbPick('glyph', i)">{{ g }}</span>
+                  :style="glyph===g?{color:store.resolveColor(color)}:{}" @click="kbPick('glyph', i)">{{ g }}</span>
           </div>
         </div>
         <div class="field" :class="kbCls('pin')" @click="pinned=!pinned" style="cursor:pointer;display:flex;align-items:center;gap:8px;">
@@ -245,17 +253,20 @@ window.SaveQueryModal = {
     const v=this.model.view;
     const name = v ? v.name : '';
     const q = v ? v.query : (this.model.query||'');
-    const color = v ? (v.color || this.store.COLORS[0]) : this.store.COLORS[0];
+    const color = v ? (v.color || 'system') : 'system';   // new views follow the theme accent by default
     const glyph = v ? v.glyph : '◆';
     const pinned = v ? !!v.pinned : false;
     return { name, q, color, glyph, pinned, _orig:{ name, q, color, glyph, pinned } };
   },
-  computed: { count(){ try { return this.store.queryCount(this.q); } catch(e){ return 0; } } },
+  computed: {
+    colorOptions(){ return ['system', ...this.store.COLORS]; },
+    count(){ try { return this.store.queryCount(this.q); } catch(e){ return 0; } }
+  },
   methods: {
     kbRows(){ return [
       { id:'name',   type:'input',  ref:'name' },
       { id:'query',  type:'input',  ref:'query' },
-      { id:'color',  type:'grid',   items:this.store.COLORS, cols:10, isOn:c=>c===this.color, select:c=>{ this.color=c; } },
+      { id:'color',  type:'grid',   items:this.colorOptions, cols:10, isOn:c=>c===this.color, select:c=>{ this.color=c; } },
       { id:'glyph',  type:'grid',   items:this.store.GLYPHS, cols:10, isOn:g=>g===this.glyph, select:g=>{ this.glyph=g; } },
       { id:'pin',    type:'button', activate:()=>{ this.pinned=!this.pinned; } },
       { id:'delete', type:'button', activate:()=>this.remove(), when:()=>this.model.mode==='edit' },

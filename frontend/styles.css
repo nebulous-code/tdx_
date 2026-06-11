@@ -426,6 +426,16 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
   color: var(--amber-hi); font-family: var(--mono); font-size: var(--fs); caret-color: var(--amber);
 }
 .quickadd input::placeholder { color: var(--amber-mut); }
+/* tag autofill: grey ghost completion overlaid on the input (transparent prefix
+   pushes the suffix to the caret; metrics match because both use the mono font) */
+.qa-input-wrap { position: relative; flex: 1; display: flex; min-width: 0; }
+.qa-ghost {
+  position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  display: flex; align-items: center; overflow: hidden; white-space: pre;
+  font-family: var(--mono); font-size: var(--fs); color: var(--amber-faint);
+}
+.qa-ghost .qa-ghost-pre { color: transparent; }
+.qa-ghost .qa-ghost-hint { color: var(--amber-mut); font-size: 10px; }
 /* clear (✕) button inside the statusbar search box */
 .search-x { cursor: pointer; color: var(--amber-dim); padding: 0 4px; user-select: none; }
 .search-x:hover { color: var(--amber); }
@@ -545,6 +555,8 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 }
 .swatch.on { box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 3px currentColor; }
 .swatch.kfocus { box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 3px var(--amber-hi); }
+/* the system (theme-following) swatch looks like amber today — mark it with an inner ring */
+.swatch.swatch-system::after { content: ''; position: absolute; inset: 4px; border-radius: 50%; border: 1.5px solid var(--bg-1); }
 .glyphgrid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
 .glyphpick {
   aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
@@ -590,7 +602,7 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 @media (max-width: 860px) {
   /* minmax(0,1fr): the single column can't grow to its widest no-wrap content
      (which was stretching the whole app past the screen) — it stays viewport-wide */
-  .shell { grid-template-columns: minmax(0, 1fr); grid-template-areas: "topbar" "main" "status"; }
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr auto; grid-template-areas: "topbar" "main" "status"; }
   .sidebar {
     position: fixed; top: 28px; bottom: 22px; left: 0; width: 80vw; max-width: 300px;
     z-index: 50; transform: translateX(-100%); transition: transform .16s ease;
@@ -601,14 +613,15 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
   .mobile-only { display: inline-flex; }
   :root { --detail-w: 100%; }
 
-  /* keep the full-width bars inside the phone: clip overflow + shed lowest-value items */
+  /* keep the full-width bars inside the phone: WRAP (grow taller) instead of clipping,
+     and still shed the lowest-value items */
   .topbar, .statusbar, .list-head { min-width: 0; }
-  .topbar { gap: 8px; overflow: hidden; }
+  .topbar { gap: 8px; flex-wrap: wrap; height: auto; min-height: 28px; row-gap: 4px; }
   .topbar .t-clock { display: none; }              /* the phone already shows the time */
-  .topbar .right { gap: 8px; min-width: 0; }
-  .topbar .right .qbtn { max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar .right { gap: 8px; min-width: 0; flex-wrap: wrap; }
   .list-head { flex-wrap: wrap; height: auto; row-gap: 4px; }   /* sort/completed wrap, don't clip */
-  .statusbar { overflow: hidden; }
+  .statusbar { flex-wrap: wrap; height: auto; min-height: 22px; row-gap: 4px; }
+  .statusbar .right { flex-wrap: wrap; min-width: 0; }
   .statusbar .s-cmdk, .statusbar .s-version { display: none; }  /* no keyboard / version line on a phone */
   .view-title .view-q { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }

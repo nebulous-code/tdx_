@@ -40,6 +40,11 @@
                 @click="store.openQueryView(pv)" :title="pv.query">{{ store.queryCount(pv.query) }} {{ pv.name.toLowerCase() }}</span>
           <span class="sep">│</span>
         </template>
+        <template v-for="pl in store.pinnedLabels()" :key="pl.id">
+          <span class="dim pin-view" :class="{ active: store.view.id==='label_'+pl.id }"
+                @click="store.openLabelView(pl)" :title="'label:'+pl.name">{{ store.queryCount('label:'+pl.name+' status:open') }} {{ pl.name }}</span>
+          <span class="sep">│</span>
+        </template>
         <span class="qbtn" @click="openAccount" title="account (@)">{{ store.currentUser && store.currentUser.username }}</span>
       </div>
     </header>
@@ -496,10 +501,10 @@ const app = createApp({
           else if(it.kind==='label') this.deleteLabel(it.ref);
           break;
         }
-        case 'p': {   // pin / unpin the focused view to the header
+        case 'p': {   // pin / unpin the focused view or label to the header
           e.preventDefault();
           const it=items[idx];
-          if(it && it.kind==='query'){
+          if(it && (it.kind==='query' || it.kind==='label')){
             this.store.togglePin(it.ref);
             this.store.toast(it.ref.pinned ? '★ pinned "'+it.ref.name+'"' : 'unpinned "'+it.ref.name+'"');
           }
