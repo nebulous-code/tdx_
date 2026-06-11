@@ -85,7 +85,7 @@
         <span class="mut">{{ store.visibleRoots().length }} match{{ store.visibleRoots().length===1?'':'es' }}</span>
       </template>
       <template v-else>
-        <span><span class="spark">●</span> READY</span>
+        <span class="s-ready" @click="refreshApp" title="tap to refresh"><span class="spark">●</span> READY</span>
         <span class="sep">│</span>
         <span class="mut">{{ store.visibleRoots().length }} rows</span>
       </template>
@@ -201,6 +201,12 @@ const app = createApp({
   },
   methods: {
     openPalette(){ this.paletteOpen=true; },
+    // tap "READY" to reload — useful as a PWA where there's no refresh button. Flush
+    // any pending debounced save first so a refresh never drops unsaved edits.
+    async refreshApp(){
+      try{ if(this._save){ clearTimeout(this._save); this._save=null; } await this.persist(); }catch(e){}
+      location.reload();
+    },
     newTask(){ this.$nextTick(()=>{ this.$refs.list && this.$refs.list.focusAdd(); }); },
     openProjectModal(mode, parentId, project){
       this.projectModal = { mode, parentId: parentId||null, project: project||null };
@@ -269,8 +275,9 @@ const app = createApp({
         if(this.paletteOpen){ this.paletteOpen=false; return; }
         // project/save/label modals own Esc themselves (KbForm dirty-guard)
         if(this.store.detailOpen){
-          // inside the recurrence sub-pane, Esc pops out of it — not the whole drawer
-          if(this.$refs.detail && this.$refs.detail.recurActive){ this.$refs.detail.kbKey(e); return; }
+          // inside the recurrence sub-pane OR holding a subtask in move mode, Esc drops
+          // that first (one level) — not the whole drawer; a second Esc closes the drawer
+          if(this.$refs.detail && (this.$refs.detail.recurActive || this.$refs.detail.subMoveId)){ this.$refs.detail.kbKey(e); return; }
           const a=document.activeElement; if(a && a.blur) a.blur(); this.store.detailOpen=false; return;
         }
         // a task detail opened from search closes first (above); a second Esc clears the search
@@ -286,10 +293,12 @@ const app = createApp({
           if(tag==='select' && (e.key==='j'||e.key==='k') && this.$refs.detail) this.$refs.detail.kbKey(e);
           return;
         }
-        // while inside the recurrence sub-pane, the detail's own shortcuts (swap /
-        // duplicate / delete) are suppressed — keys go to the builder instead
+        // while inside the recurrence sub-pane OR holding a subtask in move mode, the
+        // detail's own shortcuts (swap / duplicate / delete) are suppressed — keys go
+        // to the builder / move handler instead
         const inRecur = this.$refs.detail && this.$refs.detail.recurActive;
-        if(!inRecur){
+        const inSubMove = this.$refs.detail && this.$refs.detail.subMoveId;
+        if(!inRecur && !inSubMove){
           if(e.key==='J'){ e.preventDefault(); this.detailSwap(1); return; }
           if(e.key==='K'){ e.preventDefault(); this.detailSwap(-1); return; }
           if(e.key==='u'){ e.preventDefault(); this.$refs.detail && this.$refs.detail.duplicate(); return; }
@@ -318,6 +327,18 @@ const app = createApp({
       // each pane has its own navigation while focused
       if(this.store.focusPane==='side'){ this.sidebarKey(e); return; }
       if(this.store.focusPane==='filter'){ this.filterKey(e); return; }
+
+      // subtask move mode (m): j/k reorder the held subtask among its siblings;
+      // m/enter/esc drop it. selectedTaskId stays on it, so .sel / .moving track it.
+      if(this.store.taskMoveId){
+        const t=this.store.taskById(this.store.taskMoveId);
+        switch(e.key){
+          case 'j': case 'ArrowDown': e.preventDefault(); this.store.moveSubtask(t,1); this.scrollSelIntoView(); break;
+          case 'k': case 'ArrowUp':   e.preventDefault(); this.store.moveSubtask(t,-1); this.scrollSelIntoView(); break;
+          case 'm': case 'Enter': case 'Escape': e.preventDefault(); this.store.taskMoveId=null; this.store.toast('✓ order saved'); break;
+        }
+        return;
+      }
 
       // j/k walk the flattened visible rows, so subtasks are reachable too
       const rows=this.store.visibleRows();
@@ -360,6 +381,11 @@ const app = createApp({
           } break;
         case 'i':
           e.preventDefault(); this.newTask(); break;
+        case 'm': {   // grab a subtask to reorder (roots are sort-driven, so skip them)
+          const t=this.store.taskById(curId);
+          if(t && t.parentId){ e.preventDefault(); this.store.taskMoveId=t.id; this.store.toast('↕ move mode · j/k reorder · esc to drop'); }
+          break;
+        }
         case 's':
           e.preventDefault(); this.$refs.list && this.$refs.list.cycleSort(); break;
         case '^':
@@ -516,7 +542,7 @@ const app = createApp({
           const it=items[idx];
           if(it && (it.kind==='query' || it.kind==='label')){
             this.store.togglePin(it.ref);
-            this.store.toast(it.ref.pinned ? '★ pinned "'+it.ref.name+'"' : 'unpinned "'+it.ref.name+'"');
+            this.store.toast(it.ref.pinned ? '✦ pinned "'+it.ref.name+'"' : 'unpinned "'+it.ref.name+'"');
           }
           break;
         }
@@ -736,6 +762,23 @@ const app = createApp({
     window.addEventListener('pagehide', this._flush);
     this._onVis=()=>{ if(document.visibilityState==='hidden') this._flush(); };
     document.addEventListener('visibilitychange', this._onVis);
+    // Mobile nav swipe (t_681): left-edge swipe-right opens the sidebar; swipe-left on
+    // the open sidebar closes it. Mostly-horizontal only, so vertical scrolling is left
+    // alone; passive listeners (we never preventDefault). Gated to the mobile breakpoint
+    // at gesture time so it follows viewport changes. The detail drawer (right) is untouched.
+    this._touch=null;
+    this._onTouchStart=(e)=>{ const t=e.changedTouches&&e.changedTouches[0]; this._touch = t ? { x:t.clientX, y:t.clientY } : null; };
+    this._onTouchEnd=(e)=>{
+      const s=this._touch; this._touch=null;
+      if(!s || !window.matchMedia('(max-width: 860px)').matches) return;
+      const t=e.changedTouches&&e.changedTouches[0]; if(!t) return;
+      const dx=t.clientX-s.x, dy=t.clientY-s.y;
+      if(Math.abs(dx) <= Math.abs(dy)) return;              // mostly-horizontal only
+      if(!this.store.sidebarOpen && s.x < 24 && dx > 50) this.store.sidebarOpen=true;     // open: from left edge
+      else if(this.store.sidebarOpen && dx < -50) this.store.sidebarOpen=false;           // close: swipe left
+    };
+    window.addEventListener('touchstart', this._onTouchStart, { passive:true });
+    window.addEventListener('touchend', this._onTouchEnd, { passive:true });
     // Tear down any service worker left over from the notification-era build so
     // it can't serve a stale cached shell.
     if('serviceWorker' in navigator){
@@ -750,6 +793,8 @@ const app = createApp({
   beforeUnmount(){
     document.removeEventListener('keydown', this.onKey);
     if(this._barRO) this._barRO.disconnect();
+    window.removeEventListener('touchstart', this._onTouchStart);
+    window.removeEventListener('touchend', this._onTouchEnd);
     clearInterval(this._timer);
     window.removeEventListener('pagehide', this._flush);
     document.removeEventListener('visibilitychange', this._onVis);

@@ -50,7 +50,7 @@ function readState(userId) {
     .prepare(
       `SELECT id, project_id, parent_id, title, done, due, reminder,
               recurrence, notes, priority, created_at, completed_at
-       FROM tasks WHERE user_id = ?`
+       FROM tasks WHERE user_id = ? ORDER BY position, id`
     )
     .all(userId)
     .map((t) => ({
@@ -116,8 +116,8 @@ function writeState(userId, snapshot, expectedVersion) {
   );
   const insTask = db.prepare(
     `INSERT INTO tasks (user_id, id, project_id, parent_id, title, done, due, reminder,
-                        recurrence, notes, priority, created_at, completed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                        recurrence, notes, priority, created_at, completed_at, position)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insLabel = db.prepare('INSERT INTO labels (user_id, id, name, pinned) VALUES (?, ?, ?, ?)');
   const insTaskLabel = db.prepare(
@@ -148,7 +148,7 @@ function writeState(userId, snapshot, expectedVersion) {
       insLabel.run(userId, l.id, l.name, l.pinned ? 1 : 0);
     }
     const knownLabels = new Set(labels.map((l) => l.id));
-    for (const t of tasks) {
+    tasks.forEach((t, i) => {
       insTask.run(
         userId,
         t.id,
@@ -162,12 +162,13 @@ function writeState(userId, snapshot, expectedVersion) {
         t.notes ?? '',
         Number.isInteger(t.priority) ? t.priority : 0,
         t.createdAt ?? new Date().toISOString().slice(0, 10),
-        t.completedAt ?? null
+        t.completedAt ?? null,
+        i
       );
       for (const lid of t.labels || []) {
         if (knownLabels.has(lid)) insTaskLabel.run(userId, t.id, lid);
       }
-    }
+    });
     savedQueries.forEach((s, i) => {
       insSaved.run(userId, s.id, s.name, s.glyph, s.query, s.system ? 1 : 0, s.color ?? null, s.pinned ? 1 : 0, i);
     });

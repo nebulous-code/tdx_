@@ -139,6 +139,7 @@
     focusPane: 'list',       // 'list' | 'side' | 'filter' — which window the keyboard drives
     sideFocusId: null,       // id of the keyboard-focused sidebar item
     moveId: null,            // id of the sidebar item being reordered (m = move mode)
+    taskMoveId: null,        // id of the subtask being reordered in the task list (m = move mode)
     pendingNotesFocus: false,// set by quick-add Shift+Enter → detail opens focused in notes
     toasts: [],
     currentUser: null,       // { id, username, email } once authenticated; null = logged out
@@ -392,6 +393,15 @@
     const target = sibs[sibs.indexOf(p) + dir];
     if(!target) return;
     const ia = arr.indexOf(p), ib = arr.indexOf(target);
+    const tmp = arr[ia]; arr[ia] = arr[ib]; arr[ib] = tmp;
+  };
+  store.moveSubtask = (t, dir) => {          // swap with the prev/next sibling subtask (same parent)
+    if(!t) return;
+    const arr = store.tasks;
+    const sibs = arr.filter(x=>x.parentId===t.parentId);
+    const target = sibs[sibs.indexOf(t) + dir];
+    if(!target) return;
+    const ia = arr.indexOf(t), ib = arr.indexOf(target);
     const tmp = arr[ia]; arr[ia] = arr[ib]; arr[ib] = tmp;
   };
   store.openSideItem = (it) => {

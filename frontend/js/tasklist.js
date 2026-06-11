@@ -14,7 +14,7 @@ window.TaskRow = {
   props: ['store','task','depth'],
   template: `
   <div>
-    <div class="task" :class="{ done: task.done, sel: store.selectedTaskId===task.id }"
+    <div class="task" :class="{ done: task.done, sel: store.selectedTaskId===task.id, moving: store.taskMoveId===task.id }"
          :style="{ paddingLeft: (12 + depth*22) + 'px' }"
          @click="select">
       <span v-if="subs.length" class="twist-sub" @click.stop="task.collapsed=!task.collapsed">{{ task.collapsed ? '▸' : '▾' }}</span>

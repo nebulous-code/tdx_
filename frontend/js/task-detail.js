@@ -90,9 +90,9 @@ window.TaskDetail = {
       <!-- subtasks -->
       <div class="field">
         <label>subtasks <span class="mut">{{ doneSubs }}/{{ subs.length }}</span></label>
-        <div v-for="s in subs" :key="s.id" class="task" style="padding:3px 0;border:none;cursor:default;">
+        <div v-for="s in subs" :key="s.id" class="task" style="padding:3px 0;border:none;cursor:default;" :class="[kbCls('sub_'+s.id), { moving: subMoveId===s.id }]">
           <span class="checkbox" :class="{on:s.done}" @click="store.toggleDone(s)">{{ s.done ? '✓' : '' }}</span>
-          <input class="input" style="border:none;background:transparent;padding:2px 4px;" v-model="s.title" :class="{done:s.done}" :style="s.done?{textDecoration:'line-through',color:'var(--amber-mut)'}:{}" />
+          <input class="input" style="border:none;background:transparent;padding:2px 4px;" v-model="s.title" :class="{done:s.done}" :style="s.done?{textDecoration:'line-through',color:'var(--amber-mut)'}:{}" :ref="'sub_'+s.id" @focus="kbFocusRow('sub_'+s.id)" @keydown.esc.stop.prevent="blurField" />
           <span class="twist-sub" @click="store.deleteTask(s)" title="Delete">✕</span>
         </div>
         <div class="quickadd" :class="kbCls('addsub')" style="border:1px solid var(--line-2);background:var(--bg-3);border-radius:2px;margin-top:4px;padding:4px 8px;">
@@ -109,7 +109,7 @@ window.TaskDetail = {
     </div>
   </div>
   `,
-  data(){ return { subDraft:'', kbAutoListen:false, kbAutofocus:false, recurActive:false, recurTouched:false }; },
+  data(){ return { subDraft:'', kbAutoListen:false, kbAutofocus:false, recurActive:false, recurTouched:false, subMoveId:null }; },
   computed: {
     task(){ return this.store.taskById(this.store.selectedTaskId); },
     projectOptions(){ return this.store.projectTree(); },   // tree-ordered for the project select
@@ -163,6 +163,8 @@ window.TaskDetail = {
         { id:'addlabel',  type:'button', activate:()=>this.addLabel() },
         { id:'recur',     type:'static' },   // l/space/enter descends into the recurrence builder
         { id:'notes',     type:'input',  ref:'notes' },
+        // one navigable row per existing subtask (j/k highlight · i rename · m reorder)
+        ...this.subs.map(s => ({ id:'sub_'+s.id, type:'input', ref:'sub_'+s.id })),
         { id:'addsub',    type:'input',  ref:'addsub' },
         { id:'save',      type:'button', activate:()=>this.save() },
         { id:'duplicate', type:'button', activate:()=>this.duplicate() },
@@ -197,12 +199,29 @@ window.TaskDetail = {
         }
         return true;
       }
+      // subtask move mode: j/k reorder the held subtask; m/enter/esc drop it. The
+      // kfocus cursor follows the held row (KbForm highlights by row index, not id).
+      if(this.subMoveId){
+        const t=this.store.taskById(this.subMoveId);
+        if(e.key==='j'||e.key==='ArrowDown'){ e.preventDefault(); this.store.moveSubtask(t,1); this._refocusSub(t.id); return true; }
+        if(e.key==='k'||e.key==='ArrowUp'){ e.preventDefault(); this.store.moveSubtask(t,-1); this._refocusSub(t.id); return true; }
+        if(e.key==='m'||e.key==='Enter'||e.key==='Escape'){ e.preventDefault(); this.subMoveId=null; this.store.toast('✓ order saved'); return true; }
+        return true;   // hold: swallow other keys while reordering
+      }
       const cur=this.kbCur();
+      // m grabs the focused subtask (nav mode only — not while typing in its title input)
+      if(e.key==='m' && cur && typeof cur.id==='string' && cur.id.indexOf('sub_')===0){
+        const a=document.activeElement;
+        const editing = a && (a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.tagName==='SELECT');
+        if(!editing){ e.preventDefault(); this.subMoveId=cur.id.slice(4); this.store.toast('↕ move mode · j/k reorder · esc to drop'); return true; }
+      }
       if(cur && cur.id==='recur' && e.key==='i'){   // i = edit, like every other field
         e.preventDefault(); this.enterRecur(); return true;
       }
       return false;
     },
+    // keep the kbForm cursor on the held subtask as it changes array position
+    _refocusSub(id){ const i=this.kbNav.findIndex(r=>r.id==='sub_'+id); if(i>=0) this.kbRow=i; },
     close(){ this.store.detailOpen=false; },
     // recurrence-builder changed — remember it (so we only infer a due date when the
     // rule was actually edited this session, not merely viewed).
