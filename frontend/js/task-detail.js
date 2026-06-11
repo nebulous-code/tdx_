@@ -93,7 +93,7 @@ window.TaskDetail = {
         <div v-for="s in subs" :key="s.id" class="task" style="padding:3px 0;border:none;cursor:default;" :class="[kbCls('sub_'+s.id), { moving: subMoveId===s.id }]">
           <span class="checkbox" :class="{on:s.done}" @click="store.toggleDone(s)">{{ s.done ? '✓' : '' }}</span>
           <input class="input" style="border:none;background:transparent;padding:2px 4px;" v-model="s.title" :class="{done:s.done}" :style="s.done?{textDecoration:'line-through',color:'var(--amber-mut)'}:{}" :ref="'sub_'+s.id" @focus="kbFocusRow('sub_'+s.id)" @keydown.esc.stop.prevent="blurField" />
-          <span class="twist-sub" @click="store.deleteTask(s)" title="Delete">✕</span>
+          <span class="twist-sub" @click="store.softDeleteTask(s.id)" title="Delete">✕</span>
         </div>
         <div class="quickadd" :class="kbCls('addsub')" style="border:1px solid var(--line-2);background:var(--bg-3);border-radius:2px;margin-top:4px;padding:4px 8px;">
           <span class="prompt">+</span>
@@ -261,7 +261,7 @@ window.TaskDetail = {
       this.store.selectedTaskId=copy.id;
       this.store.toast('⧉ duplicated');
     },
-    async del(){ if(await this.store.askConfirm('Delete this task'+(this.subs.length?' and its subtasks':'')+'?')) this.store.deleteTask(this.task); },
+    async del(){ if(await this.store.askConfirm('Delete this task'+(this.subs.length?' and its subtasks':'')+'?')){ await this.store.softDeleteTask(this.task.id); this.store.detailOpen=false; } },
     autosize(){ const el=this.$refs.title; if(el){ el.style.height='auto'; el.style.height=el.scrollHeight+'px'; } },
     // Focus notes only AFTER the drawer's slide-in finishes. Focusing mid-transition
     // makes the browser scroll the still-off-screen textarea into view while the panel

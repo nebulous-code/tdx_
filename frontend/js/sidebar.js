@@ -36,7 +36,8 @@ window.AppSidebar = {
         <template v-for="p in roots" :key="p.id">
           <tree-row :store="store" :project="p" :depth="0"
                     @new-sub="$emit('new-project', $event)"
-                    @edit="$emit('edit-project', $event)"></tree-row>
+                    @edit="$emit('edit-project', $event)"
+                    @delete="$emit('delete-project', $event)"></tree-row>
         </template>
       </div>
     </div>
@@ -87,13 +88,15 @@ window.TreeRow = {
       <span v-else class="twist"> </span>
       <span class="glyph" :style="{ color: store.resolveColor(project.color) }">{{ project.glyph }}</span>
       <span class="label">{{ project.name }}</span>
+      <span class="add" title="Delete project (x)" @click.stop="$emit('delete', project)">✕</span>
       <span class="add" title="Edit project (e)" @click.stop="$emit('edit', project)">›</span>
       <span class="add" title="Add subproject" @click.stop="$emit('new-sub', project.id)">+</span>
       <span class="count">{{ store.projectCount(project.id) }}</span>
     </div>
     <div v-if="!project.collapsed" class="tree-children">
       <tree-row v-for="c in kids" :key="c.id" :store="store" :project="c" :depth="depth+1"
-                @new-sub="$emit('new-sub', $event)" @edit="$emit('edit', $event)"></tree-row>
+                @new-sub="$emit('new-sub', $event)" @edit="$emit('edit', $event)"
+                @delete="$emit('delete', $event)"></tree-row>
     </div>
   </div>
   `,

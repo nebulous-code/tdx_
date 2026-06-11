@@ -38,6 +38,7 @@ window.ProjectModal = {
         </div>
       </div>
       <div class="modal-foot">
+        <button v-if="model.mode==='edit'" class="btn" :class="kbCls('duplicate')" @click="duplicate">duplicate</button>
         <button v-if="model.mode==='edit'" class="btn danger" :class="kbCls('delete')" style="margin-right:auto;" @click="remove">delete</button>
         <button class="btn" :class="kbCls('cancel')" @click="$emit('close')">cancel</button>
         <button class="btn primary" :class="kbCls('save')" @click="save">{{ model.mode==='new' ? 'create ↵' : 'save ↵' }}</button>
@@ -69,6 +70,7 @@ window.ProjectModal = {
       { id:'parent', type:'input',  ref:'parent' },
       { id:'color',  type:'grid',   items:this.colorOptions, cols:11, isOn:c=>c===this.color, select:c=>{ this.color=c; } },
       { id:'glyph',  type:'grid',   items:this.store.GLYPHS, cols:10, isOn:g=>g===this.glyph, select:g=>{ this.glyph=g; } },
+      { id:'duplicate', type:'button', activate:()=>this.duplicate(), when:()=>this.model.mode==='edit' },
       { id:'delete', type:'button', activate:()=>this.remove(), when:()=>this.model.mode==='edit' },
       { id:'cancel', type:'button', activate:()=>this.$emit('close') },
       { id:'save',   type:'button', activate:()=>this.save() },
@@ -90,11 +92,20 @@ window.ProjectModal = {
     },
     async remove(){
       if(this.model.mode!=='edit') return;
-      if(await this.store.askConfirm('Delete project "'+this.model.project.name+'", its subprojects and tasks?')){
-        this.store.deleteProject(this.model.project);
-        this.store.setView({ kind:'query', id:'sv_today', title:'Today', query:'status:open due:today' });
+      if(await this.store.askConfirm('Delete "'+this.model.project.name+'" and everything in it?')){
+        const ok = await this.store.softDeleteProject(this.model.project.id);
+        if(ok){
+          if(this.store.view.kind==='project' && !this.store.projectById(this.store.view.id))
+            this.store.setView({ kind:'query', id:'sv_today', title:'Today', query:'status:open due:today' });
+          this.store.toast('✓ deleted');
+        }
         this.$emit('close');
       }
+    },
+    async duplicate(){
+      if(this.model.mode!=='edit') return;
+      const dup = await this.store.duplicateProjectFlow(this.model.project);
+      if(dup) this.$emit('close');   // leave the modal open if the user cancelled
     }
   }
 };

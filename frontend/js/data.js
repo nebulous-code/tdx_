@@ -464,15 +464,6 @@
     return Rec.ymd(Rec.addDays(nextDue, gap)) + time;
   }
 
-  store.deleteTask = (t) => {
-    // delete subtasks too
-    const kids = store.subtasks(t.id);
-    kids.forEach(k=>store.deleteTask(k));
-    const i = store.tasks.findIndex(x=>x.id===t.id);
-    if(i>=0) store.tasks.splice(i,1);
-    if(store.selectedTaskId===t.id){ store.selectedTaskId=null; store.detailOpen=false; }
-  };
-
   store.addProject = (partial) => {
     const p = reactive({
       id: uid('p'), parentId: partial.parentId||null,
@@ -481,11 +472,49 @@
     });
     store.projects.push(p); return p;
   };
-  store.deleteProject = (p) => {
-    store.childProjects(p.id).forEach(c=>store.deleteProject(c));
-    store.tasks.filter(t=>t.projectId===p.id).forEach(t=>store.deleteTask(t));
-    const i = store.projects.findIndex(x=>x.id===p.id);
-    if(i>=0) store.projects.splice(i,1);
+  // Deep-clone a project + every task/subtask, with fresh ids and remapped
+  // parent/project refs. includeSubprojects (default true) also clones the whole
+  // subproject subtree; false clones just this project + its own tasks, leaving the
+  // copy without subprojects. Cloned tasks reset to open (mk defaults done:false);
+  // due/reminder/recurrence/labels/notes/priority kept as-is.
+  store.duplicateProject = (p, includeSubprojects=true) => {
+    const projMap = new Map();   // old project id -> new project id
+    const walk = (orig, newParentId, nameOverride) => {
+      const np = store.addProject({ name: nameOverride || orig.name, color: orig.color, glyph: orig.glyph, parentId: newParentId });
+      projMap.set(orig.id, np.id);
+      if(includeSubprojects) store.childProjects(orig.id).forEach(c=>walk(c, np.id));   // subprojects keep their names
+      return np;
+    };
+    // unique root name: "X (copy)", then add " copy" INSIDE the parens on each clash —
+    // re-checked so a 3rd duplicate keeps going ("X (copy)", "X (copy copy)", "X (copy copy copy)"…).
+    let inner = 'copy';
+    let rootName = p.name + ' (' + inner + ')';
+    while(store.projects.some(x=>x.name===rootName)){ inner += ' copy'; rootName = p.name + ' (' + inner + ')'; }
+    const root = walk(p, p.parentId, rootName);
+    const cloneTaskTree = (t, newProjectId, newParentId) => {
+      const nt = store.addTask({ projectId:newProjectId, parentId:newParentId, title:t.title,
+        due:t.due, reminder:t.reminder, labels:[...(t.labels||[])], rec:t.recurrence, notes:t.notes, priority:t.priority });
+      store.subtasks(t.id).forEach(s=>cloneTaskTree(s, newProjectId, nt.id));   // subtasks share projectId
+    };
+    projMap.forEach((newPid, origPid) => {
+      store.tasks.filter(t=>t.projectId===origPid && !t.parentId).forEach(rt=>cloneTaskTree(rt, newPid, null));
+    });
+    return root;
+  };
+  // shared duplicate UX (ProjectModal button + sidebar `u`): when the project has
+  // subprojects, ask whether to copy them too (cancel / no / yes); then clone, open the
+  // copy, and toast. Returns null if cancelled.
+  store.duplicateProjectFlow = async (p) => {
+    let includeSubs = true;
+    if(store.childProjects(p.id).length){
+      const choice = await store.askChoice('Also duplicate "'+p.name+'"\'s subprojects?');
+      if(choice==='cancel') return null;
+      includeSubs = (choice==='yes');
+    }
+    const dup = store.duplicateProject(p, includeSubs);
+    store.openProjectView(dup);
+    store.toast('⧉ duplicated');
+    return dup;
   };
 
   store.saveQuery = (name, query, glyph, color, pinned) => {
@@ -531,8 +560,10 @@
   // in a fresh session would reuse an id (e.g. t_101) that already exists in the
   // loaded data — causing two tasks to share an id and "swap" in the UI.
   // (Seed ids like 't1'/'p_inbox' have no trailing '_N' and are correctly ignored.)
-  store.reserveIds = () => {
-    let max = _id;
+  // floor = the server's high-water mark across ALL rows incl. archived (soft-deleted)
+  // ones the client can't see — without it a new id could collide with an archived row.
+  store.reserveIds = (floor) => {
+    let max = Math.max(_id, floor || 0);
     const scan = (arr) => {
       for(const o of (arr||[])){
         const m = /_(\d+)$/.exec(o && o.id);

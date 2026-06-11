@@ -123,7 +123,7 @@ window.KbForm = {
     kbKey(e){
       // defer to the app-styled confirm/prompt dialog (state lives on the root app)
       const root = this.$root;
-      if(root && (root.confirmState || root.promptState)) return;
+      if(root && (root.confirmState || root.promptState || root.choiceState)) return;
       if(this.store && (this.store.confirmState || this.store.promptState)) return;
       if(this.kbDelegate && this.kbDelegate(e)) return;   // host may handle/forward (e.g. a nested sub-pane)
       const tag = (e.target.tagName||'').toLowerCase();

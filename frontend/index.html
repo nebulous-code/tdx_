@@ -58,6 +58,7 @@
       @delete-query="deleteView"
       @new-project="openProjectModal('new', $event)"
       @edit-project="openProjectModal('edit', null, $event)"
+      @delete-project="deleteProject"
       @edit-label="openLabelEdit"
       @delete-label="deleteLabel"></app-sidebar>
     <div class="scrim" :class="{ show: store.sidebarOpen }" @click="store.sidebarOpen=false"></div>
@@ -127,6 +128,18 @@
     </div>
   </div>
 
+  <!-- app-styled 3-way choice (store.askChoice → 'cancel' | 'no' | 'yes'); Enter is inert -->
+  <div v-if="choiceState" class="overlay" @click.self="resolveChoice('cancel')" style="z-index:10005;">
+    <div class="modal" style="max-width:400px;">
+      <div class="modal-body" style="text-align:center;line-height:1.6;">{{ choiceState.msg }}</div>
+      <div class="modal-foot" style="justify-content:center;gap:10px;">
+        <button class="btn" @click="resolveChoice('cancel')">Cancel ⎋</button>
+        <button class="btn" @click="resolveChoice('no')"><span><u>n</u>o</span></button>
+        <button class="btn primary" @click="resolveChoice('yes')"><span><u>y</u>es</span></button>
+      </div>
+    </div>
+  </div>
+
   <!-- app-styled prompt (store.askPrompt) -->
   <div v-if="promptState" class="overlay" @click.self="resolvePrompt(false)" style="z-index:10005;">
     <div class="modal" style="max-width:380px;">
@@ -183,6 +196,7 @@ const app = createApp({
     sortOpen: false,
     labelModal: null,
     confirmState: null,   // { msg, resolve } for store.askConfirm
+    choiceState: null,    // { msg, resolve } for store.askChoice (cancel/no/yes; Enter inert)
     promptState: null,    // { label, value, resolve } for store.askPrompt
     loaded: false,   // true once we've successfully loaded server state; gates writes
   }; },
@@ -231,7 +245,33 @@ const app = createApp({
         this.store.toast('✓ label deleted');
       }
     },
+    // "Delete" a project = soft archive (cascades to subprojects + their tasks).
+    async deleteProject(p){
+      if(await this.store.askConfirm('Delete "'+p.name+'" and everything in it?')){
+        const ok = await this.store.softDeleteProject(p.id);
+        if(ok){
+          // if we were viewing the (now-archived) project or a descendant, bail to a safe view
+          if(this.store.view.kind==='project' && !this.store.projectById(this.store.view.id))
+            this.store.openQueryView(this.store.savedQueries[0]);
+          this.store.toast('✓ deleted');
+        }
+      }
+    },
+    // Soft-delete goes through a server mutation, not the snapshot: drop any pending
+    // autosave first (it would write the pre-delete state and un-archive the row), call
+    // the endpoint, then apply the fresh archived-filtered state via applyState (which
+    // sets _suppress so the autosave watcher won't fire on the swap).
+    async mutateDelete(url){
+      if(this._save){ clearTimeout(this._save); this._save=null; }
+      try{
+        const res = await fetch(url, { method:'POST', credentials:'include' });
+        if(res.status===401){ this.handleAuthExpired(); return false; }
+        if(res.ok){ const fresh = await res.json(); stateVersion = fresh.version||0; this.applyState(fresh); return true; }
+        this.store.toast('delete failed ('+res.status+')'); return false;
+      }catch(e){ this.store.toast('offline — not deleted'); return false; }
+    },
     resolveConfirm(v){ if(this.confirmState){ const r=this.confirmState.resolve; this.confirmState=null; r(v); } },
+    resolveChoice(v){ if(this.choiceState){ const r=this.choiceState.resolve; this.choiceState=null; r(v); } },
     resolvePrompt(ok){
       if(!this.promptState) return;
       const r=this.promptState.resolve;
@@ -259,6 +299,17 @@ const app = createApp({
         e.stopImmediatePropagation();
         if(e.key==='Enter'){ e.preventDefault(); this.resolveConfirm(true); }   // Yes — discard & close
         else if(e.key==='Escape'){ e.preventDefault(); this.resolveConfirm(false); }   // No — keep editing
+        return;
+      }
+      if(this.choiceState){
+        // 3-way: y / n decide, Esc cancels, Enter is intentionally inert (force an
+        // explicit y or n). stopImmediatePropagation so a modal's KbForm doesn't also act.
+        e.stopImmediatePropagation();
+        const k=(e.key||'').toLowerCase();
+        if(k==='y'){ e.preventDefault(); this.resolveChoice('yes'); }
+        else if(k==='n'){ e.preventDefault(); this.resolveChoice('no'); }
+        else if(e.key==='Escape'){ e.preventDefault(); this.resolveChoice('cancel'); }
+        else if(e.key==='Enter'){ e.preventDefault(); }   // inert by design
         return;
       }
       if(this.promptState) return;   // the prompt input handles its own enter/esc
@@ -530,11 +581,18 @@ const app = createApp({
           else if(it.kind==='label') this.openLabelEdit(it.ref);
           break;
         }
-        case 'x': {   // delete the focused view / label
+        case 'x': {   // delete the focused view / label / project
           e.preventDefault();
           const it=items[idx];
           if(it.kind==='query') this.deleteView(it.ref);
           else if(it.kind==='label') this.deleteLabel(it.ref);
+          else if(it.kind==='project') this.deleteProject(it.ref);
+          break;
+        }
+        case 'u': {   // dUplicate the focused project
+          e.preventDefault();
+          const it=items[idx];
+          if(it && it.kind==='project') this.store.duplicateProjectFlow(it.ref);
           break;
         }
         case 'p': {   // pin / unpin the focused view or label to the header
@@ -616,9 +674,10 @@ const app = createApp({
       if(s.tasks){ this.store.tasks.splice(0, this.store.tasks.length, ...s.tasks); }
       if(s.labels){ this.store.labels.splice(0, this.store.labels.length, ...s.labels); }
       if(s.savedQueries){ this.store.savedQueries.splice(0, this.store.savedQueries.length, ...s.savedQueries); }
-      // raise the id counter past every id we just loaded, so newly-created
-      // tasks/projects can't reuse an existing id (the t_101 collision bug).
-      this.store.reserveIds();
+      // raise the id counter past every id we just loaded AND past the server's
+      // high-water mark (s.seq covers archived rows the client can't see), so a
+      // newly-created task/project can't reuse an existing id (the t_101 collision bug).
+      this.store.reserveIds(s.seq);
       this.$nextTick(()=>{ this._suppress = false; });
     },
     snapshot(){
@@ -734,8 +793,12 @@ const app = createApp({
     // explicit "save now" (e.g. the detail drawer's Save button): cancel the
     // debounce and persist immediately.
     this.store.saveNow=()=>{ if(this._save){ clearTimeout(this._save); this._save=null; } this.persist(); };
+    // soft-delete hooks (callable from child components, like saveNow)
+    this.store.softDeleteProject = (id) => this.mutateDelete('/api/projects/'+id+'/delete');
+    this.store.softDeleteTask    = (id) => this.mutateDelete('/api/tasks/'+id+'/delete');
     // app-styled confirm / prompt (Promise-based) usable from any component
     this.store.askConfirm=(msg)=> new Promise((res)=>{ this.confirmState={ msg, resolve:res }; });
+    this.store.askChoice=(msg)=> new Promise((res)=>{ this.choiceState={ msg, resolve:res }; });   // 'cancel' | 'no' | 'yes'
     this.store.askPrompt=(label, value='')=> new Promise((res)=>{
       this.promptState={ label, value, resolve:res };
       this.$nextTick(()=>{ const el=this.$refs.promptInput; if(el){ el.focus(); el.select(); } });

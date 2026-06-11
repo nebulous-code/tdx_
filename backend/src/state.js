@@ -25,10 +25,19 @@ function getVersion(userId) {
   return row ? row.state_version : 0;
 }
 
+// Bump the per-user optimistic-concurrency version (used by the soft-delete
+// endpoints, which mutate outside the snapshot write path). Returns the new version.
+function bumpVersion(userId) {
+  const next = getVersion(userId) + 1;
+  db.prepare('UPDATE users SET state_version = ?, updated_at = ? WHERE id = ?')
+    .run(next, new Date().toISOString(), userId);
+  return next;
+}
+
 // ---- read -----------------------------------------------------------------
 function readState(userId) {
   const projects = db
-    .prepare('SELECT id, parent_id, name, color, glyph, collapsed FROM projects WHERE user_id = ? ORDER BY position, id')
+    .prepare('SELECT id, parent_id, name, color, glyph, collapsed FROM projects WHERE user_id = ? AND archived = 0 ORDER BY position, id')
     .all(userId)
     .map((p) => ({
       id: p.id,
@@ -50,7 +59,7 @@ function readState(userId) {
     .prepare(
       `SELECT id, project_id, parent_id, title, done, due, reminder,
               recurrence, notes, priority, created_at, completed_at
-       FROM tasks WHERE user_id = ? ORDER BY position, id`
+       FROM tasks WHERE user_id = ? AND archived = 0 ORDER BY position, id`
     )
     .all(userId)
     .map((t) => ({
@@ -88,7 +97,23 @@ function readState(userId) {
       pinned: !!s.pinned,
     }));
 
-  return { projects, tasks, labels, savedQueries, version: getVersion(userId) };
+  // High-water mark of the numeric id suffix across ALL of the user's rows — INCLUDING
+  // archived (soft-deleted) projects/tasks the client never sees. The client seeds its
+  // uid counter from this so a freshly-minted id can't collide with an archived row
+  // still in the DB (which would blow up the next snapshot insert on the (user_id,id) PK).
+  const seqRow = db
+    .prepare(
+      `SELECT MAX(n) AS m FROM (
+         SELECT CAST(substr(id, instr(id, '_') + 1) AS INTEGER) n FROM projects      WHERE user_id = ?
+         UNION ALL SELECT CAST(substr(id, instr(id, '_') + 1) AS INTEGER) FROM tasks         WHERE user_id = ?
+         UNION ALL SELECT CAST(substr(id, instr(id, '_') + 1) AS INTEGER) FROM labels        WHERE user_id = ?
+         UNION ALL SELECT CAST(substr(id, instr(id, '_') + 1) AS INTEGER) FROM saved_queries WHERE user_id = ?
+       )`
+    )
+    .get(userId, userId, userId, userId);
+  const seq = seqRow && seqRow.m ? seqRow.m : 0;
+
+  return { projects, tasks, labels, savedQueries, version: getVersion(userId), seq };
 }
 
 // ---- write ----------------------------------------------------------------
@@ -127,15 +152,21 @@ function writeState(userId, snapshot, expectedVersion) {
     'INSERT INTO saved_queries (user_id, id, name, glyph, query, system, color, pinned, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
 
-  const delTaskLabels = db.prepare('DELETE FROM task_labels WHERE user_id = ?');
-  const delTasks = db.prepare('DELETE FROM tasks WHERE user_id = ?');
-  const delProjects = db.prepare('DELETE FROM projects WHERE user_id = ?');
+  // Soft-delete tables (projects, tasks) wipe ONLY live rows so archived rows the
+  // client never sees survive the snapshot round-trip. task_labels for archived tasks
+  // are spared too. labels + saved_queries are hard-deleted as before.
+  const delTaskLabels = db.prepare(
+    'DELETE FROM task_labels WHERE user_id = ? AND task_id IN (SELECT id FROM tasks WHERE user_id = ? AND archived = 0)'
+  );
+  const delTasks = db.prepare('DELETE FROM tasks WHERE user_id = ? AND archived = 0');
+  const delProjects = db.prepare('DELETE FROM projects WHERE user_id = ? AND archived = 0');
   const delLabels = db.prepare('DELETE FROM labels WHERE user_id = ?');
   const delSaved = db.prepare('DELETE FROM saved_queries WHERE user_id = ?');
 
   const apply = db.transaction(() => {
-    // Children first (task_labels FK to tasks/labels), then the rest.
-    delTaskLabels.run(userId);
+    // Children first (task_labels FK to tasks/labels), then the rest. delTaskLabels
+    // runs before delTasks so its `archived = 0` subquery still sees the live tasks.
+    delTaskLabels.run(userId, userId);
     delTasks.run(userId);
     delProjects.run(userId);
     delLabels.run(userId);
@@ -183,4 +214,4 @@ function writeState(userId, snapshot, expectedVersion) {
   return { version };
 }
 
-module.exports = { readState, writeState, getVersion, ConflictError };
+module.exports = { readState, writeState, getVersion, bumpVersion, ConflictError };

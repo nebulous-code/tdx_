@@ -17,6 +17,7 @@ const backup = require('./backup');
 const stateRoutes = require('./routes/state');
 const authRoutes = require('./routes/auth');
 const backupRoutes = require('./routes/backup');
+const deleteRoutes = require('./routes/delete');
 
 // Cookie signing needs a stable secret; without it sessions can't be trusted.
 const SESSION_SECRET = process.env.SESSION_SECRET;
@@ -47,6 +48,7 @@ async function main() {
   await fastify.register(authRoutes);
   await fastify.register(stateRoutes);
   await fastify.register(backupRoutes);
+  await fastify.register(deleteRoutes);
 
   // Static frontend. `index: 'index.html'` serves the app at '/'.
   await fastify.register(fastifyStatic, {
