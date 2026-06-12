@@ -36,6 +36,14 @@ window.ProjectModal = {
                   :style="glyph===g?{color:store.resolveColor(color)}:{}" @click="kbPick('glyph', i)">{{ g }}</span>
           </div>
         </div>
+        <div class="field">
+          <label>health checks <span class="mut">— gaps to flag for this project</span></label>
+          <div class="health-opts">
+            <span v-for="(s,i) in healthOptions" :key="s.key" class="hopt" :class="[{on: health.includes(s.key)}, kbCls('health', i)]" @click="toggleHealthOpt(s.key)">
+              <span class="hopt-box">{{ health.includes(s.key) ? '✓' : '' }}</span><span class="hopt-icon">{{ s.icon }}</span>{{ s.name }}
+            </span>
+          </div>
+        </div>
       </div>
       <div class="modal-foot">
         <button v-if="model.mode==='edit'" class="btn" :class="kbCls('duplicate')" @click="duplicate">duplicate</button>
@@ -52,10 +60,12 @@ window.ProjectModal = {
     const color = p?p.color:'system';   // new projects follow the theme accent by default
     const glyph = p?p.glyph:this.store.GLYPHS[1];
     const parentId = p ? (p.parentId||'') : (this.model.parentId||'');
-    return { name, color, glyph, parentId, _orig:{ name, color, glyph, parentId } };
+    const health = (p && Array.isArray(p.health)) ? [...p.health] : [];   // enabled check keys
+    return { name, color, glyph, parentId, health, _orig:{ name, color, glyph, parentId, health:[...health] } };
   },
   computed: {
     colorOptions(){ return ['system', ...this.store.COLORS]; },
+    healthOptions(){ return this.store.healthSignals(); },   // catalog (size auto-omitted when sizing off)
     // tree-ordered parents, excluding self + descendants (no cycles)
     parentOptions(){
       const self=this.model.project;
@@ -70,21 +80,23 @@ window.ProjectModal = {
       { id:'parent', type:'input',  ref:'parent' },
       { id:'color',  type:'grid',   items:this.colorOptions, cols:11, isOn:c=>c===this.color, select:c=>{ this.color=c; } },
       { id:'glyph',  type:'grid',   items:this.store.GLYPHS, cols:10, isOn:g=>g===this.glyph, select:g=>{ this.glyph=g; } },
+      { id:'health', type:'grid',   items:this.healthOptions, cols:3, isOn:s=>this.health.includes(s.key), select:s=>this.toggleHealthOpt(s.key) },
       { id:'duplicate', type:'button', activate:()=>this.duplicate(), when:()=>this.model.mode==='edit' },
       { id:'delete', type:'button', activate:()=>this.remove(), when:()=>this.model.mode==='edit' },
       { id:'cancel', type:'button', activate:()=>this.$emit('close') },
       { id:'save',   type:'button', activate:()=>this.save() },
     ]; },
     kbSubmit(){ this.save(); },
-    kbDirty(){ return this.name!==this._orig.name || this.color!==this._orig.color || this.glyph!==this._orig.glyph || this.parentId!==this._orig.parentId; },
+    toggleHealthOpt(key){ const i=this.health.indexOf(key); if(i>=0) this.health.splice(i,1); else this.health.push(key); },
+    kbDirty(){ return this.name!==this._orig.name || this.color!==this._orig.color || this.glyph!==this._orig.glyph || this.parentId!==this._orig.parentId || JSON.stringify(this.health)!==JSON.stringify(this._orig.health); },
     save(){
       const nm=this.name.trim()||'untitled';
       if(this.model.mode==='new'){
-        const p=this.store.addProject({ name:nm, color:this.color, glyph:this.glyph, parentId:this.parentId||null });
+        const p=this.store.addProject({ name:nm, color:this.color, glyph:this.glyph, parentId:this.parentId||null, health:[...this.health] });
         this.store.openProjectView(p);
         this.store.toast('▣ project created');
       } else {
-        const p=this.model.project; p.name=nm; p.color=this.color; p.glyph=this.glyph;
+        const p=this.model.project; p.name=nm; p.color=this.color; p.glyph=this.glyph; p.health=[...this.health];
         this.store.reparentProject(p, this.parentId);
         this.store.toast('✓ project saved');
       }

@@ -425,6 +425,37 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .empty pre { color: var(--amber-faint); font-size: 12px; line-height: 1.3; }
 
 /* quick add bar */
+/* project health (t_867) — completeness gaps on the view-title row, right-justified,
+   wrapping on narrow screens; click a chip to filter, pipe-separated */
+.view-title .view-health {
+  margin-left: auto; display: inline-flex; flex-wrap: wrap; justify-content: flex-end;
+  align-items: center; gap: 4px 6px; font-size: 11px; user-select: none;
+}
+.view-health .hb-chip { cursor: pointer; color: var(--amber-dim); display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.view-health .hb-chip:hover, .view-health .hb-chip.active { color: var(--amber-hi); text-shadow: var(--glow-soft); }
+.view-health .hb-chip .hb-icon { color: var(--red); }   /* the checked-for symbol is red; number + label stay system */
+.view-health .hb-sep { color: var(--line-2); }
+.view-health .hb-clear { cursor: pointer; color: var(--amber-mut); }
+.view-health .hb-clear:hover { color: var(--red); }
+.view-health .hb-healthy { color: var(--amber-mut); }       /* "healthy" stays system-font color… */
+.view-health .hb-healthy .hb-check { color: var(--green); } /* …only the check is green */
+/* per-check toggles in the project editor — two rows of three */
+.health-opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.health-opts .hopt {
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+  padding: 3px 8px; border: 1px solid var(--line-2); border-radius: var(--radius);
+  font-size: 12px; color: var(--amber-dim); user-select: none;
+}
+.health-opts .hopt:hover { border-color: var(--amber-mut); color: var(--amber); }
+.health-opts .hopt.on { color: var(--amber-hi); border-color: var(--amber-mut); }
+.health-opts .hopt.kfocus { box-shadow: 0 0 0 1px var(--amber-hi); border-color: var(--amber-hi); }
+.health-opts .hopt .hopt-box {
+  width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--amber-mut); border-radius: 2px; font-size: 10px; color: var(--amber-hi);
+}
+.health-opts .hopt.on .hopt-box { background: var(--amber); color: var(--on-accent); border-color: var(--amber); }
+.health-opts .hopt .hopt-icon { color: var(--red); width: 12px; text-align: center; }   /* same red symbol as the bar */
+
 .quickadd {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--bg-1);

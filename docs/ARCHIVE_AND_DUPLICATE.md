@@ -11,8 +11,9 @@ working copy, and **delete** one when you're done.
 ## The naming convention (important)
 - **To the user it's "Delete."** The data is presented as gone — no archive language, no restore button.
 - **Under the hood it's a soft archive:** an `archived` flag; rows stay in the DB as a safety net against
-  buggy hard deletes. There is **no in-app revival** — if you ever need it back you're in the DB, where
-  the recovery query is literally `WHERE archived = 1`.
+  buggy hard deletes. There is **no in-app revival in this cut** — if you need it back you're in the DB,
+  where the recovery query is literally `WHERE archived = 1`. *(An optional in-app restore screen is now
+  tracked separately as **t_880** — see the Backlog.)*
 - **README transparency:** document that "Delete" is a soft archive on disk (recovery safety net, no
   in-app restore), so it's honest, not a hidden surprise.
 

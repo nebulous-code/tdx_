@@ -127,6 +127,7 @@
     showCompleted: false,
     searchActive: false,     // vim '/' free-text search is showing its results
     searchTerm: '',          // the current search string (remembered across view switches)
+    healthFilter: null,      // a health-bar signal key while filtering a project view (transient)
     sortField: 'due',        // due | created | title | project | priority | size | tag
     // per-field direction. 'asc' = ^, 'desc' = v.
     sortDirs: { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', size:'desc', tag:'asc' },
@@ -203,6 +204,32 @@
   store.projectCount = (pid) =>
     store.tasks.filter(t=>!t.done && !t.parentId && t.projectId===pid).length;
   store.queryCount = (q) => Q.run(q, store.ctx()).filter(t=>!t.parentId).length;
+
+  // ---- project health (t_867) -------------------------------------------------
+  // Completeness signals over a project's OPEN ROOT tasks. One source of truth drives
+  // both the health-bar counts and the click-to-filter predicate (so they can't drift).
+  store.healthSignals = () => {
+    const fib = store.currentUser && store.currentUser.fib_sizing;
+    const overdue = t => !!t.due && Rec.daysBetween(Rec.startOfDay(new Date()), Rec.parseYMD(t.due)) < 0;
+    // name = label in the project-editor config; label = label on the health bar
+    return [
+      { key:'no-due',      icon:'◷', name:'due date', label:'no due',      test:t=>!t.due },
+      { key:'no-tag',      icon:'#', name:'tag',       label:'no tag',      test:t=>!(t.labels && t.labels.length) },
+      { key:'no-priority', icon:'⚑', name:'priority',  label:'no priority', test:t=>!t.priority },
+      ...(fib ? [{ key:'no-size', icon:'Σ', name:'size', label:'no size', test:t=>!t.size }] : []),
+      { key:'no-notes',    icon:'¶', name:'notes',     label:'no notes',    test:t=>!(t.notes && t.notes.trim()) },
+      { key:'overdue',     icon:'!', name:'overdue',   label:'overdue',     test:overdue },
+    ];
+  };
+  // counts for only the checks this project has enabled (project.health = key array)
+  store.projectHealth = (pid) => {
+    const p = store.projectById(pid);
+    const enabled = (p && Array.isArray(p.health)) ? p.health : [];
+    if(!enabled.length) return [];
+    const ts = store.tasks.filter(t => t.projectId===pid && !t.parentId && !t.done);
+    return store.healthSignals().filter(s=>enabled.includes(s.key))
+      .map(s => ({ key:s.key, icon:s.icon, label:s.label, count: ts.filter(s.test).length }));
+  };
   // saved views pinned to the top header (rendered in savedQueries array order)
   store.pinnedViews = () => store.savedQueries.filter(s=>s.pinned);
   // labels pinned to the header (after the views); same toggle works on either
@@ -266,6 +293,11 @@
       return 0;
     };
     list = [...list].sort((a,b)=> dir * cmp(a,b));
+    // health-bar click-to-filter: narrow a project view to one completeness gap
+    if(store.view.kind==='project' && store.healthFilter){
+      const sig = store.healthSignals().find(s=>s.key===store.healthFilter);
+      if(sig) list = list.filter(sig.test);
+    }
     return list;
   };
 
@@ -352,6 +384,7 @@
   store.setView = (v) => {
     store.view = v; store.selectedTaskId = null; store.sidebarOpen = false;
     store.searchActive = false;   // switching views exits search (the term is kept for the next '/')
+    store.healthFilter = null;    // and drops any project health-bar filter
   };
   store.openQueryView = (sv) => {
     store.setView({ kind:'query', id:sv.id, title:sv.name, query:sv.query });
@@ -473,6 +506,7 @@
       id: uid('p'), parentId: partial.parentId||null,
       name: partial.name||'new-project',
       color: partial.color||COLORS[0], glyph: partial.glyph||'●', collapsed:false,
+      health: Array.isArray(partial.health) ? partial.health : [],
     });
     store.projects.push(p); return p;
   };

@@ -27,6 +27,14 @@ function getVersion(userId) {
 
 // Bump the per-user optimistic-concurrency version (used by the soft-delete
 // endpoints, which mutate outside the snapshot write path). Returns the new version.
+// projects.health holds a JSON array of enabled check keys. Be defensive: legacy rows
+// (the column shipped briefly as INTEGER 0/1) and any garbage read back as "none".
+function parseHealth(v) {
+  if (Array.isArray(v)) return v;
+  if (typeof v === 'string') { try { const a = JSON.parse(v); return Array.isArray(a) ? a : []; } catch { return []; } }
+  return [];
+}
+
 function bumpVersion(userId) {
   const next = getVersion(userId) + 1;
   db.prepare('UPDATE users SET state_version = ?, updated_at = ? WHERE id = ?')
@@ -37,7 +45,7 @@ function bumpVersion(userId) {
 // ---- read -----------------------------------------------------------------
 function readState(userId) {
   const projects = db
-    .prepare('SELECT id, parent_id, name, color, glyph, collapsed FROM projects WHERE user_id = ? AND archived = 0 ORDER BY position, id')
+    .prepare('SELECT id, parent_id, name, color, glyph, collapsed, health FROM projects WHERE user_id = ? AND archived = 0 ORDER BY position, id')
     .all(userId)
     .map((p) => ({
       id: p.id,
@@ -46,6 +54,7 @@ function readState(userId) {
       color: p.color,
       glyph: p.glyph,
       collapsed: !!p.collapsed,
+      health: parseHealth(p.health),   // enabled health-check keys (array)
     }));
 
   // labels per task, gathered in one pass (scoped to the user)
@@ -138,7 +147,7 @@ function writeState(userId, snapshot, expectedVersion) {
   const savedQueries = Array.isArray(snapshot.savedQueries) ? snapshot.savedQueries : [];
 
   const insProject = db.prepare(
-    'INSERT INTO projects (user_id, id, parent_id, name, color, glyph, collapsed, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO projects (user_id, id, parent_id, name, color, glyph, collapsed, position, health) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
   const insTask = db.prepare(
     `INSERT INTO tasks (user_id, id, project_id, parent_id, title, done, due, reminder,
@@ -174,7 +183,7 @@ function writeState(userId, snapshot, expectedVersion) {
     delSaved.run(userId);
 
     projects.forEach((p, i) => {
-      insProject.run(userId, p.id, p.parentId ?? null, p.name, p.color, p.glyph, p.collapsed ? 1 : 0, i);
+      insProject.run(userId, p.id, p.parentId ?? null, p.name, p.color, p.glyph, p.collapsed ? 1 : 0, i, JSON.stringify(Array.isArray(p.health) ? p.health : []));
     });
     for (const l of labels) {
       insLabel.run(userId, l.id, l.name, l.pinned ? 1 : 0);

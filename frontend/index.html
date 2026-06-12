@@ -66,9 +66,19 @@
     <!-- main -->
     <main class="main">
       <query-bar ref="qbar" :store="store" @save-query="openSave"></query-bar>
-      <div class="view-title" style="display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--line);background:var(--bg);">
+      <div class="view-title" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:5px 12px;border-bottom:1px solid var(--line);background:var(--bg);">
         <span class="hi" style="font-family:var(--crt);font-size:18px;line-height:1;">{{ store.view.title }}</span>
         <span class="mut view-q" style="font-size:11px;" v-if="store.currentQuery()">› {{ store.currentQuery() }}</span>
+        <span v-if="health" class="view-health">
+          <template v-if="healthGaps.length">
+            <template v-for="(s,i) in healthGaps" :key="s.key">
+              <span v-if="i>0" class="hb-sep">│</span>
+              <span class="hb-chip" :class="['hb-'+s.key, { active: store.healthFilter===s.key }]" @click="toggleHealth(s.key)"><span class="hb-icon">{{ s.icon }}</span> {{ s.count }} {{ s.label }}</span>
+            </template>
+            <span v-if="store.healthFilter" class="hb-clear" @click="store.healthFilter=null" title="clear filter (esc)">✕</span>
+          </template>
+          <span v-else class="hb-healthy"><span class="hb-check">✓</span> healthy</span>
+        </span>
       </div>
       <task-list ref="list" :store="store"></task-list>
       <task-detail ref="detail" :store="store"></task-detail>
@@ -201,7 +211,11 @@ const app = createApp({
     loaded: false,   // true once we've successfully loaded server state; gates writes
   }; },
   computed: {
-    today(){ return new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'2-digit'}); }
+    today(){ return new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'2-digit'}); },
+    // project health bar (t_867) — rendered on the view-title row in project views
+    healthProject(){ return (!this.store.searchActive && this.store.view.kind==='project') ? this.store.projectById(this.store.view.id) : null; },
+    health(){ const p=this.healthProject; if(!p) return null; const en=Array.isArray(p.health)?p.health:[]; return en.length ? this.store.projectHealth(p.id) : null; },
+    healthGaps(){ return this.health ? this.health.filter(s=>s.count>0) : []; }
   },
   watch: {
     // the detail drawer is its own captured pane while open; restore the list when it closes
@@ -214,6 +228,7 @@ const app = createApp({
     'store.currentUser'(u){ if(u) this.$nextTick(()=>this._observeBars && this._observeBars()); }
   },
   methods: {
+    toggleHealth(key){ this.store.healthFilter = this.store.healthFilter===key ? null : key; },
     openPalette(){ this.paletteOpen=true; },
     // tap "READY" to reload — useful as a PWA where there's no refresh button. Flush
     // any pending debounced save first so a refresh never drops unsaved edits.
@@ -333,6 +348,8 @@ const app = createApp({
         }
         // a task detail opened from search closes first (above); a second Esc clears the search
         if(this.store.searchActive){ e.preventDefault(); this.clearSearch(); return; }
+        // clear an active project health-bar filter (list-level transient, like search)
+        if(this.store.healthFilter){ e.preventDefault(); this.store.healthFilter=null; return; }
       }
       // task-detail drawer: a captured pane. While open it owns nav-mode keys
       // (j/k fields · i edit · space toggle · enter save); J/K swap tasks; u/d
