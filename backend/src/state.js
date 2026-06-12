@@ -58,7 +58,7 @@ function readState(userId) {
   const tasks = db
     .prepare(
       `SELECT id, project_id, parent_id, title, done, due, reminder,
-              recurrence, notes, priority, created_at, completed_at
+              recurrence, notes, priority, size, created_at, completed_at
        FROM tasks WHERE user_id = ? AND archived = 0 ORDER BY position, id`
     )
     .all(userId)
@@ -74,6 +74,7 @@ function readState(userId) {
       recurrence: t.recurrence,
       notes: t.notes || '',
       priority: t.priority || 0,
+      size: [0, 1, 2, 3, 5, 8, 13].includes(t.size) ? t.size : 0,
       collapsed: false, // transient view state; not persisted
       createdAt: t.created_at,
       completedAt: t.completed_at,
@@ -141,8 +142,8 @@ function writeState(userId, snapshot, expectedVersion) {
   );
   const insTask = db.prepare(
     `INSERT INTO tasks (user_id, id, project_id, parent_id, title, done, due, reminder,
-                        recurrence, notes, priority, created_at, completed_at, position)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                        recurrence, notes, priority, size, created_at, completed_at, position)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insLabel = db.prepare('INSERT INTO labels (user_id, id, name, pinned) VALUES (?, ?, ?, ?)');
   const insTaskLabel = db.prepare(
@@ -192,6 +193,7 @@ function writeState(userId, snapshot, expectedVersion) {
         t.recurrence ?? null,
         t.notes ?? '',
         Number.isInteger(t.priority) ? t.priority : 0,
+        [0, 1, 2, 3, 5, 8, 13].includes(t.size) ? t.size : 0,
         t.createdAt ?? new Date().toISOString().slice(0, 10),
         t.completedAt ?? null,
         i

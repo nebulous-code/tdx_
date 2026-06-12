@@ -12,17 +12,19 @@ window.AccountScreen = {
     const u = this.store.currentUser || {};
     const theme = u.theme || 'amber';
     const weekStart = u.week_start ?? 1;
+    const fibSizing = !!u.fib_sizing;
     return {
       username: u.username || '',
       email: u.email || '',
       oldPassword: '', newPassword: '', confirmPassword: '',
       theme,
       weekStart,
+      fibSizing,
       weekDays: [
         {v:0,n:'Sunday'},{v:1,n:'Monday'},{v:2,n:'Tuesday'},{v:3,n:'Wednesday'},
         {v:4,n:'Thursday'},{v:5,n:'Friday'},{v:6,n:'Saturday'},
       ],
-      init: { username: u.username || '', email: u.email || '', theme, weekStart },
+      init: { username: u.username || '', email: u.email || '', theme, weekStart, fibSizing },
       kbAutofocus: false,   // start in nav, not in the username field
       themes: [
         { key:'amber',   name:'amber',   bg:'#0b0a07', accent:'#ffb000' },
@@ -67,6 +69,14 @@ window.AccountScreen = {
             <option v-for="d in weekDays" :key="d.v" :value="d.v">{{ d.n }}</option>
           </select>
         </div>
+        <div class="acct-row" :class="kbCls('fibSizing')" @click="fibSizing=!fibSizing" style="cursor:pointer;">
+          <span class="acct-label">sizing</span>
+          <span style="flex:1;display:flex;align-items:center;gap:6px;">
+            <span class="mut">enable size field on tasks</span>
+            <span class="info-tip" data-tip="Provides Fibonacci sizing (1, 2, 3, 5, 8, 13) for estimating a task's effort." @click.stop>ⓘ</span>
+          </span>
+          <span class="pin-check" :class="{on:fibSizing}">{{ fibSizing ? '✓' : '' }}</span>
+        </div>
 
         <div v-if="isAdmin" class="acct-sep">admin</div>
         <div v-if="isAdmin" class="acct-row" :class="kbCls('backups')" @click="openBackups" style="cursor:pointer;">
@@ -103,6 +113,7 @@ window.AccountScreen = {
     dirty(){
       return this.username !== this.init.username || this.email !== this.init.email ||
         this.theme !== this.init.theme || this.weekStart !== this.init.weekStart ||
+        this.fibSizing !== this.init.fibSizing ||
         !!this.oldPassword || !!this.newPassword || !!this.confirmPassword;
     }
   },
@@ -113,6 +124,7 @@ window.AccountScreen = {
       { id:'theme',           type:'grid',   items:this.themes, cols:6, previewOnFocus:true,
         isOn:t=>this.theme===t.key, select:t=>this.selectTheme(t.key) },
       { id:'weekStart',       type:'input',  ref:'weekStart' },
+      { id:'fibSizing',       type:'button', activate:()=>{ this.fibSizing=!this.fibSizing; } },
       { id:'backups',         type:'button', when:()=>this.isAdmin, activate:()=>this.openBackups() },
       { id:'oldPassword',     type:'input',  ref:'oldPassword' },
       { id:'newPassword',     type:'input',  ref:'newPassword' },
@@ -144,7 +156,7 @@ window.AccountScreen = {
     async save(){
       if(this.busy) return;
       this.error='';
-      const payload = { theme: this.theme, week_start: this.weekStart };
+      const payload = { theme: this.theme, week_start: this.weekStart, fib_sizing: this.fibSizing ? 1 : 0 };
       const uname = this.username.trim();
       if(!uname || uname.length>32){ this.error='username must be 1–32 characters'; return; }
       payload.username = uname;

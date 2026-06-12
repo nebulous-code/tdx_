@@ -39,7 +39,7 @@ function cleanSortPrefs(p) {
   if (!SORT_KEYS.some(k => enabled[k])) return undefined;   // at least one must stay enabled
   return { order, enabled, dirs };
 }
-const publicUser = (u) => ({ id: u.id, username: u.username, email: u.email, theme: u.theme || 'amber', week_start: u.week_start ?? 1, sort_prefs: u.sort_prefs ? JSON.parse(u.sort_prefs) : null, is_admin: !!u.is_admin });
+const publicUser = (u) => ({ id: u.id, username: u.username, email: u.email, theme: u.theme || 'amber', week_start: u.week_start ?? 1, sort_prefs: u.sort_prefs ? JSON.parse(u.sort_prefs) : null, fib_sizing: !!u.fib_sizing, is_admin: !!u.is_admin });
 
 async function routes(fastify) {
   // ---- login --------------------------------------------------------------
@@ -101,6 +101,7 @@ async function routes(fastify) {
     let theme = current.theme || 'amber';
     let weekStart = current.week_start ?? 1;
     let sortPrefs = current.sort_prefs ?? null;   // JSON string or null
+    let fibSizing = current.fib_sizing ?? 0;
 
     if (body.theme !== undefined) {
       if (!ALLOWED_THEMES.includes(body.theme)) return reply.code(400).send({ error: 'unknown theme', field: 'theme' });
@@ -114,6 +115,11 @@ async function routes(fastify) {
     if (body.week_start !== undefined) {
       if (!WEEK_STARTS.includes(Number(body.week_start))) return reply.code(400).send({ error: 'invalid week start', field: 'week_start' });
       weekStart = Number(body.week_start);
+    }
+    if (body.fib_sizing !== undefined) {
+      const v = Number(body.fib_sizing);
+      if (![0, 1].includes(v)) return reply.code(400).send({ error: 'invalid fib_sizing', field: 'fib_sizing' });
+      fibSizing = v;
     }
 
     if (body.username !== undefined) {
@@ -146,8 +152,8 @@ async function routes(fastify) {
 
     const now = new Date().toISOString();
     try {
-      db.prepare('UPDATE users SET username = ?, email = ?, password_hash = ?, theme = ?, week_start = ?, sort_prefs = ?, updated_at = ? WHERE id = ?')
-        .run(username, email, passwordHash, theme, weekStart, sortPrefs, now, userId);
+      db.prepare('UPDATE users SET username = ?, email = ?, password_hash = ?, theme = ?, week_start = ?, sort_prefs = ?, fib_sizing = ?, updated_at = ? WHERE id = ?')
+        .run(username, email, passwordHash, theme, weekStart, sortPrefs, fibSizing, now, userId);
     } catch (err) {
       // Backstop for the UNIQUE COLLATE NOCASE constraints if a race slips past the checks.
       if (/UNIQUE/.test(err.message)) return reply.code(409).send({ error: 'username or email already in use' });
@@ -161,7 +167,7 @@ async function routes(fastify) {
       auth.revokeUserSessions(userId, unsigned && unsigned.valid ? unsigned.value : null);
     }
 
-    return publicUser({ id: userId, username, email, theme, week_start: weekStart, sort_prefs: sortPrefs, is_admin: current.is_admin });
+    return publicUser({ id: userId, username, email, theme, week_start: weekStart, sort_prefs: sortPrefs, fib_sizing: fibSizing, is_admin: current.is_admin });
   });
 }
 

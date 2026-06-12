@@ -99,6 +99,7 @@
       recurrence: o.rec || null,
       notes: o.notes || '',
       priority: o.priority || 0,
+      size: o.size || 0,
       collapsed: false,
       createdAt: T(todayD),
       completedAt: o.done ? T(todayD) : null,
@@ -126,12 +127,12 @@
     showCompleted: false,
     searchActive: false,     // vim '/' free-text search is showing its results
     searchTerm: '',          // the current search string (remembered across view switches)
-    sortField: 'due',        // due | created | title | project | priority | tag
+    sortField: 'due',        // due | created | title | project | priority | size | tag
     // per-field direction. 'asc' = ^, 'desc' = v.
-    sortDirs: { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', tag:'asc' },
+    sortDirs: { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', size:'desc', tag:'asc' },
     // sort configuration (Shift+S popup, persisted per-user as users.sort_prefs)
-    sortOrder: ['due','created','title','project','priority','tag'],   // priority order for the `s` cycle
-    sortEnabled: { due:true, created:true, title:true, project:true, priority:true, tag:true },
+    sortOrder: ['due','created','title','project','priority','size','tag'],   // priority order for the `s` cycle
+    sortEnabled: { due:true, created:true, title:true, project:true, priority:true, size:true, tag:true },
     builderOpen: false,
     sidebarOpen: false,      // mobile slide-in
     navCollapsed: false,     // desktop: hide the sidebar column (toggled with n)
@@ -169,8 +170,8 @@
   };
   store.reparentProject = (p, parentId) => { p.parentId = parentId || null; };
   // ---- sort configuration (Shift+S popup; persisted as users.sort_prefs) ----
-  const SORT_KEYS = ['due','created','title','project','priority','tag'];
-  const DEFAULT_SORT_DIRS = { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', tag:'asc' };
+  const SORT_KEYS = ['due','created','title','project','priority','size','tag'];
+  const DEFAULT_SORT_DIRS = { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', size:'desc', tag:'asc' };
   // pure: turn a (possibly null/partial) stored prefs object into a clean {order,enabled,dirs}
   store.normalizeSortPrefs = (p) => {
     const order = (p && Array.isArray(p.order)) ? p.order.filter(k=>SORT_KEYS.includes(k)) : [];
@@ -188,7 +189,9 @@
     const n = store.normalizeSortPrefs(p);
     store.sortOrder = n.order;
     for(const k of SORT_KEYS){ store.sortEnabled[k] = n.enabled[k]; store.sortDirs[k] = n.dirs[k]; }
-    const first = store.sortOrder.find(k=>store.sortEnabled[k]);   // start on the top enabled sort
+    // start on the top enabled sort; never land on 'size' when Fibonacci sizing is off
+    const fib = store.currentUser && store.currentUser.fib_sizing;
+    const first = store.sortOrder.find(k=>store.sortEnabled[k] && (k!=='size' || fib));
     if(first) store.sortField = first;
   };
   store.subtasks = (tid) => store.tasks.filter(t=>t.parentId===tid);
@@ -258,6 +261,7 @@
       if(by==='title')    return a.title.localeCompare(b.title);
       if(by==='project'){ const ap=(store.projectById(a.projectId)||{}).name||''; const bp=(store.projectById(b.projectId)||{}).name||''; return ap.localeCompare(bp); }
       if(by==='priority') return (a.priority||0)-(b.priority||0);
+      if(by==='size')     return (a.size||0)-(b.size||0);
       if(by==='tag')      return tagKey(a).localeCompare(tagKey(b));
       return 0;
     };
@@ -433,7 +437,7 @@
         const clone = mk(uid('t'), t.projectId, t.parentId, t.title, {
           due: Rec.ymd(nxt),
           reminder: shiftReminder(t, nxt),
-          labels: [...t.labels], rec: t.recurrence, notes: t.notes, priority: t.priority,
+          labels: [...t.labels], rec: t.recurrence, notes: t.notes, priority: t.priority, size: t.size,
         });
         store.tasks.push(clone);
         cloneSubtree(t.id, clone.id);   // regenerate the whole subtask subtree, fresh/unchecked
@@ -448,7 +452,7 @@
     for(const s of store.subtasks(origParentId)){
       const sc = mk(uid('t'), s.projectId, newParentId, s.title, {
         due: s.due, reminder: s.reminder, labels: [...s.labels],
-        rec: s.recurrence, notes: s.notes, priority: s.priority,
+        rec: s.recurrence, notes: s.notes, priority: s.priority, size: s.size,
       });
       store.tasks.push(sc);
       cloneSubtree(s.id, sc.id);
@@ -493,7 +497,7 @@
     const root = walk(p, p.parentId, rootName);
     const cloneTaskTree = (t, newProjectId, newParentId) => {
       const nt = store.addTask({ projectId:newProjectId, parentId:newParentId, title:t.title,
-        due:t.due, reminder:t.reminder, labels:[...(t.labels||[])], rec:t.recurrence, notes:t.notes, priority:t.priority });
+        due:t.due, reminder:t.reminder, labels:[...(t.labels||[])], rec:t.recurrence, notes:t.notes, priority:t.priority, size:t.size });
       store.subtasks(t.id).forEach(s=>cloneTaskTree(s, newProjectId, nt.id));   // subtasks share projectId
     };
     projMap.forEach((newPid, origPid) => {

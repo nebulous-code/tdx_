@@ -387,6 +387,20 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .tmeta .m.prio.prio3 { color: #ffd23f; }    /* medium — yellow */
 .tmeta .m.prio.prio4 { color: #ff9f43; }    /* high — orange */
 .tmeta .m.prio.prio5 { color: #ff5c5c; }    /* very high — red */
+.tmeta .m.size { color: var(--cyan); }              /* Fibonacci size estimate */
+.tmeta .m.size.size-max { color: var(--red); }      /* 13 — "break this down" */
+/* small ⓘ info badge with a CRT tooltip on hover (reuses the quick-add tooltip look) */
+.info-tip { position: relative; cursor: help; color: var(--amber-mut); font-size: 12px; }
+.info-tip:hover { color: var(--amber); }
+.info-tip:hover::after {
+  content: attr(data-tip);
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 10001;
+  width: 240px; white-space: normal; text-align: left;
+  background: var(--bg-2); border: 1px solid var(--amber-mut); color: var(--amber-hi);
+  padding: 7px 10px; border-radius: var(--radius);
+  font-family: var(--mono); font-size: 11px; font-weight: 400; line-height: 1.5;
+  letter-spacing: .2px; text-shadow: none; box-shadow: var(--glow-soft); pointer-events: none;
+}
 .tag {
   color: var(--amber-dim); border: 1px solid var(--line-2);
   border-radius: 9px; padding: 0 6px; font-size: 10px; white-space: nowrap;

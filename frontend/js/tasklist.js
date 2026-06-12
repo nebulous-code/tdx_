@@ -7,6 +7,7 @@ const SORTS = [
   { key:'title',    label:'title' },
   { key:'project',  label:'project' },
   { key:'priority', label:'priority' },
+  { key:'size',     label:'size' },         // Fibonacci estimate (only when sizing is enabled)
   { key:'tag',      label:'tag' },          // group by concatenated label names
 ];
 window.TaskRow = {
@@ -27,6 +28,7 @@ window.TaskRow = {
             <span :style="{color: store.resolveColor(proj.color)}">{{ proj.glyph }}</span>{{ proj.name }}
           </span>
           <span v-if="task.priority" class="m prio" :class="'prio'+task.priority" :title="'priority: '+prioName">⚑ {{ prioName }}</span>
+          <span v-if="task.size && store.currentUser && store.currentUser.fib_sizing" class="m size" :class="{ 'size-max': task.size===13 }" :title="'size '+task.size">Σ {{ task.size }}</span>
           <span v-if="task.due" class="m" :class="dueClass">◷ {{ dueLabel }}</span>
           <span v-if="task.reminder" class="m">◔ rem {{ relLabel(task.reminder) }}</span>
           <span v-if="task.recurrence" class="m rec" :title="recFull">↻ {{ recShort }}</span>
@@ -157,8 +159,10 @@ window.TaskList = {
   },
   methods: {
     cycleSort(){
-      // advance through enabled sorts in the user's configured order (Shift+S)
-      const enabled = this.store.sortOrder.filter(k=>this.store.sortEnabled[k]);
+      // advance through enabled sorts in the user's configured order (Shift+S);
+      // 'size' only participates when Fibonacci sizing is enabled
+      const fib = this.store.currentUser && this.store.currentUser.fib_sizing;
+      const enabled = this.store.sortOrder.filter(k=>this.store.sortEnabled[k] && (k!=='size' || fib));
       if(!enabled.length) return;
       const i = enabled.indexOf(this.store.sortField);
       this.store.sortField = enabled[(i+1) % enabled.length];   // i<0 → first enabled

@@ -27,24 +27,38 @@ window.TaskDetail = {
             <option v-for="({p,depth}) in projectOptions" :key="p.id" :value="p.id">{{ depth ? '↳ ' : '' }}{{ p.name }}</option>
           </select>
         </div>
-        <div class="row2" style="margin:0;">
-          <div class="field" style="flex:0 0 40%;margin:0;">
-            <label>status</label>
-            <button class="btn" style="width:100%;justify-content:center;" :class="[{primary: task.done}, kbCls('status')]" @click="store.toggleDone(task)">
-              {{ task.done ? '✓ done' : '☐ open' }}
-            </button>
-          </div>
-          <div class="field" style="flex:1;margin:0;">
-            <label>priority</label>
-            <select ref="priority" class="input" style="width:100%;" :class="kbCls('priority')" v-model.number="task.priority" @focus="kbFocusRow('priority')" @keydown.esc.stop.prevent="blurField">
-              <option :value="5">5 v.high</option>
-              <option :value="4">4 high</option>
-              <option :value="3">3 med</option>
-              <option :value="2">2 low</option>
-              <option :value="1">1 v.low</option>
-              <option :value="0">0 none</option>
-            </select>
-          </div>
+        <div class="field">
+          <label>status</label>
+          <button class="btn" style="width:100%;justify-content:center;" :class="[{primary: task.done}, kbCls('status')]" @click="store.toggleDone(task)">
+            {{ task.done ? '✓ done' : '☐ open' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- priority + size (size fills its half only when the account preference is on) -->
+      <div class="row2">
+        <div class="field">
+          <label>priority</label>
+          <select ref="priority" class="input" style="width:100%;" :class="kbCls('priority')" v-model.number="task.priority" @focus="kbFocusRow('priority')" @keydown.esc.stop.prevent="blurField">
+            <option :value="5">5 v.high</option>
+            <option :value="4">4 high</option>
+            <option :value="3">3 med</option>
+            <option :value="2">2 low</option>
+            <option :value="1">1 v.low</option>
+            <option :value="0">0 none</option>
+          </select>
+        </div>
+        <div v-if="store.currentUser && store.currentUser.fib_sizing" class="field">
+          <label>size</label>
+          <select ref="size" class="input" style="width:100%;" :class="kbCls('size')" v-model.number="task.size" @focus="kbFocusRow('size')" @keydown.esc.stop.prevent="blurField">
+            <option :value="0">—</option>
+            <option :value="1">1</option>
+            <option :value="2">2</option>
+            <option :value="3">3</option>
+            <option :value="5">5</option>
+            <option :value="8">8</option>
+            <option :value="13">13</option>
+          </select>
         </div>
       </div>
 
@@ -156,6 +170,7 @@ window.TaskDetail = {
         { id:'project',   type:'input',  ref:'project' },
         { id:'status',    type:'button', activate:()=>this.store.toggleDone(this.task) },
         { id:'priority',  type:'input',  ref:'priority' },
+        { id:'size',      type:'input',  ref:'size', when:()=>this.store.currentUser && this.store.currentUser.fib_sizing },
         { id:'due',       type:'input',  ref:'due' },
         { id:'reminder',  type:'input',  ref:'reminder' },
         { id:'labels',    type:'grid',   items:labels, cols:99,

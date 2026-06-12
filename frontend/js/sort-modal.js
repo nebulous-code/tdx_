@@ -39,11 +39,14 @@ window.SortModal = {
     // seed from the STORED config (not the live session sort), so the popup always
     // reflects what's actually saved in the db
     const cfg = this.store.normalizeSortPrefs((this.store.currentUser||{}).sort_prefs);
+    // hide 'size' from the working copy when Fibonacci sizing is off — keeps every
+    // reorder index in sync (it's backfilled to the end again on the next load)
+    if(!(this.store.currentUser && this.store.currentUser.fib_sizing)) cfg.order = cfg.order.filter(k=>k!=='size');
     return {
       kbAutofocus: false,
       moveKey: null,           // the sort key currently in move-mode (m)
       busy: false, error: '',
-      labels: { due:'due', created:'created', title:'title', project:'project', priority:'priority', tag:'tag' },
+      labels: { due:'due', created:'created', title:'title', project:'project', priority:'priority', size:'size', tag:'tag' },
       cfg,
       _orig: JSON.parse(JSON.stringify(cfg)),   // for dirty detection
     };
