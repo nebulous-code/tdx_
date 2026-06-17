@@ -36,7 +36,7 @@ window.CommandPalette = {
       out.push({ key:'new-proj', cat:'actions', glyph:'▣', label:'New project', desc:'', run:()=>this.$emit('new-project', null) });
       if(s.view.kind==='project') out.push({ key:'new-sub', cat:'actions', glyph:'▸', label:'New subproject in '+s.view.title, desc:'', run:()=>this.$emit('new-project', s.view.id) });
       out.push({ key:'save-q', cat:'actions', glyph:'★', label:'Save current query as view', desc:'', run:()=>this.$emit('save-query', s.view.query||'') });
-      out.push({ key:'toggle-done', cat:'actions', glyph:'☑', label:(s.showCompleted?'Hide':'Show')+' completed', desc:'', run:()=>s.showCompleted=!s.showCompleted });
+      out.push({ key:'toggle-done', cat:'actions', glyph:'☑', label:(s.completion.done?'Hide':'Show')+' completed', desc:'', run:()=>s.toggleCompletion('done') });
       ['due','created','title','project'].forEach(by=>out.push({ key:'sort-'+by, cat:'sort', glyph:'⇅', label:'Sort by '+by, desc:'', run:()=>s.sortBy=by }));
       s.savedQueries.forEach(sv=>out.push({ key:'view-'+sv.id, cat:'views', glyph:sv.glyph, label:sv.name, desc:sv.query, run:()=>s.openQueryView(sv) }));
       const walk=(p,pre)=>{ out.push({ key:'proj-'+p.id, cat:'projects', glyph:p.glyph, color:s.resolveColor(p.color), label:pre+p.name, desc:s.projectCount(p.id)+' open', run:()=>s.openProjectView(p) }); s.childProjects(p.id).forEach(c=>walk(c,pre+'↳ ')); };

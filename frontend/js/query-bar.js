@@ -55,7 +55,6 @@ window.QueryBar = {
     // KbForm's kbRows(); each chip carries display + toggle metadata.
     navGroups(){
       return [
-        { key:'status', label:'status', chips:['open','done','overdue','today'].map(v=>({field:'status',value:v,text:v,exclusive:true})) },
         { key:'due', label:'due', chips:[
             ...this.dueOpts.map(o=>({field:'due',value:o.v,text:o.t,exclusive:true})),
             ...this.dueDays.map((d,i)=>({field:'due',value:d.l,text:d.t,dueDay:true,sepBefore:i===0})),
@@ -66,7 +65,8 @@ window.QueryBar = {
           ] },
         { key:'project', label:'project', chips:this.store.projects.map(p=>({field:'project',value:p.name,text:p.name,glyph:p.glyph,color:this.store.resolveColor(p.color),exclusive:true})) },
         { key:'flags', label:'flags', chips:[
-            {field:'recurring',value:'true',text:'↻ recurring',exclusive:true},
+            { compl:'open', text:'open' }, { compl:'done', text:'completed' },
+            {field:'recurring',value:'true',text:'↻ recurring',exclusive:true,sepBefore:true},
             {field:'reminder',value:'set',text:'◔ has reminder',exclusive:false},
             {field:'has',value:'subtasks',text:'⊟ has subtasks',exclusive:false},
             {field:'is',value:'subtask',text:'└ is subtask',exclusive:false},
@@ -95,9 +95,10 @@ window.QueryBar = {
       }
       return rows;
     },
-    chipOn(c){ return c.dueDay ? this.hasDueDay(c.value) : this.has(c.field,c.value); },
+    chipOn(c){ return c.compl ? this.store.completion[c.compl] : c.dueDay ? this.hasDueDay(c.value) : this.has(c.field,c.value); },
     chipToggle(c){
-      if(c.dueDay) this.toggleDueWeekday(c.value);
+      if(c.compl) this.store.toggleCompletion(c.compl);
+      else if(c.dueDay) this.toggleDueWeekday(c.value);
       else if(c.untag) this.toggleUntagged();
       else if(c.exclusive) this.toggleExclusive(c.field,c.value);
       else if(c.field==='label'){

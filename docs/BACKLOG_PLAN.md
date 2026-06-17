@@ -41,8 +41,10 @@ The entire quality-of-life run and both project epics are **done**:
   `docs/ARCHIVE_AND_DUPLICATE.md`.)*
 
 ### Well-described but design-first
-- **t_621 — rethink the filter's "Status" option** `#bug`. Suspect most Status concepts collapse into
-  Due (`>0d`, overdue, etc.). Needs a model decision before code — no doc yet.
+- **t_621 — rethink the filter's "Status" option** `#bug` → `docs/STATUS_FILTER_RETHINK.md`. Verdict:
+  Status is redundant with **Due + the completed toggle**. Recommend removing the Status builder section
+  (keep the `status:` token so saved views still work), optionally making the completed toggle 3-state
+  (hide/all/done-only) so nothing is lost. Decision pending.
 
 ### Epics (parked / far off)
 - **t_249 — Template projects** `#epic` → `docs/TEMPLATE_PROJECTS_PLAN.md`. **Phase 1 (duplicate) shipped;**

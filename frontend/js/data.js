@@ -124,7 +124,7 @@
     view: { kind:'query', id:'sv_today', title:'Today', query:'status:open due:today' },
     selectedTaskId: null,
     detailOpen: false,
-    showCompleted: false,
+    completion: { open: true, done: false },   // which completion states the list includes (≥1 always on)
     searchActive: false,     // vim '/' free-text search is showing its results
     searchTerm: '',          // the current search string (remembered across view switches)
     healthFilter: null,      // a health-bar signal key while filtering a project view (transient)
@@ -205,6 +205,15 @@
     store.tasks.filter(t=>!t.done && !t.parentId && t.projectId===pid).length;
   store.queryCount = (q) => Q.run(q, store.ctx()).filter(t=>!t.parentId).length;
 
+  // completion filter (open / completed pills + the list-head toggle). A task passes if
+  // its completion state is currently included; ≥1 of {open, done} is always on.
+  store.completionPass = (t) => (store.completion.open && !t.done) || (store.completion.done && t.done);
+  store.toggleCompletion = (key) => {            // 'open' | 'done' — never deselect the last one on
+    const c = store.completion, other = key==='open' ? 'done' : 'open';
+    if(c[key] && !c[other]) return;              // it's the only one selected → keep it
+    c[key] = !c[key];
+  };
+
   // ---- project health (t_867) -------------------------------------------------
   // Completeness signals over a project's OPEN ROOT tasks. One source of truth drives
   // both the health-bar counts and the click-to-filter predicate (so they can't drift).
@@ -250,7 +259,7 @@
     let matched = store.tasks.filter(t =>
       (t.title||'').toLowerCase().includes(term) || (t.notes||'').toLowerCase().includes(term) ||
       (t.id||'').toLowerCase().includes(term));
-    if(!store.showCompleted) matched = matched.filter(t=>!t.done);
+    matched = matched.filter(store.completionPass);
     const roots = []; const seen = new Set();
     for(const t of matched){
       let r=t; while(r.parentId){ const p=store.taskById(r.parentId); if(!p) break; r=p; }
@@ -270,14 +279,14 @@
     const ctx = store.ctx();
     const q = store.currentQuery();
     let matched = Q.run(q, ctx);
-    if(!store.showCompleted && !/status:done|is:done/.test(q)) matched = matched.filter(t=>!t.done);
+    if(!/status:done|is:done/.test(q)) matched = matched.filter(store.completionPass);
     const matchedIds = new Set(matched.map(t=>t.id));
     const roots = []; const seen = new Set();
     for(const t of matched){
       let r=t; while(r.parentId){ const p=store.taskById(r.parentId); if(!p) break; r=p; }
       if(!seen.has(r.id)){ seen.add(r.id); roots.push(r); }
     }
-    let list = store.showCompleted ? roots : roots.filter(r=>!r.done || matchedIds.has(r.id));
+    let list = store.completion.done ? roots : roots.filter(r=>!r.done || matchedIds.has(r.id));
     const by = store.sortField;
     const dir = (store.sortDirs && store.sortDirs[by]) === 'desc' ? -1 : 1;  // ^ = asc, v = desc
     // ascending comparator per field; direction flips it
@@ -340,8 +349,10 @@
       });
     });
 
-    // status:done -> create the task already done
-    if(terms.some(t => t.field==='status' && t.value==='done' && !t.neg)) out.done = true;
+    // create the task already done when the view filters to completed — either a
+    // status:done query term, or the completion pills set to completed-only (open off).
+    if(terms.some(t => t.field==='status' && t.value==='done' && !t.neg) ||
+       (store.completion.done && !store.completion.open)) out.done = true;
 
     // due: closest-to-today date satisfying every due/status term. due:none means
     // "no due date", which an undated task already satisfies, so leave due unset.

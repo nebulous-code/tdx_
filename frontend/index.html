@@ -459,7 +459,7 @@ const app = createApp({
         case '^':
           e.preventDefault(); this.$refs.list && this.$refs.list.toggleSortDir(); break;
         case 'c':
-          this.store.showCompleted=!this.store.showCompleted; break;
+          this.store.toggleCompletion('done'); break;
         case '!':
           if(curId){ e.preventDefault(); const t=this.store.taskById(curId);
             if(t){ t.priority = ((t.priority||0)+1) % 6;   // cycle none→v.low→…→v.high→none

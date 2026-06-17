@@ -94,7 +94,7 @@ window.TaskList = {
 
     <div class="list-head">
       <span class="grow">{{ rootTasks.length }} task{{ rootTasks.length===1?'':'s' }}<span v-if="doneCount"> · {{ doneCount }} done</span></span>
-      <span class="qbtn" :class="{on: store.showCompleted}" @click="store.showCompleted=!store.showCompleted" title="show / hide completed (c)">{{ store.showCompleted ? '☑' : '☐' }} <u>c</u>ompleted</span>
+      <span v-if="store.view.kind==='project' || String(store.view.id).startsWith('label_')" class="qbtn" :class="{on: store.completion.done}" @click="store.toggleCompletion('done')" title="show / hide completed (c)">{{ store.completion.done ? '☑' : '☐' }} <u>c</u>ompleted</span>
       <span class="qbtn" @click="cycleSort" title="cycle sort field (s)"><u>s</u>ort: {{ sortFieldLabel }}</span>
       <span class="qbtn" @click="toggleSortDir" title="toggle direction (^)">{{ sortDirSymbol }}</span>
     </div>
@@ -127,7 +127,7 @@ window.TaskList = {
       const ctx = this.store.ctx();
       const q = this.store.currentQuery();
       let list = Q.run(q, ctx);
-      if(!this.store.showCompleted && !/status:done|is:done/.test(q)) list = list.filter(t=>!t.done);
+      if(!/status:done|is:done/.test(q)) list = list.filter(this.store.completionPass);
       return list;
     },
     // show matched root tasks; if a subtask matches but parent doesn't, surface parent too
