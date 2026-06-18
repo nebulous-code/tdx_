@@ -1,0 +1,217 @@
+// routes/auth.ts — login / logout / me / account. Faithful port of
+// backend/src/routes/auth.js using Kysely + the ported auth module.
+
+import type { FastifyInstance } from 'fastify';
+import {
+  COOKIE_NAME,
+  type PublicUser,
+  SESSION_TTL_MS,
+  cleanSortPrefs,
+  clearFailures,
+  createSession,
+  dummyVerify,
+  hashPassword,
+  publicUser,
+  rateLimited,
+  recordFailure,
+  resolveSession,
+  revokeSession,
+  revokeUserSessions,
+  validateEmail,
+  validatePassword,
+  validateUsername,
+  verifyPassword,
+} from '../auth.js';
+
+const COOKIE_OPTS = {
+  httpOnly: true,
+  sameSite: 'strict' as const,
+  secure: false, // plain HTTP over LAN; revisit behind HTTPS
+  path: '/',
+  signed: true,
+  maxAge: Math.floor(SESSION_TTL_MS / 1000),
+};
+
+const ALLOWED_THEMES = ['amber', 'matrix', 'ice', 'paper', 'plasma', 'magenta'];
+const WEEK_STARTS = [0, 1, 2, 3, 4, 5, 6];
+
+export default async function authRoutes(app: FastifyInstance): Promise<void> {
+  // ---- login --------------------------------------------------------------
+  app.post('/api/auth/login', async (request, reply) => {
+    const { username, password } = (request.body ?? {}) as { username?: string; password?: string };
+    const ip = request.ip;
+    const GENERIC = { error: 'invalid username or password' };
+
+    if (rateLimited(username, ip)) {
+      return reply.code(429).send({ error: 'too many attempts — try again shortly' });
+    }
+    if (!username || !password) {
+      recordFailure(username, ip);
+      return reply.code(401).send(GENERIC);
+    }
+
+    const user = await app.db
+      .selectFrom('users')
+      .selectAll()
+      .where('username', '=', String(username).trim()) // column is COLLATE NOCASE
+      .executeTakeFirst();
+    if (!user) {
+      await dummyVerify(String(password)); // equalize timing
+      recordFailure(username, ip);
+      return reply.code(401).send(GENERIC);
+    }
+    const ok = await verifyPassword(user.password_hash, String(password));
+    if (!ok) {
+      recordFailure(username, ip);
+      return reply.code(401).send(GENERIC);
+    }
+
+    clearFailures(username, ip);
+    const token = await createSession(app.db, user.id);
+    reply.setCookie(COOKIE_NAME, token, COOKIE_OPTS);
+    return publicUser(user);
+  });
+
+  // ---- logout -------------------------------------------------------------
+  app.post('/api/auth/logout', { preHandler: app.authenticate }, async (request, reply) => {
+    const raw = request.cookies[COOKIE_NAME];
+    const unsigned = raw ? request.unsignCookie(raw) : null;
+    if (unsigned?.valid && unsigned.value) await revokeSession(app.db, unsigned.value);
+    reply.clearCookie(COOKIE_NAME, { path: '/' });
+    return { ok: true };
+  });
+
+  // ---- me -----------------------------------------------------------------
+  app.get('/api/auth/me', { preHandler: app.authenticate }, async (request) => {
+    return publicUser(request.user!);
+  });
+
+  // ---- account update -----------------------------------------------------
+  app.put('/api/auth/account', { preHandler: app.authenticate }, async (request, reply) => {
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const userId = request.user!.id;
+    const current = await app.db
+      .selectFrom('users')
+      .selectAll()
+      .where('id', '=', userId)
+      .executeTakeFirst();
+    if (!current) return reply.code(401).send({ error: 'unauthorized' });
+
+    let username = current.username;
+    let email = current.email;
+    let passwordHash = current.password_hash;
+    let theme = current.theme || 'amber';
+    let weekStart = current.week_start ?? 1;
+    let sortPrefs = current.sort_prefs ?? null; // JSON string or null
+    let fibSizing = current.fib_sizing ?? 0;
+
+    if (body.theme !== undefined) {
+      if (!ALLOWED_THEMES.includes(body.theme as string))
+        return reply.code(400).send({ error: 'unknown theme', field: 'theme' });
+      theme = body.theme as string;
+    }
+    if (body.sort_prefs !== undefined) {
+      const clean = cleanSortPrefs(body.sort_prefs);
+      if (clean === undefined)
+        return reply.code(400).send({ error: 'invalid sort prefs', field: 'sort_prefs' });
+      sortPrefs = clean === null ? null : JSON.stringify(clean);
+    }
+    if (body.week_start !== undefined) {
+      if (!WEEK_STARTS.includes(Number(body.week_start)))
+        return reply.code(400).send({ error: 'invalid week start', field: 'week_start' });
+      weekStart = Number(body.week_start);
+    }
+    if (body.fib_sizing !== undefined) {
+      const v = Number(body.fib_sizing);
+      if (![0, 1].includes(v))
+        return reply.code(400).send({ error: 'invalid fib_sizing', field: 'fib_sizing' });
+      fibSizing = v;
+    }
+    if (body.username !== undefined) {
+      const v = validateUsername(body.username);
+      if (!v.ok) return reply.code(400).send({ error: v.error, field: 'username' });
+      const clash = await app.db
+        .selectFrom('users')
+        .select('id')
+        .where('username', '=', v.value)
+        .where('id', '!=', userId)
+        .executeTakeFirst();
+      if (clash)
+        return reply.code(409).send({ error: 'username is already taken', field: 'username' });
+      username = v.value;
+    }
+    if (body.email !== undefined) {
+      const v = validateEmail(body.email);
+      if (!v.ok) return reply.code(400).send({ error: v.error, field: 'email' });
+      const clash = await app.db
+        .selectFrom('users')
+        .select('id')
+        .where('email', '=', v.value)
+        .where('id', '!=', userId)
+        .executeTakeFirst();
+      if (clash) return reply.code(409).send({ error: 'email is already in use', field: 'email' });
+      email = v.value;
+    }
+
+    let passwordChanged = false;
+    if (body.newPassword !== undefined || body.oldPassword !== undefined) {
+      const okOld = await verifyPassword(current.password_hash, String(body.oldPassword || ''));
+      if (!okOld)
+        return reply
+          .code(400)
+          .send({ error: 'current password is incorrect', field: 'oldPassword' });
+      const v = validatePassword(body.newPassword);
+      if (!v.ok) return reply.code(400).send({ error: v.error, field: 'newPassword' });
+      if (await verifyPassword(current.password_hash, v.value)) {
+        return reply
+          .code(400)
+          .send({ error: 'new password must differ from the current one', field: 'newPassword' });
+      }
+      passwordHash = await hashPassword(v.value);
+      passwordChanged = true;
+    }
+
+    const now = new Date().toISOString();
+    try {
+      await app.db
+        .updateTable('users')
+        .set({
+          username,
+          email,
+          password_hash: passwordHash,
+          theme,
+          week_start: weekStart,
+          sort_prefs: sortPrefs,
+          fib_sizing: fibSizing,
+          updated_at: now,
+        })
+        .where('id', '=', userId)
+        .execute();
+    } catch (err) {
+      if (/UNIQUE/.test((err as Error).message))
+        return reply.code(409).send({ error: 'username or email already in use' });
+      throw err;
+    }
+
+    if (passwordChanged) {
+      const raw = request.cookies[COOKIE_NAME];
+      const unsigned = raw ? request.unsignCookie(raw) : null;
+      await revokeUserSessions(app.db, userId, unsigned?.valid ? unsigned.value : null);
+    }
+
+    const result: PublicUser = publicUser({
+      id: userId,
+      username,
+      email,
+      theme,
+      week_start: weekStart,
+      sort_prefs: sortPrefs,
+      fib_sizing: fibSizing,
+      is_admin: current.is_admin,
+    });
+    return result;
+  });
+}
+
+// Re-export for the test helper.
+export { resolveSession };

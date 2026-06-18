@@ -1,0 +1,91 @@
+// app.ts — D1 service. Wires Fastify + TypeBox + OpenAPI/Swagger, the DB + auth
+// plugins, and the domain route modules. `buildApp(opts)` accepts an injected DB
+// handle so tests run against a fresh in-memory database.
+
+import 'dotenv/config';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import fastifySwagger from '@fastify/swagger';
+import fastifySwaggerUi from '@fastify/swagger-ui';
+import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
+import Fastify, { type FastifyInstance } from 'fastify';
+import { type DB, DEFAULT_DB_PATH, type Sqlite, openDatabase } from './db.js';
+import { registerAuth } from './plugins/auth.js';
+import { registerDb } from './plugins/db.js';
+import adminRoutes from './routes/admin.js';
+import authRoutes from './routes/auth.js';
+import bootstrapRoutes from './routes/bootstrap.js';
+import labelRoutes from './routes/labels.js';
+import projectRoutes from './routes/projects.js';
+import queryRoutes from './routes/query.js';
+import savedQueryRoutes from './routes/savedQueries.js';
+import taskRoutes from './routes/tasks.js';
+import tokenRoutes from './routes/tokens.js';
+
+export interface AppOpts {
+  db?: DB;
+  sqlite?: Sqlite;
+  dbPath?: string;
+  logger?: boolean;
+}
+
+export async function buildApp(opts: AppOpts = {}): Promise<FastifyInstance> {
+  const handle =
+    opts.db && opts.sqlite
+      ? { db: opts.db, sqlite: opts.sqlite }
+      : openDatabase(opts.dbPath ?? DEFAULT_DB_PATH);
+
+  const app = Fastify({ logger: opts.logger ?? true }).withTypeProvider<TypeBoxTypeProvider>();
+
+  await app.register(fastifySwagger, {
+    openapi: { info: { title: 'tdx API', version: '0.0.0', description: 'D1 backend' } },
+  });
+  await app.register(fastifySwaggerUi, { routePrefix: '/docs' });
+
+  registerDb(app, handle);
+  await registerAuth(app);
+
+  await app.register(authRoutes);
+  await app.register(adminRoutes);
+  await app.register(tokenRoutes);
+  await app.register(bootstrapRoutes);
+  await app.register(queryRoutes);
+  await app.register(taskRoutes);
+  await app.register(projectRoutes);
+  await app.register(labelRoutes);
+  await app.register(savedQueryRoutes);
+
+  app.get(
+    '/health',
+    {
+      schema: {
+        description: 'Liveness probe',
+        response: {
+          200: Type.Object({
+            status: Type.Literal('ok'),
+            service: Type.String(),
+            time: Type.String(),
+          }),
+        },
+      },
+    },
+    async () => ({ status: 'ok' as const, service: 'tdx-server', time: new Date().toISOString() }),
+  );
+
+  return app;
+}
+
+// Run the server when invoked directly; stay importable (no listen) for tests.
+const invokedDirectly =
+  process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedDirectly) {
+  const app = await buildApp();
+  const port = Number(process.env.PORT || 3002);
+  const host = process.env.HOST || '0.0.0.0';
+  try {
+    await app.listen({ port, host });
+  } catch (err) {
+    app.log.error(err);
+    process.exit(1);
+  }
+}

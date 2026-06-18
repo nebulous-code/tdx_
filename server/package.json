@@ -1,0 +1,37 @@
+{
+  "name": "tdx-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "D1 TypeScript backend for tdx (fresh service, stands beside backend/ until cutover).",
+  "scripts": {
+    "dev": "tsx watch src/app.ts",
+    "build": "tsc",
+    "start": "node dist/src/app.js",
+    "test": "node --import tsx --test \"test/**/*.test.ts\"",
+    "migrate": "tsx src/db.ts --migrate",
+    "migrate:legacy": "tsx scripts/migrate-from-legacy.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src test scripts",
+    "format": "biome format --write src test scripts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/swagger": "^9.4.0",
+    "@fastify/swagger-ui": "^5.2.0",
+    "@fastify/type-provider-typebox": "^5.1.0",
+    "@node-rs/argon2": "^2.0.2",
+    "@sinclair/typebox": "^0.34.0",
+    "better-sqlite3": "^11.8.0",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.0",
+    "kysely": "^0.29.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

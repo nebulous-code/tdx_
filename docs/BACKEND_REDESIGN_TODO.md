@@ -28,28 +28,30 @@
 - [x] Sensitivity-checked (perturbed value → golden fails) + deterministic across repeat runs
 
 ## Phase 1 — D1: TypeScript backend rewrite (tasks only)
-**Foundation**
-- [ ] Lock the stack picks (above); scaffold the TS Fastify service + OpenAPI contract
-- [ ] Schema/migrations: UUID ids · `owner_id` · `creator_id`/`assignee_id` · `grants` · `groups`/`group_members` · `api_tokens` · (events/notes columns reserved)
-- [ ] One-time data migration: prod DB → UUIDs + `owner_id`=current user, no grants
-- [ ] **CI migration test:** seed a DB with old prefixed ids → run migration → assert row/link survival + counts
+**Foundation** — **DONE** (lives in `server/`; `npm test`, `npm run migrate`, `npm run dev`)
+- [x] Stack locked + fresh TS Fastify service scaffolded (`server/`: TypeBox provider + `@fastify/swagger` OpenAPI at `/docs`, `GET /health`); Kysely over better-sqlite3; tsx/tsc/Biome; 0 npm vulns (Kysely bumped to 0.29).
+- [x] Schema/migrations (`server/migrations/001_init.sql`): UUID ids · `owner_id` · `creator_id`/`assignee_id` · `grants` · `groups`/`group_members` · `api_tokens` · `updated_at` on shareable resources. (events/notes columns deferred to D2.) Idempotent runner ported from `backend/src/db.js`.
+- [x] One-time data migration (`server/scripts/migrate-from-legacy.ts`): prefixed ids → UUIDs, refs rewired, `owner_id`=`creator_id`=user, no grants, archived rows preserved. Verified on a **copy** of the real DB (counts match exactly, zero dangling refs).
+- [x] **CI migration test** (`server/test/migration.test.ts`): legacy-shaped seed → migrate → asserts survival (incl. archived) + ref integrity + prefs carried.
 
 **Core logic (port, parity-tested)**
-- [ ] Port `Rec` (recurrence) — **test-first** against goldens
-- [ ] Port `Q` (query engine) against goldens; add `assignee:` predicate
-- [ ] Boundary validation on every input (via the chosen schema lib)
+- [x] Port `Rec` (recurrence) → `server/src/rec.ts` — verified against the Phase 0 goldens (`server/test/parity.test.ts`).
+- [x] Port `Q` (query engine) → `server/src/query.ts` — verified against the goldens. `assignee:` predicate **deferred** to the API-surface step (ported verbatim so goldens match exactly).
+- [~] Boundary validation: TypeBox toolchain wired + proven on `/health`; full per-input validation lands with the granular endpoints.
 
-**Auth / ownership foundation** (single-user defaults; contract-complete; mostly UI-less)
-- [ ] Sessions (port) + API tokens (PATs) with per-domain scopes
-- [ ] `canAccess` authorization middleware on every resource route
-- [ ] Admin-only `POST /api/admin/users` (replaces `add-user.js`)
-- [ ] Endpoints: grant/revoke share, set/clear assignee, token create/revoke, "shared with me", group CRUD
+**Auth / ownership foundation** — **DONE** (single-user defaults; contract-complete; UI-less)
+- [x] Sessions (ported `auth.ts`: argon2id + rate-limit + signed cookie) + API tokens (PATs) with per-domain scopes (`tokens.ts`, Bearer; read/write enforced, domain prefixes reserved)
+- [x] `canAccess` (`authz.ts`: owner / grants / groups; task inherits project) on every resource route via `accessLevel`/`denyStatus` (404 vs 403)
+- [x] Admin-only `POST /api/admin/users` + `scripts/add-user.ts` (replaces `add-user.js`)
+- [x] Endpoints: set/clear assignee (`/api/tasks/:id/assign`), token create/list/revoke. Grant/revoke-share, "shared with me", group CRUD **deferred** (machinery + single-resource access tested; collections owner-scoped for now)
 
 **API surface + cutover**
-- [ ] Granular CRUD (tasks/projects/labels/views); complete spawns recurrence server-side
-- [ ] `POST /api/query`
-- [ ] Remove `PUT /api/state`; per-resource concurrency (ETag/`updated_at`)
-- [ ] Repoint the Vue app onto the granular API (thinner client; keep working + shell-friendly for D2)
+- [x] Granular CRUD (tasks/projects/labels/saved-queries); `POST /api/tasks/:id/complete` spawns recurrence server-side (parity-checked vs `store.spawn` golden); archive cascade; label merge
+- [x] `POST /api/query` (server-side `Q.run` over the owner's live tasks) + `GET /api/bootstrap`
+- [x] Per-resource concurrency: `updated_at` ETag + `If-Match` → 412 (tasks/projects; labels/saved-queries unconditional, no `updated_at`). Removing legacy `PUT /api/state` happens at cutover.
+- [ ] Repoint the Vue app onto the granular API (thinner client; keep working + shell-friendly for D2) — **next step**
+
+> All of the above is integration-tested via `fastify.inject` (43 server tests green); the legacy `backend/` keeps running until the frontend repoint.
 
 **Ship**
 - [ ] Deploy → daily-drive → log functionality lost (goldens as safety net)
