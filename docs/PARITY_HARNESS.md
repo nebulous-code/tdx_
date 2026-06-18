@@ -29,15 +29,15 @@ Mix **hand-crafted edge cases** (one task of every recurrence flavor; overdue/to
 ## How it plugs into the rewrite
 The exact corpus + goldens run **unchanged** against the TS port (the port adds a thin adapter so the same fixtures feed `Rec`/`Q` in TS). Green = parity. **Recurrence is ported test-first**: write/confirm its goldens, then port until they pass, before wiring it into endpoints.
 
-## Step-0 checklist
-- [ ] Add `node:test` scaffolding (a `test/` dir, an npm `test` script).
-- [ ] Dual-export `frontend/js/query.js` and `frontend/js/recurrence.js` (1 line each).
-- [ ] Assemble the fixture corpus (crafted edge cases + anonymized real-data export).
-- [ ] Golden tests: `Rec` (parse, next-occurrences, date math).
-- [ ] Golden tests: `Q` (parse, `run` over the corpus for a battery of queries).
-- [ ] Headless store tests: spawn-on-complete, due-inference, `viewDefaults`, `visibleRoots`/completion.
-- [ ] (Optional) Playwright smokes for the handful of critical workflows.
-- [ ] Wire the same corpus/goldens so the TS port can be checked against them.
+## Step-0 checklist — **DONE** (lives in `test/`, run with `npm test`; see `test/README.md`)
+- [x] Add `node:test` scaffolding (a `test/` dir, a root `package.json` `test` script, zero deps).
+- [x] ~~Dual-export `query.js`/`recurrence.js`~~ → **global-shim loader** (`vm.runInThisContext` with `window=globalThis`), zero frontend edits. It naturally resolves the cross-file globals (query.js's bare `Rec`, data.js's `Vue`) that a dual-export alone wouldn't, and `var Vue` in the vendored global build (which `require` would hide). Determinism comes from a frozen clock + `TZ=UTC` (`support/clock.cjs`).
+- [x] Assemble the fixture corpus (crafted edge cases; the store seeds its own deterministic data for Tier 2). Anonymized real-data slice deferred — the synthetic corpus covered the predicates and the store seed is realistic.
+- [x] Golden tests: `Rec` (parse/stringify/summary/compact, next-occurrences, matches, date math).
+- [x] Golden tests: `Q` (parse + build round-trip, `run` over the corpus battery, dueDelta/slug).
+- [x] Headless store tests: spawn-on-complete, due-inference (the real `task-detail.js` method), `viewDefaults`, `searchRoots`/`visibleRoots`/completion. Vue's global build loads in Node with no DOM, so **no jsdom** was needed.
+- [ ] (Optional, deferred) Playwright smokes for the handful of critical workflows.
+- [x] The same corpus/goldens (plain JSON) become the TS port's parity target.
 
 ## First concrete move
 Add the two dual-export lines, drop in one `node:test` file, and golden the `Rec` + `Q` outputs over a starter corpus. That alone de-risks the scariest 80% before a single line of the new backend exists.

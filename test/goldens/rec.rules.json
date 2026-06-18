@@ -1,0 +1,385 @@
+[
+  {
+    "rule": "daily",
+    "parsed": {
+      "type": "daily",
+      "interval": 1
+    },
+    "stringify": "daily",
+    "summary": "Every day",
+    "compact": "daily"
+  },
+  {
+    "rule": "every day",
+    "parsed": {
+      "type": "daily",
+      "interval": 1
+    },
+    "stringify": "daily",
+    "summary": "Every day",
+    "compact": "daily"
+  },
+  {
+    "rule": "every 1 days",
+    "parsed": {
+      "type": "daily",
+      "interval": 1
+    },
+    "stringify": "daily",
+    "summary": "Every day",
+    "compact": "daily"
+  },
+  {
+    "rule": "every 2 days",
+    "parsed": {
+      "type": "daily",
+      "interval": 2
+    },
+    "stringify": "every 2 days",
+    "summary": "Every 2 days",
+    "compact": "2d"
+  },
+  {
+    "rule": "every 10 days",
+    "parsed": {
+      "type": "daily",
+      "interval": 10
+    },
+    "stringify": "every 10 days",
+    "summary": "Every 10 days",
+    "compact": "10d"
+  },
+  {
+    "rule": "weekly on mon",
+    "parsed": {
+      "type": "weekly",
+      "interval": 1,
+      "days": [
+        1
+      ]
+    },
+    "stringify": "weekly on mon",
+    "summary": "Weekly on Monday",
+    "compact": "Mo"
+  },
+  {
+    "rule": "weekly on mon,wed,fri",
+    "parsed": {
+      "type": "weekly",
+      "interval": 1,
+      "days": [
+        1,
+        3,
+        5
+      ]
+    },
+    "stringify": "weekly on mon,wed,fri",
+    "summary": "Weekly on Monday, Wednesday, Friday",
+    "compact": "Mo·We·Fr"
+  },
+  {
+    "rule": "weekly on sat,sun",
+    "parsed": {
+      "type": "weekly",
+      "interval": 1,
+      "days": [
+        0,
+        6
+      ]
+    },
+    "stringify": "weekly on sun,sat",
+    "summary": "Weekly on Sunday, Saturday",
+    "compact": "Su·Sa"
+  },
+  {
+    "rule": "weekly on sun,mon,tue,wed,thu,fri,sat",
+    "parsed": {
+      "type": "weekly",
+      "interval": 1,
+      "days": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    "stringify": "weekly on sun,mon,tue,wed,thu,fri,sat",
+    "summary": "Weekly on Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday",
+    "compact": "Su·Mo·Tu·We·Th·Fr·Sa"
+  },
+  {
+    "rule": "every 2 weeks on tue",
+    "parsed": {
+      "type": "weekly",
+      "interval": 2,
+      "days": [
+        2
+      ]
+    },
+    "stringify": "every 2 weeks on tue",
+    "summary": "Every 2 weeks on Tuesday",
+    "compact": "Tu/2w"
+  },
+  {
+    "rule": "every 2 weeks on mon,thu",
+    "parsed": {
+      "type": "weekly",
+      "interval": 2,
+      "days": [
+        1,
+        4
+      ]
+    },
+    "stringify": "every 2 weeks on mon,thu",
+    "summary": "Every 2 weeks on Monday, Thursday",
+    "compact": "Mo·Th/2w"
+  },
+  {
+    "rule": "every 3 weeks",
+    "parsed": {
+      "type": "weekly",
+      "interval": 3,
+      "days": null
+    },
+    "stringify": "every 3 weeks",
+    "summary": "Every 3 weeks",
+    "compact": "—/3w"
+  },
+  {
+    "rule": "monthly on day 1",
+    "parsed": {
+      "type": "monthly-day",
+      "interval": 1,
+      "day": 1
+    },
+    "stringify": "monthly on day 1",
+    "summary": "Monthly on the 1st",
+    "compact": "day 1"
+  },
+  {
+    "rule": "monthly on day 15",
+    "parsed": {
+      "type": "monthly-day",
+      "interval": 1,
+      "day": 15
+    },
+    "stringify": "monthly on day 15",
+    "summary": "Monthly on the 15th",
+    "compact": "day 15"
+  },
+  {
+    "rule": "monthly on day 31",
+    "parsed": {
+      "type": "monthly-day",
+      "interval": 1,
+      "day": 31
+    },
+    "stringify": "monthly on day 31",
+    "summary": "Monthly on the 31st",
+    "compact": "day 31"
+  },
+  {
+    "rule": "monthly on day 99",
+    "parsed": {
+      "type": "monthly-day",
+      "interval": 1,
+      "day": 31
+    },
+    "stringify": "monthly on day 31",
+    "summary": "Monthly on the 31st",
+    "compact": "day 31"
+  },
+  {
+    "rule": "every 2 months on day 10",
+    "parsed": {
+      "type": "monthly-day",
+      "interval": 2,
+      "day": 10
+    },
+    "stringify": "every 2 months on day 10",
+    "summary": "Every 2 months on the 10th",
+    "compact": "day 10/2mo"
+  },
+  {
+    "rule": "every 3 months on day 31",
+    "parsed": {
+      "type": "monthly-day",
+      "interval": 3,
+      "day": 31
+    },
+    "stringify": "every 3 months on day 31",
+    "summary": "Every 3 months on the 31st",
+    "compact": "day 31/3mo"
+  },
+  {
+    "rule": "monthly on 1st mon",
+    "parsed": {
+      "type": "monthly-weekday",
+      "interval": 1,
+      "ord": 1,
+      "weekday": 1
+    },
+    "stringify": "monthly on 1st mon",
+    "summary": "Monthly on the 1st Monday",
+    "compact": "1st Mo"
+  },
+  {
+    "rule": "monthly on 2nd fri",
+    "parsed": {
+      "type": "monthly-weekday",
+      "interval": 1,
+      "ord": 2,
+      "weekday": 5
+    },
+    "stringify": "monthly on 2nd fri",
+    "summary": "Monthly on the 2nd Friday",
+    "compact": "2nd Fr"
+  },
+  {
+    "rule": "monthly on 3rd wed",
+    "parsed": {
+      "type": "monthly-weekday",
+      "interval": 1,
+      "ord": 3,
+      "weekday": 3
+    },
+    "stringify": "monthly on 3rd wed",
+    "summary": "Monthly on the 3rd Wednesday",
+    "compact": "3rd We"
+  },
+  {
+    "rule": "monthly on 4th thu",
+    "parsed": {
+      "type": "monthly-weekday",
+      "interval": 1,
+      "ord": 4,
+      "weekday": 4
+    },
+    "stringify": "monthly on 4th thu",
+    "summary": "Monthly on the 4th Thursday",
+    "compact": "4th Th"
+  },
+  {
+    "rule": "monthly on 5th sun",
+    "parsed": {
+      "type": "monthly-weekday",
+      "interval": 1,
+      "ord": 5,
+      "weekday": 0
+    },
+    "stringify": "monthly on 5th sun",
+    "summary": "Monthly on the 5th Sunday",
+    "compact": "5th Su"
+  },
+  {
+    "rule": "monthly on last fri",
+    "parsed": {
+      "type": "monthly-weekday",
+      "interval": 1,
+      "ord": -1,
+      "weekday": 5
+    },
+    "stringify": "monthly on last fri",
+    "summary": "Monthly on the last Friday",
+    "compact": "last Fr"
+  },
+  {
+    "rule": "monthly on last sun",
+    "parsed": {
+      "type": "monthly-weekday",
+      "interval": 1,
+      "ord": -1,
+      "weekday": 0
+    },
+    "stringify": "monthly on last sun",
+    "summary": "Monthly on the last Sunday",
+    "compact": "last Su"
+  },
+  {
+    "rule": "every 2 months on 1st mon",
+    "parsed": {
+      "type": "monthly-weekday",
+      "interval": 2,
+      "ord": 1,
+      "weekday": 1
+    },
+    "stringify": "every 2 months on 1st mon",
+    "summary": "Every 2 months on the 1st Monday",
+    "compact": "1st Mo/2mo"
+  },
+  {
+    "rule": "every 3 months",
+    "parsed": {
+      "type": "monthly-day",
+      "interval": 3,
+      "day": null
+    },
+    "stringify": "every 3 months on day 1",
+    "summary": "Every 3 months",
+    "compact": "3mo"
+  },
+  {
+    "rule": "WEEKLY ON MON,WED",
+    "parsed": {
+      "type": "weekly",
+      "interval": 1,
+      "days": [
+        1,
+        3
+      ]
+    },
+    "stringify": "weekly on mon,wed",
+    "summary": "Weekly on Monday, Wednesday",
+    "compact": "Mo·We"
+  },
+  {
+    "rule": "  daily  ",
+    "parsed": {
+      "type": "daily",
+      "interval": 1
+    },
+    "stringify": "daily",
+    "summary": "Every day",
+    "compact": "daily"
+  },
+  {
+    "rule": "every 0 days",
+    "parsed": {
+      "type": "daily",
+      "interval": 0
+    },
+    "stringify": "every 0 days",
+    "summary": "Every 0 days",
+    "compact": "0d"
+  },
+  {
+    "rule": "weekly on funday",
+    "parsed": {
+      "type": "invalid",
+      "raw": "weekly on funday"
+    },
+    "stringify": "",
+    "summary": "invalid pattern",
+    "compact": ""
+  },
+  {
+    "rule": "totally not a rule",
+    "parsed": {
+      "type": "invalid",
+      "raw": "totally not a rule"
+    },
+    "stringify": "",
+    "summary": "invalid pattern",
+    "compact": ""
+  },
+  {
+    "rule": "",
+    "parsed": null,
+    "stringify": "",
+    "summary": "",
+    "compact": ""
+  }
+]

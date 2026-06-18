@@ -1,0 +1,86 @@
+[
+  {
+    "rule": "weekly on mon,wed,fri",
+    "anchor": "2026-06-01",
+    "results": [
+      {
+        "date": "2026-06-17",
+        "matches": true
+      },
+      {
+        "date": "2026-06-18",
+        "matches": false
+      },
+      {
+        "date": "2026-06-19",
+        "matches": true
+      },
+      {
+        "date": "2026-06-20",
+        "matches": false
+      }
+    ]
+  },
+  {
+    "rule": "monthly on day 31",
+    "anchor": "2026-01-31",
+    "results": [
+      {
+        "date": "2026-02-28",
+        "matches": true
+      },
+      {
+        "date": "2026-02-27",
+        "matches": false
+      },
+      {
+        "date": "2026-03-31",
+        "matches": true
+      },
+      {
+        "date": "2026-04-30",
+        "matches": true
+      }
+    ]
+  },
+  {
+    "rule": "monthly on last fri",
+    "anchor": "2026-01-30",
+    "results": [
+      {
+        "date": "2026-06-26",
+        "matches": true
+      },
+      {
+        "date": "2026-06-27",
+        "matches": false
+      },
+      {
+        "date": "2026-07-31",
+        "matches": true
+      }
+    ]
+  },
+  {
+    "rule": "every 3 days",
+    "anchor": "2026-06-01",
+    "results": [
+      {
+        "date": "2026-06-03",
+        "matches": false
+      },
+      {
+        "date": "2026-06-04",
+        "matches": true
+      },
+      {
+        "date": "2026-06-18",
+        "matches": false
+      },
+      {
+        "date": "2026-06-19",
+        "matches": true
+      }
+    ]
+  }
+]

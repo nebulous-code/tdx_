@@ -15,15 +15,17 @@
 
 ---
 
-## Phase 0 — Parity harness (before any rewrite) — see `PARITY_HARNESS.md`
-- [ ] `node:test` scaffolding + `test/` dir
-- [ ] Dual-export `query.js` + `recurrence.js` (1 line each, no browser impact)
-- [ ] Fixture corpus — crafted edge cases + anonymized real-data slice
-- [ ] Golden tests: `Rec` (parse, next-occurrences, date math)
-- [ ] Golden tests: `Q` (parse + `run` over the corpus)
-- [ ] Headless store tests: spawn-on-complete, due-inference, `viewDefaults`, `visibleRoots`/completion
-- [ ] (optional) ~5–10 Playwright critical-path smokes
-- [ ] Wire corpus/goldens so the TS port can be checked against them
+## Phase 0 — Parity harness (before any rewrite) — see `PARITY_HARNESS.md` — **DONE** (`test/`, `npm test`)
+- [x] `node:test` scaffolding + `test/` dir + root `package.json` (zero installed deps)
+- [x] ~~Dual-export `query.js` + `recurrence.js`~~ → **global-shim loader** (`vm.runInThisContext`), zero frontend changes — handles cross-file globals (`Rec` in query.js, `Vue` in data.js) the dual-export couldn't
+- [x] Deterministic clock (freeze `new Date()`) + pinned `TZ=UTC`; golden write/compare helper
+- [x] Fixture corpus — crafted edge cases (recurrence flavors, due/status, weekday windows, labels, subtasks) — real-data slice deferred (synthetic corpus sufficed)
+- [x] Golden tests: `Rec` (parse/stringify/summary/compact, next-occurrences, matches, date math)
+- [x] Golden tests: `Q` (parse + build round-trip, `run` over the corpus, dueDelta/slug)
+- [x] Headless store tests: spawn-on-complete, due-inference (real `task-detail.js` method), `viewDefaults`, `visibleRoots`/`searchRoots`/completion — Vue loads headlessly, **no jsdom needed**
+- [ ] (optional, deferred) ~5–10 Playwright critical-path smokes
+- [x] Goldens are plain JSON → the TS port reuses the same corpus/goldens as its parity target
+- [x] Sensitivity-checked (perturbed value → golden fails) + deterministic across repeat runs
 
 ## Phase 1 — D1: TypeScript backend rewrite (tasks only)
 **Foundation**

@@ -1,0 +1,47 @@
+[
+  {
+    "action": "default",
+    "completion": {
+      "open": true,
+      "done": false
+    },
+    "passOpen": true,
+    "passDone": false
+  },
+  {
+    "action": "toggle open (only one on → stays)",
+    "completion": {
+      "open": true,
+      "done": false
+    },
+    "passOpen": true,
+    "passDone": false
+  },
+  {
+    "action": "toggle done on",
+    "completion": {
+      "open": true,
+      "done": true
+    },
+    "passOpen": true,
+    "passDone": true
+  },
+  {
+    "action": "toggle open off",
+    "completion": {
+      "open": false,
+      "done": true
+    },
+    "passOpen": false,
+    "passDone": true
+  },
+  {
+    "action": "toggle done off (only one on → stays)",
+    "completion": {
+      "open": false,
+      "done": true
+    },
+    "passOpen": false,
+    "passDone": true
+  }
+]

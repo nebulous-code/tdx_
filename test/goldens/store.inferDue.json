@@ -1,0 +1,37 @@
+[
+  {
+    "recurrence": "daily",
+    "dueIn": null,
+    "dueOut": "2026-06-18"
+  },
+  {
+    "recurrence": "weekly on mon,wed,fri",
+    "dueIn": null,
+    "dueOut": "2026-06-19"
+  },
+  {
+    "recurrence": "monthly on day 1",
+    "dueIn": null,
+    "dueOut": "2026-07-01"
+  },
+  {
+    "recurrence": "monthly on last fri",
+    "dueIn": null,
+    "dueOut": "2026-06-26"
+  },
+  {
+    "recurrence": "every 3 days",
+    "dueIn": null,
+    "dueOut": "2026-06-18"
+  },
+  {
+    "recurrence": "weekly on mon",
+    "dueIn": "2026-12-25",
+    "dueOut": "2026-12-25"
+  },
+  {
+    "recurrence": null,
+    "dueIn": null,
+    "dueOut": null
+  }
+]

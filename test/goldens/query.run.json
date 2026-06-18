@@ -1,0 +1,536 @@
+[
+  {
+    "query": "",
+    "matches": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "t10",
+      "t11",
+      "t12",
+      "t13",
+      "t14",
+      "t15"
+    ]
+  },
+  {
+    "query": "status:open",
+    "matches": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t8",
+      "t10",
+      "t11",
+      "t12",
+      "t13",
+      "t14"
+    ]
+  },
+  {
+    "query": "status:done",
+    "matches": [
+      "t7",
+      "t9",
+      "t15"
+    ]
+  },
+  {
+    "query": "status:overdue",
+    "matches": [
+      "t2"
+    ]
+  },
+  {
+    "query": "status:today",
+    "matches": [
+      "t4",
+      "t8",
+      "t14"
+    ]
+  },
+  {
+    "query": "due:none",
+    "matches": [
+      "t5",
+      "t9",
+      "t10",
+      "t15"
+    ]
+  },
+  {
+    "query": "due:set",
+    "matches": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t6",
+      "t7",
+      "t8",
+      "t11",
+      "t12",
+      "t13",
+      "t14"
+    ]
+  },
+  {
+    "query": "due:today",
+    "matches": [
+      "t4",
+      "t8",
+      "t14"
+    ]
+  },
+  {
+    "query": "due:tomorrow",
+    "matches": [
+      "t1",
+      "t3"
+    ]
+  },
+  {
+    "query": "due:overdue",
+    "matches": [
+      "t2",
+      "t7"
+    ]
+  },
+  {
+    "query": "due:week",
+    "matches": [
+      "t1",
+      "t3",
+      "t4",
+      "t6",
+      "t8",
+      "t14"
+    ]
+  },
+  {
+    "query": "due:month",
+    "matches": [
+      "t1",
+      "t3",
+      "t4",
+      "t6",
+      "t8",
+      "t11",
+      "t13",
+      "t14"
+    ]
+  },
+  {
+    "query": "due:<7d",
+    "matches": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t6",
+      "t7",
+      "t8",
+      "t14"
+    ]
+  },
+  {
+    "query": "due:>7d",
+    "matches": [
+      "t11",
+      "t12",
+      "t13"
+    ]
+  },
+  {
+    "query": "due:=0d",
+    "matches": [
+      "t4",
+      "t8",
+      "t14"
+    ]
+  },
+  {
+    "query": "due:<=3d",
+    "matches": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t7",
+      "t8",
+      "t14"
+    ]
+  },
+  {
+    "query": "due:>=0d",
+    "matches": [
+      "t1",
+      "t3",
+      "t4",
+      "t6",
+      "t8",
+      "t11",
+      "t12",
+      "t13",
+      "t14"
+    ]
+  },
+  {
+    "query": "due:mwf",
+    "matches": [
+      "t1",
+      "t3"
+    ]
+  },
+  {
+    "query": "due:su",
+    "matches": []
+  },
+  {
+    "query": "due:tr",
+    "matches": [
+      "t4",
+      "t8",
+      "t14"
+    ]
+  },
+  {
+    "query": "reminder:none",
+    "matches": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "t10",
+      "t11",
+      "t14",
+      "t15"
+    ]
+  },
+  {
+    "query": "reminder:set",
+    "matches": [
+      "t12",
+      "t13"
+    ]
+  },
+  {
+    "query": "reminder:today",
+    "matches": [
+      "t12"
+    ]
+  },
+  {
+    "query": "reminder:overdue",
+    "matches": [
+      "t13"
+    ]
+  },
+  {
+    "query": "recurring:true",
+    "matches": [
+      "t3",
+      "t11",
+      "t15"
+    ]
+  },
+  {
+    "query": "recurring:false",
+    "matches": [
+      "t1",
+      "t2",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "t10",
+      "t12",
+      "t13",
+      "t14"
+    ]
+  },
+  {
+    "query": "is:subtask",
+    "matches": [
+      "t8",
+      "t9"
+    ]
+  },
+  {
+    "query": "is:task",
+    "matches": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t10",
+      "t11",
+      "t12",
+      "t13",
+      "t14",
+      "t15"
+    ]
+  },
+  {
+    "query": "is:recurring",
+    "matches": [
+      "t3",
+      "t11",
+      "t15"
+    ]
+  },
+  {
+    "query": "is:done",
+    "matches": [
+      "t7",
+      "t9",
+      "t15"
+    ]
+  },
+  {
+    "query": "is:open",
+    "matches": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t8",
+      "t10",
+      "t11",
+      "t12",
+      "t13",
+      "t14"
+    ]
+  },
+  {
+    "query": "has:subtasks",
+    "matches": [
+      "t4"
+    ]
+  },
+  {
+    "query": "has:label",
+    "matches": [
+      "t1",
+      "t2",
+      "t6"
+    ]
+  },
+  {
+    "query": "has:no-labels",
+    "matches": [
+      "t3",
+      "t4",
+      "t5",
+      "t7",
+      "t8",
+      "t9",
+      "t10",
+      "t11",
+      "t12",
+      "t13",
+      "t14",
+      "t15"
+    ]
+  },
+  {
+    "query": "has:due",
+    "matches": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t6",
+      "t7",
+      "t8",
+      "t11",
+      "t12",
+      "t13",
+      "t14"
+    ]
+  },
+  {
+    "query": "project:work",
+    "matches": [
+      "t2",
+      "t3",
+      "t4",
+      "t7",
+      "t8",
+      "t9",
+      "t13",
+      "t14"
+    ]
+  },
+  {
+    "query": "project:home",
+    "matches": [
+      "t1",
+      "t5",
+      "t6",
+      "t11",
+      "t12",
+      "t15"
+    ]
+  },
+  {
+    "query": "project:inbox",
+    "matches": [
+      "t10"
+    ]
+  },
+  {
+    "query": "label:urgent",
+    "matches": [
+      "t2"
+    ]
+  },
+  {
+    "query": "label:urgent,bug",
+    "matches": [
+      "t2"
+    ]
+  },
+  {
+    "query": "label:home",
+    "matches": [
+      "t1",
+      "t6"
+    ]
+  },
+  {
+    "query": "-status:done",
+    "matches": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t8",
+      "t10",
+      "t11",
+      "t12",
+      "t13",
+      "t14"
+    ]
+  },
+  {
+    "query": "-due:none",
+    "matches": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t6",
+      "t7",
+      "t8",
+      "t11",
+      "t12",
+      "t13",
+      "t14"
+    ]
+  },
+  {
+    "query": "-label:urgent",
+    "matches": [
+      "t1",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "t9",
+      "t10",
+      "t11",
+      "t12",
+      "t13",
+      "t14",
+      "t15"
+    ]
+  },
+  {
+    "query": "buy",
+    "matches": [
+      "t1"
+    ]
+  },
+  {
+    "query": "report",
+    "matches": [
+      "t4"
+    ]
+  },
+  {
+    "query": "\"weekly review\"",
+    "matches": [
+      "t3",
+      "t14"
+    ]
+  },
+  {
+    "query": "project:work status:open",
+    "matches": [
+      "t2",
+      "t3",
+      "t4",
+      "t8",
+      "t13",
+      "t14"
+    ]
+  },
+  {
+    "query": "due:week -label:urgent",
+    "matches": [
+      "t1",
+      "t3",
+      "t4",
+      "t6",
+      "t8",
+      "t14"
+    ]
+  },
+  {
+    "query": "project:home recurring:true",
+    "matches": [
+      "t11",
+      "t15"
+    ]
+  },
+  {
+    "query": "is:task status:open due:set",
+    "matches": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t6",
+      "t11",
+      "t12",
+      "t13",
+      "t14"
+    ]
+  }
+]

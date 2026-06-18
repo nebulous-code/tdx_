@@ -1,0 +1,128 @@
+[
+  {
+    "label": "project p_tdx, due asc",
+    "view": "project:p_tdx",
+    "sort": "due",
+    "completion": {
+      "open": true,
+      "done": false
+    },
+    "ids": [
+      "t3",
+      "t1",
+      "t2",
+      "t4",
+      "t5"
+    ]
+  },
+  {
+    "label": "project p_tdx, +completed",
+    "view": "project:p_tdx",
+    "sort": "due",
+    "completion": {
+      "open": true,
+      "done": true
+    },
+    "ids": [
+      "t3",
+      "t1",
+      "t2",
+      "t4",
+      "t5"
+    ]
+  },
+  {
+    "label": "project p_tdx, title asc",
+    "view": "project:p_tdx",
+    "sort": "title",
+    "completion": {
+      "open": true,
+      "done": false
+    },
+    "ids": [
+      "t4",
+      "t5",
+      "t3",
+      "t1",
+      "t2"
+    ]
+  },
+  {
+    "label": "project p_tdx, priority (desc)",
+    "view": "project:p_tdx",
+    "sort": "priority",
+    "completion": {
+      "open": true,
+      "done": false
+    },
+    "ids": [
+      "t1",
+      "t2",
+      "t3",
+      "t4",
+      "t5"
+    ]
+  },
+  {
+    "label": "status:open due:week, due asc",
+    "view": "status:open due:week",
+    "sort": "due",
+    "completion": {
+      "open": true,
+      "done": false
+    },
+    "ids": [
+      "t1",
+      "h1",
+      "h3",
+      "he1",
+      "he2",
+      "t2",
+      "t6",
+      "r2",
+      "t4",
+      "t7",
+      "he4",
+      "h4",
+      "m2"
+    ]
+  },
+  {
+    "label": "status:overdue",
+    "view": "status:overdue",
+    "sort": "due",
+    "completion": {
+      "open": true,
+      "done": false
+    },
+    "ids": [
+      "t3",
+      "m1"
+    ]
+  },
+  {
+    "label": "recurring:true status:open",
+    "view": "recurring:true status:open",
+    "sort": "due",
+    "completion": {
+      "open": true,
+      "done": false
+    },
+    "ids": [
+      "m1",
+      "t1",
+      "h1",
+      "h3",
+      "he1",
+      "he2",
+      "t6",
+      "r2",
+      "t7",
+      "he4",
+      "h4",
+      "m2",
+      "h2",
+      "m3"
+    ]
+  }
+]

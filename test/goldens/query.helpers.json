@@ -1,0 +1,101 @@
+{
+  "dueDelta": [
+    {
+      "id": "t1",
+      "due": "2026-06-19",
+      "delta": 1
+    },
+    {
+      "id": "t2",
+      "due": "2026-06-10",
+      "delta": -8
+    },
+    {
+      "id": "t3",
+      "due": "2026-06-19",
+      "delta": 1
+    },
+    {
+      "id": "t4",
+      "due": "2026-06-18",
+      "delta": 0
+    },
+    {
+      "id": "t5",
+      "due": null,
+      "delta": null
+    },
+    {
+      "id": "t6",
+      "due": "2026-06-22",
+      "delta": 4
+    },
+    {
+      "id": "t7",
+      "due": "2026-06-10",
+      "delta": -8
+    },
+    {
+      "id": "t8",
+      "due": "2026-06-18",
+      "delta": 0
+    },
+    {
+      "id": "t9",
+      "due": null,
+      "delta": null
+    },
+    {
+      "id": "t10",
+      "due": null,
+      "delta": null
+    },
+    {
+      "id": "t11",
+      "due": "2026-07-01",
+      "delta": 13
+    },
+    {
+      "id": "t12",
+      "due": "2026-09-01",
+      "delta": 75
+    },
+    {
+      "id": "t13",
+      "due": "2026-06-30",
+      "delta": 12
+    },
+    {
+      "id": "t14",
+      "due": "2026-06-18",
+      "delta": 0
+    },
+    {
+      "id": "t15",
+      "due": null,
+      "delta": null
+    }
+  ],
+  "slug": [
+    {
+      "in": "Work",
+      "out": "work"
+    },
+    {
+      "in": "My Project!",
+      "out": "myproject"
+    },
+    {
+      "in": "a-b-c",
+      "out": "abc"
+    },
+    {
+      "in": "  Spaces  ",
+      "out": "spaces"
+    },
+    {
+      "in": "ÜberCafé",
+      "out": "bercaf"
+    }
+  ]
+}

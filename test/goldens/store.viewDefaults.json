@@ -1,0 +1,92 @@
+[
+  {
+    "label": "project view (p_tdx)",
+    "query": "project:p_tdx",
+    "defaults": {
+      "labels": [],
+      "projectId": "p_tdx"
+    },
+    "warn": false
+  },
+  {
+    "label": "label view (urgent)",
+    "query": "label:urgent status:open",
+    "defaults": {
+      "labels": [
+        "l_urgent"
+      ]
+    },
+    "warn": false
+  },
+  {
+    "label": "Today",
+    "query": "status:open due:today",
+    "defaults": {
+      "labels": [],
+      "due": "2026-06-18"
+    },
+    "warn": false
+  },
+  {
+    "label": "Overdue",
+    "query": "status:overdue",
+    "defaults": {
+      "labels": [],
+      "due": "2026-06-17"
+    },
+    "warn": false
+  },
+  {
+    "label": "This week",
+    "query": "status:open due:week",
+    "defaults": {
+      "labels": [],
+      "due": "2026-06-18"
+    },
+    "warn": false
+  },
+  {
+    "label": "No date",
+    "query": "due:none status:open",
+    "defaults": {
+      "labels": []
+    },
+    "warn": false
+  },
+  {
+    "label": "Recurring",
+    "query": "recurring:true status:open",
+    "defaults": {
+      "labels": []
+    },
+    "warn": true
+  },
+  {
+    "label": "Quick (label:quick)",
+    "query": "label:quick status:open",
+    "defaults": {
+      "labels": [
+        "l_quick"
+      ]
+    },
+    "warn": false
+  },
+  {
+    "label": "Weekday window (due:mwf)",
+    "query": "status:open due:mwf",
+    "defaults": {
+      "labels": [],
+      "due": "2026-06-19"
+    },
+    "warn": false
+  },
+  {
+    "label": "completed-only pills",
+    "query": "status:open",
+    "defaults": {
+      "labels": [],
+      "done": true
+    },
+    "warn": false
+  }
+]

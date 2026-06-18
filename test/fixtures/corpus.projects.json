@@ -1,0 +1,5 @@
+[
+  { "id": "p_work",  "name": "Work" },
+  { "id": "p_home",  "name": "Home" },
+  { "id": "p_inbox", "name": "Inbox" }
+]

@@ -1,0 +1,582 @@
+[
+  {
+    "query": "",
+    "terms": [],
+    "rebuilt": ""
+  },
+  {
+    "query": "status:open",
+    "terms": [
+      {
+        "field": "status",
+        "value": "open",
+        "neg": false
+      }
+    ],
+    "rebuilt": "status:open"
+  },
+  {
+    "query": "status:done",
+    "terms": [
+      {
+        "field": "status",
+        "value": "done",
+        "neg": false
+      }
+    ],
+    "rebuilt": "status:done"
+  },
+  {
+    "query": "status:overdue",
+    "terms": [
+      {
+        "field": "status",
+        "value": "overdue",
+        "neg": false
+      }
+    ],
+    "rebuilt": "status:overdue"
+  },
+  {
+    "query": "status:today",
+    "terms": [
+      {
+        "field": "status",
+        "value": "today",
+        "neg": false
+      }
+    ],
+    "rebuilt": "status:today"
+  },
+  {
+    "query": "due:none",
+    "terms": [
+      {
+        "field": "due",
+        "value": "none",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:none"
+  },
+  {
+    "query": "due:set",
+    "terms": [
+      {
+        "field": "due",
+        "value": "set",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:set"
+  },
+  {
+    "query": "due:today",
+    "terms": [
+      {
+        "field": "due",
+        "value": "today",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:today"
+  },
+  {
+    "query": "due:tomorrow",
+    "terms": [
+      {
+        "field": "due",
+        "value": "tomorrow",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:tomorrow"
+  },
+  {
+    "query": "due:overdue",
+    "terms": [
+      {
+        "field": "due",
+        "value": "overdue",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:overdue"
+  },
+  {
+    "query": "due:week",
+    "terms": [
+      {
+        "field": "due",
+        "value": "week",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:week"
+  },
+  {
+    "query": "due:month",
+    "terms": [
+      {
+        "field": "due",
+        "value": "month",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:month"
+  },
+  {
+    "query": "due:<7d",
+    "terms": [
+      {
+        "field": "due",
+        "value": "<7d",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:<7d"
+  },
+  {
+    "query": "due:>7d",
+    "terms": [
+      {
+        "field": "due",
+        "value": ">7d",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:>7d"
+  },
+  {
+    "query": "due:=0d",
+    "terms": [
+      {
+        "field": "due",
+        "value": "=0d",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:=0d"
+  },
+  {
+    "query": "due:<=3d",
+    "terms": [
+      {
+        "field": "due",
+        "value": "<=3d",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:<=3d"
+  },
+  {
+    "query": "due:>=0d",
+    "terms": [
+      {
+        "field": "due",
+        "value": ">=0d",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:>=0d"
+  },
+  {
+    "query": "due:mwf",
+    "terms": [
+      {
+        "field": "due",
+        "value": "mwf",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:mwf"
+  },
+  {
+    "query": "due:su",
+    "terms": [
+      {
+        "field": "due",
+        "value": "su",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:su"
+  },
+  {
+    "query": "due:tr",
+    "terms": [
+      {
+        "field": "due",
+        "value": "tr",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:tr"
+  },
+  {
+    "query": "reminder:none",
+    "terms": [
+      {
+        "field": "reminder",
+        "value": "none",
+        "neg": false
+      }
+    ],
+    "rebuilt": "reminder:none"
+  },
+  {
+    "query": "reminder:set",
+    "terms": [
+      {
+        "field": "reminder",
+        "value": "set",
+        "neg": false
+      }
+    ],
+    "rebuilt": "reminder:set"
+  },
+  {
+    "query": "reminder:today",
+    "terms": [
+      {
+        "field": "reminder",
+        "value": "today",
+        "neg": false
+      }
+    ],
+    "rebuilt": "reminder:today"
+  },
+  {
+    "query": "reminder:overdue",
+    "terms": [
+      {
+        "field": "reminder",
+        "value": "overdue",
+        "neg": false
+      }
+    ],
+    "rebuilt": "reminder:overdue"
+  },
+  {
+    "query": "recurring:true",
+    "terms": [
+      {
+        "field": "recurring",
+        "value": "true",
+        "neg": false
+      }
+    ],
+    "rebuilt": "recurring:true"
+  },
+  {
+    "query": "recurring:false",
+    "terms": [
+      {
+        "field": "recurring",
+        "value": "false",
+        "neg": false
+      }
+    ],
+    "rebuilt": "recurring:false"
+  },
+  {
+    "query": "is:subtask",
+    "terms": [
+      {
+        "field": "is",
+        "value": "subtask",
+        "neg": false
+      }
+    ],
+    "rebuilt": "is:subtask"
+  },
+  {
+    "query": "is:task",
+    "terms": [
+      {
+        "field": "is",
+        "value": "task",
+        "neg": false
+      }
+    ],
+    "rebuilt": "is:task"
+  },
+  {
+    "query": "is:recurring",
+    "terms": [
+      {
+        "field": "is",
+        "value": "recurring",
+        "neg": false
+      }
+    ],
+    "rebuilt": "is:recurring"
+  },
+  {
+    "query": "is:done",
+    "terms": [
+      {
+        "field": "is",
+        "value": "done",
+        "neg": false
+      }
+    ],
+    "rebuilt": "is:done"
+  },
+  {
+    "query": "is:open",
+    "terms": [
+      {
+        "field": "is",
+        "value": "open",
+        "neg": false
+      }
+    ],
+    "rebuilt": "is:open"
+  },
+  {
+    "query": "has:subtasks",
+    "terms": [
+      {
+        "field": "has",
+        "value": "subtasks",
+        "neg": false
+      }
+    ],
+    "rebuilt": "has:subtasks"
+  },
+  {
+    "query": "has:label",
+    "terms": [
+      {
+        "field": "has",
+        "value": "label",
+        "neg": false
+      }
+    ],
+    "rebuilt": "has:label"
+  },
+  {
+    "query": "has:no-labels",
+    "terms": [
+      {
+        "field": "has",
+        "value": "no-labels",
+        "neg": false
+      }
+    ],
+    "rebuilt": "has:no-labels"
+  },
+  {
+    "query": "has:due",
+    "terms": [
+      {
+        "field": "has",
+        "value": "due",
+        "neg": false
+      }
+    ],
+    "rebuilt": "has:due"
+  },
+  {
+    "query": "project:work",
+    "terms": [
+      {
+        "field": "project",
+        "value": "work",
+        "neg": false
+      }
+    ],
+    "rebuilt": "project:work"
+  },
+  {
+    "query": "project:home",
+    "terms": [
+      {
+        "field": "project",
+        "value": "home",
+        "neg": false
+      }
+    ],
+    "rebuilt": "project:home"
+  },
+  {
+    "query": "project:inbox",
+    "terms": [
+      {
+        "field": "project",
+        "value": "inbox",
+        "neg": false
+      }
+    ],
+    "rebuilt": "project:inbox"
+  },
+  {
+    "query": "label:urgent",
+    "terms": [
+      {
+        "field": "label",
+        "value": "urgent",
+        "neg": false
+      }
+    ],
+    "rebuilt": "label:urgent"
+  },
+  {
+    "query": "label:urgent,bug",
+    "terms": [
+      {
+        "field": "label",
+        "value": "urgent,bug",
+        "neg": false
+      }
+    ],
+    "rebuilt": "label:urgent,bug"
+  },
+  {
+    "query": "label:home",
+    "terms": [
+      {
+        "field": "label",
+        "value": "home",
+        "neg": false
+      }
+    ],
+    "rebuilt": "label:home"
+  },
+  {
+    "query": "-status:done",
+    "terms": [
+      {
+        "field": "status",
+        "value": "done",
+        "neg": true
+      }
+    ],
+    "rebuilt": "-status:done"
+  },
+  {
+    "query": "-due:none",
+    "terms": [
+      {
+        "field": "due",
+        "value": "none",
+        "neg": true
+      }
+    ],
+    "rebuilt": "-due:none"
+  },
+  {
+    "query": "-label:urgent",
+    "terms": [
+      {
+        "field": "label",
+        "value": "urgent",
+        "neg": true
+      }
+    ],
+    "rebuilt": "-label:urgent"
+  },
+  {
+    "query": "buy",
+    "terms": [
+      {
+        "field": "text",
+        "value": "buy",
+        "neg": false
+      }
+    ],
+    "rebuilt": "buy"
+  },
+  {
+    "query": "report",
+    "terms": [
+      {
+        "field": "text",
+        "value": "report",
+        "neg": false
+      }
+    ],
+    "rebuilt": "report"
+  },
+  {
+    "query": "\"weekly review\"",
+    "terms": [
+      {
+        "field": "text",
+        "value": "weekly review",
+        "neg": false
+      }
+    ],
+    "rebuilt": "\"weekly review\""
+  },
+  {
+    "query": "project:work status:open",
+    "terms": [
+      {
+        "field": "project",
+        "value": "work",
+        "neg": false
+      },
+      {
+        "field": "status",
+        "value": "open",
+        "neg": false
+      }
+    ],
+    "rebuilt": "project:work status:open"
+  },
+  {
+    "query": "due:week -label:urgent",
+    "terms": [
+      {
+        "field": "due",
+        "value": "week",
+        "neg": false
+      },
+      {
+        "field": "label",
+        "value": "urgent",
+        "neg": true
+      }
+    ],
+    "rebuilt": "due:week -label:urgent"
+  },
+  {
+    "query": "project:home recurring:true",
+    "terms": [
+      {
+        "field": "project",
+        "value": "home",
+        "neg": false
+      },
+      {
+        "field": "recurring",
+        "value": "true",
+        "neg": false
+      }
+    ],
+    "rebuilt": "project:home recurring:true"
+  },
+  {
+    "query": "is:task status:open due:set",
+    "terms": [
+      {
+        "field": "is",
+        "value": "task",
+        "neg": false
+      },
+      {
+        "field": "status",
+        "value": "open",
+        "neg": false
+      },
+      {
+        "field": "due",
+        "value": "set",
+        "neg": false
+      }
+    ],
+    "rebuilt": "is:task status:open due:set"
+  }
+]
