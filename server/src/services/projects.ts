@@ -8,12 +8,14 @@ import { checkIfMatch } from './concurrency.js';
 import { collectSubtree } from './tasks.js';
 
 export interface ProjectCreateInput {
+  id?: string;
   name: string;
   parentId?: string | null;
   color?: string;
   glyph?: string;
   collapsed?: boolean;
   health?: string[];
+  position?: number;
 }
 export interface ProjectPatch {
   name?: string;
@@ -31,7 +33,7 @@ export async function getProject(db: DB, id: string) {
 }
 
 export async function createProject(db: DB, owner: string, input: ProjectCreateInput) {
-  const id = newId();
+  const id = input.id ?? newId();
   const now = new Date().toISOString();
   const m = await db
     .selectFrom('projects')
@@ -48,7 +50,7 @@ export async function createProject(db: DB, owner: string, input: ProjectCreateI
       color: input.color ?? '#ffb000',
       glyph: input.glyph ?? '●',
       collapsed: input.collapsed ? 1 : 0,
-      position: Number(m?.m ?? 0) + 1,
+      position: input.position ?? Number(m?.m ?? 0) + 1,
       archived: 0,
       health: JSON.stringify(input.health ?? []),
       created_at: now,

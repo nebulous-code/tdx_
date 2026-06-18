@@ -14,9 +14,9 @@ export async function getLabel(db: DB, id: string) {
 export async function createLabel(
   db: DB,
   owner: string,
-  input: { name: string; pinned?: boolean },
+  input: { id?: string; name: string; pinned?: boolean },
 ) {
-  const id = newId();
+  const id = input.id ?? newId();
   await db
     .insertInto('labels')
     .values({ id, owner_id: owner, name: input.name, pinned: input.pinned ? 1 : 0 })

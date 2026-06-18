@@ -11,9 +11,11 @@ import { checkIfMatch } from './concurrency.js';
 type Trx = Kysely<Database_>;
 
 export interface TaskCreateInput {
+  id?: string;
   title: string;
   projectId?: string | null;
   parentId?: string | null;
+  done?: boolean;
   due?: string | null;
   reminder?: string | null;
   recurrence?: string | null;
@@ -22,6 +24,7 @@ export interface TaskCreateInput {
   size?: number;
   labels?: string[];
   assigneeId?: string | null;
+  position?: number;
 }
 export interface TaskPatch {
   title?: string;
@@ -36,6 +39,7 @@ export interface TaskPatch {
   size?: number;
   labels?: string[];
   assigneeId?: string | null;
+  position?: number;
 }
 
 // Replace a task's labels with the subset that actually belongs to `owner`.
@@ -79,15 +83,21 @@ export async function loadTask(db: DB | Trx, id: string): Promise<TaskJson | nul
 export const getTask = (db: DB, id: string): Promise<TaskJson | null> => loadTask(db, id);
 
 export async function createTask(db: DB, owner: string, input: TaskCreateInput): Promise<TaskJson> {
-  const id = newId();
+  const id = input.id ?? newId();
   const now = new Date().toISOString();
+  const done = input.done ? 1 : 0;
   await db.transaction().execute(async (trx) => {
-    const m = await trx
-      .selectFrom('tasks')
-      .select((eb) => eb.fn.max('position').as('m'))
-      .where('owner_id', '=', owner)
-      .executeTakeFirst();
-    const position = Number(m?.m ?? 0) + 1;
+    const position =
+      input.position ??
+      Number(
+        (
+          await trx
+            .selectFrom('tasks')
+            .select((eb) => eb.fn.max('position').as('m'))
+            .where('owner_id', '=', owner)
+            .executeTakeFirst()
+        )?.m ?? 0,
+      ) + 1;
     await trx
       .insertInto('tasks')
       .values({
@@ -98,7 +108,7 @@ export async function createTask(db: DB, owner: string, input: TaskCreateInput):
         project_id: input.projectId ?? null,
         parent_id: input.parentId ?? null,
         title: input.title,
-        done: 0,
+        done,
         due: input.due ?? null,
         reminder: input.reminder ?? null,
         recurrence: input.recurrence ?? null,
@@ -108,7 +118,7 @@ export async function createTask(db: DB, owner: string, input: TaskCreateInput):
         position,
         archived: 0,
         created_at: now,
-        completed_at: null,
+        completed_at: done ? now : null,
         updated_at: now,
       })
       .execute();
@@ -145,6 +155,7 @@ export async function updateTask(
     if (patch.priority !== undefined) set.priority = patch.priority;
     if (patch.size !== undefined) set.size = patch.size;
     if (patch.assigneeId !== undefined) set.assignee_id = patch.assigneeId;
+    if (patch.position !== undefined) set.position = patch.position;
 
     await trx.updateTable('tasks').set(set).where('id', '=', id).execute();
     if (patch.labels !== undefined) await setTaskLabels(trx, row.owner_id, id, patch.labels);

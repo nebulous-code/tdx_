@@ -6,11 +6,13 @@ import { newId } from '../ids.js';
 import { rowToSavedQuery } from '../schemas.js';
 
 export interface SavedQueryCreateInput {
+  id?: string;
   name: string;
   query: string;
   glyph?: string;
   color?: string | null;
   pinned?: boolean;
+  position?: number;
 }
 export interface SavedQueryPatch {
   name?: string;
@@ -31,7 +33,7 @@ export async function getSavedQuery(db: DB, id: string) {
 }
 
 export async function createSavedQuery(db: DB, owner: string, input: SavedQueryCreateInput) {
-  const id = newId();
+  const id = input.id ?? newId();
   const m = await db
     .selectFrom('saved_queries')
     .select((eb) => eb.fn.max('position').as('m'))
@@ -47,7 +49,7 @@ export async function createSavedQuery(db: DB, owner: string, input: SavedQueryC
       query: input.query,
       system: 0,
       color: input.color ?? null,
-      position: Number(m?.m ?? 0) + 1,
+      position: input.position ?? Number(m?.m ?? 0) + 1,
       pinned: input.pinned ? 1 : 0,
     })
     .execute();

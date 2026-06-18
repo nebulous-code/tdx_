@@ -5,6 +5,7 @@
 import 'dotenv/config';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import fastifyStatic from '@fastify/static';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
 import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
@@ -22,11 +23,19 @@ import savedQueryRoutes from './routes/savedQueries.js';
 import taskRoutes from './routes/tasks.js';
 import tokenRoutes from './routes/tokens.js';
 
+const FRONTEND_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  'frontend',
+);
+
 export interface AppOpts {
   db?: DB;
   sqlite?: Sqlite;
   dbPath?: string;
   logger?: boolean;
+  serveFrontend?: boolean; // serve ../../frontend statically (default true)
 }
 
 export async function buildApp(opts: AppOpts = {}): Promise<FastifyInstance> {
@@ -71,6 +80,13 @@ export async function buildApp(opts: AppOpts = {}): Promise<FastifyInstance> {
     },
     async () => ({ status: 'ok' as const, service: 'tdx-server', time: new Date().toISOString() }),
   );
+
+  // Serve the no-build Vue frontend same-origin (so its relative /api/... calls
+  // and the session cookie just work). API/docs/health routes are registered
+  // above and take precedence over the static wildcard.
+  if (opts.serveFrontend ?? true) {
+    await app.register(fastifyStatic, { root: FRONTEND_DIR, index: 'index.html' });
+  }
 
   return app;
 }

@@ -6,8 +6,17 @@
   const T = Rec.ymd; // ymd formatter
   const todayD = Rec.startOfDay(new Date());
   const d = (off) => T(Rec.addDays(todayD, off));
-  let _id = 100;
-  const uid = (p) => (p||'id') + '_' + (++_id);
+  // Global UUID ids (the server is authoritative-by-acceptance: it stores the id
+  // the client supplies on create). crypto.randomUUID needs a secure context
+  // (https/localhost) — on a plain-HTTP LAN IP it's undefined, so fall back to a
+  // v4 built from crypto.getRandomValues, which works everywhere.
+  function uuidv4(){
+    const b = crypto.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+    const h = [...b].map(x => x.toString(16).padStart(2,'0'));
+    return h.slice(0,4).join('')+'-'+h.slice(4,6).join('')+'-'+h.slice(6,8).join('')+'-'+h.slice(8,10).join('')+'-'+h.slice(10,16).join('');
+  }
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : uuidv4());
 
   // ---- category color palette (flat, single color) ----
   const COLORS = [
@@ -603,25 +612,10 @@
     if(i>=0) store.labels.splice(i,1);
   };
 
-  // After loading state from the server, raise the id counter above every id
-  // already present. uid() generates 'prefix_N' ids from a single shared counter
-  // that resets to 100 on each page load; without this, the first task created
-  // in a fresh session would reuse an id (e.g. t_101) that already exists in the
-  // loaded data — causing two tasks to share an id and "swap" in the UI.
-  // (Seed ids like 't1'/'p_inbox' have no trailing '_N' and are correctly ignored.)
-  // floor = the server's high-water mark across ALL rows incl. archived (soft-deleted)
-  // ones the client can't see — without it a new id could collide with an archived row.
-  store.reserveIds = (floor) => {
-    let max = Math.max(_id, floor || 0);
-    const scan = (arr) => {
-      for(const o of (arr||[])){
-        const m = /_(\d+)$/.exec(o && o.id);
-        if(m){ const n = +m[1]; if(n>max) max = n; }
-      }
-    };
-    scan(store.tasks); scan(store.projects); scan(store.labels); scan(store.savedQueries);
-    _id = max;
-  };
+  // ids are globally-unique UUIDs now, so there's no counter to reserve — the
+  // old prefix_N collision bug can't happen. Kept as a no-op in case any caller
+  // still invokes it (the hydrate path no longer does).
+  store.reserveIds = () => {};
 
   window.store = store;
 

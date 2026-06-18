@@ -174,6 +174,7 @@
 <script src="js/vue.global.prod.js"></script>
 <script src="js/recurrence.js"></script>
 <script src="js/query.js"></script>
+<script src="js/sync.js"></script>
 <script src="js/data.js"></script>
 <script src="js/kbform.js"></script>
 <script src="js/sidebar.js"></script>
@@ -190,7 +191,8 @@
 <script src="js/sort-modal.js"></script>
 <script>
 const { createApp } = Vue;
-let stateVersion = 0;   // optimistic-concurrency version from the server
+// Endpoint base per store array (granular API).
+const SYNC_EP = { tasks:'/api/tasks', projects:'/api/projects', labels:'/api/labels', savedQueries:'/api/saved-queries' };
 
 const app = createApp({
   data(){ return {
@@ -278,12 +280,10 @@ const app = createApp({
     // sets _suppress so the autosave watcher won't fire on the swap).
     async mutateDelete(url){
       if(this._save){ clearTimeout(this._save); this._save=null; }
-      try{
-        const res = await fetch(url, { method:'POST', credentials:'include' });
-        if(res.status===401){ this.handleAuthExpired(); return false; }
-        if(res.ok){ const fresh = await res.json(); stateVersion = fresh.version||0; this.applyState(fresh); return true; }
-        this.store.toast('delete failed ('+res.status+')'); return false;
-      }catch(e){ this.store.toast('offline — not deleted'); return false; }
+      const ok = await this.apiSend('DELETE', url, null);
+      if(!ok){ this.store.toast('delete failed'); return false; }
+      await this.resync();   // server cascaded subprojects/subtasks; pull fresh state
+      return true;
     },
     resolveConfirm(v){ if(this.confirmState){ const r=this.confirmState.resolve; this.confirmState=null; r(v); } },
     resolveChoice(v){ if(this.choiceState){ const r=this.choiceState.resolve; this.choiceState=null; r(v); } },
@@ -682,64 +682,69 @@ const app = createApp({
     scrollSideIntoView(){
       this.$nextTick(()=>{ const el=document.querySelector('.sidebar .kfocus'); if(el) el.scrollIntoView({block:'nearest'}); });
     },
-    // ---- persistence (snapshot store over /api/state) ----
-    // Replace the store's arrays in-place (keeps Vue reactivity refs intact).
-    // _suppress stops the resulting change from scheduling a redundant PUT.
+    // ---- persistence (granular diff-sync over the per-resource API) ----
+    // Replace the store's arrays in-place (keeps Vue reactivity refs intact) and
+    // record the synced baseline. _suppress stops the resulting change from
+    // scheduling a redundant write.
     applyState(s){
       this._suppress = true;
       if(s.projects){ this.store.projects.splice(0, this.store.projects.length, ...s.projects); }
       if(s.tasks){ this.store.tasks.splice(0, this.store.tasks.length, ...s.tasks); }
       if(s.labels){ this.store.labels.splice(0, this.store.labels.length, ...s.labels); }
       if(s.savedQueries){ this.store.savedQueries.splice(0, this.store.savedQueries.length, ...s.savedQueries); }
-      // raise the id counter past every id we just loaded AND past the server's
-      // high-water mark (s.seq covers archived rows the client can't see), so a
-      // newly-created task/project can't reuse an existing id (the t_101 collision bug).
-      this.store.reserveIds(s.seq);
+      this._lastSaved = window.Sync.snapshot(this.store);   // diff baseline
       this.$nextTick(()=>{ this._suppress = false; });
     },
-    snapshot(){
-      // `version` travels in the body so the optimistic-concurrency check works
-      // even through proxies that strip the conditional If-Match header.
-      return {
-        version: stateVersion,
-        projects: JSON.parse(JSON.stringify(this.store.projects)),
-        tasks: JSON.parse(JSON.stringify(this.store.tasks)),
-        labels: JSON.parse(JSON.stringify(this.store.labels)),
-        savedQueries: JSON.parse(JSON.stringify(this.store.savedQueries)),
-      };
-    },
+    // Diff the store against the last synced baseline and issue granular calls.
     async persist(){
       // Never write before a successful load: a failed hydrate leaves the store
       // holding sample/stale data, and pushing that would clobber the server.
       if(!this.loaded) return;
-      try{
-        const res = await fetch('/api/state', {
-          method:'PUT',
-          credentials:'include',
-          headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify(this.snapshot()),
-        });
-        if(res.status===401){ this.handleAuthExpired(); return; }
-        if(res.status===409){
-          // another device wrote first — take server state, drop our unsaved edits
-          const server = await res.json();
-          stateVersion = server.version || 0;
-          this.applyState(server);
-          this.store.toast('↻ synced from another device');
-          return;
+      const prev = this._lastSaved || window.Sync.empty();
+      const curr = window.Sync.snapshot(this.store);
+      const d = window.Sync.diff(prev, curr);
+      // ordered: create parents first (projects/labels/views, then tasks in store
+      // order so a task's parent precedes it), then updates, then deletes (children
+      // before parents). Tasks are only removed via the archive path, not here.
+      const ops = [];
+      for(const t of ['projects','labels','savedQueries','tasks']) for(const id of d[t].creates) ops.push({ type:t, action:'create', id });
+      for(const t of ['projects','labels','savedQueries','tasks']) for(const id of d[t].updates) ops.push({ type:t, action:'update', id });
+      for(const t of ['tasks','savedQueries','labels','projects']) for(const id of d[t].deletes) ops.push({ type:t, action:'delete', id });
+      if(!ops.length) return;
+      for(const op of ops){
+        const ok = await this.syncOp(op, curr);
+        if(ok){
+          // advance the baseline for just this entity so an unrelated failure
+          // doesn't force a re-send of what already saved.
+          if(op.action==='delete') delete this._lastSaved[op.type][op.id];
+          else this._lastSaved[op.type][op.id] = curr[op.type][op.id];
         }
-        if(res.ok){ const j = await res.json(); stateVersion = j.version; }
-        else { this.store.toast('save failed ('+res.status+')'); }
-      }catch(e){ this.store.toast('offline — change not saved'); }
+        // on failure leave the baseline stale → the next watcher fire retries it.
+      }
+    },
+    syncOp(op, curr){
+      const base = SYNC_EP[op.type];
+      if(op.action==='create') return this.apiSend('POST', base, Object.assign({ id:op.id }, curr[op.type][op.id]));
+      if(op.action==='update') return this.apiSend('PUT', base+'/'+op.id, curr[op.type][op.id]);
+      return this.apiSend('DELETE', base+'/'+op.id, null);
+    },
+    async apiSend(method, url, body){
+      try{
+        const res = await fetch(url, { method, credentials:'include',
+          headers: body ? { 'Content-Type':'application/json' } : {},
+          body: body ? JSON.stringify(body) : undefined });
+        if(res.status===401){ this.handleAuthExpired(); return false; }
+        if(res.ok) return true;
+        this.store.toast('save failed ('+res.status+')');
+        return false;
+      }catch(e){ this.store.toast('offline — change not saved'); return false; }
     },
     async hydrate(){
       try{
-        const res = await fetch('/api/state', { credentials:'include' });
+        const res = await fetch('/api/bootstrap', { credentials:'include' });
         if(res.status===401){ this.handleAuthExpired(); return; }
         if(res.ok){
-          const s = await res.json();
-          stateVersion = s.version || 0;
-          this.applyState(s);
+          this.applyState(await res.json());
           this.loaded = true;   // writes are now allowed
           // default to the top sidebar view (view isn't persisted) — honors the
           // user's saved-query order rather than always landing on "Today"
@@ -753,6 +758,14 @@ const app = createApp({
       }
       // loaded stays false: the app shows whatever is in memory but won't save
       // until a reload succeeds, so it can't overwrite good server state.
+    },
+    // pull the authoritative state after a server-side cascade (archive)
+    async resync(){
+      try{
+        const res = await fetch('/api/bootstrap', { credentials:'include' });
+        if(res.status===401){ this.handleAuthExpired(); return; }
+        if(res.ok){ this.applyState(await res.json()); }
+      }catch(e){ this.store.toast('offline — could not refresh'); }
     },
     // ---- auth / session lifecycle ----
     async checkSession(){
@@ -811,8 +824,8 @@ const app = createApp({
     // debounce and persist immediately.
     this.store.saveNow=()=>{ if(this._save){ clearTimeout(this._save); this._save=null; } this.persist(); };
     // soft-delete hooks (callable from child components, like saveNow)
-    this.store.softDeleteProject = (id) => this.mutateDelete('/api/projects/'+id+'/delete');
-    this.store.softDeleteTask    = (id) => this.mutateDelete('/api/tasks/'+id+'/delete');
+    this.store.softDeleteProject = (id) => this.mutateDelete('/api/projects/'+id);
+    this.store.softDeleteTask    = (id) => this.mutateDelete('/api/tasks/'+id);
     // app-styled confirm / prompt (Promise-based) usable from any component
     this.store.askConfirm=(msg)=> new Promise((res)=>{ this.confirmState={ msg, resolve:res }; });
     this.store.askChoice=(msg)=> new Promise((res)=>{ this.choiceState={ msg, resolve:res }; });   // 'cancel' | 'no' | 'yes'

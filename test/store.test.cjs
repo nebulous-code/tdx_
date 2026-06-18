@@ -11,13 +11,14 @@ const { golden } = require('./support/golden.cjs');
 
 loadStore(); // load Vue + engines + data.js once
 
-// Map generated ids (…_<n>) to stable tokens so goldens survive fixture growth;
-// seed ids (t1, p_tdx) pass through unchanged.
+// Map generated ids (UUIDs from uid(), or legacy …_<n>) to stable tokens so the
+// golden is deterministic; seed ids (t1, p_tdx) pass through unchanged.
+const GENERATED = /_\d+$|^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function genLabeler() {
   const map = new Map();
   let n = 0;
   return (id) => {
-    if (id == null || !/_\d+$/.test(id)) return id;
+    if (id == null || !GENERATED.test(id)) return id;
     if (!map.has(id)) map.set(id, 'gen_' + ++n);
     return map.get(id);
   };

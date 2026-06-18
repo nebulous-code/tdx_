@@ -68,10 +68,14 @@ export const SavedQuerySchema = Type.Object({
 });
 
 // ---- create / update request schemas --------------------------------------
+// `id` (client-generated UUID) and `position` are accepted on create so the
+// diff-sync frontend stays authoritative over ids and ordering.
 export const TaskCreateSchema = Type.Object({
+  id: Type.Optional(Type.String()),
   title: Type.String(),
   projectId: Type.Optional(NStr()),
   parentId: Type.Optional(NStr()),
+  done: Type.Optional(Type.Boolean()),
   due: Type.Optional(NStr()),
   reminder: Type.Optional(NStr()),
   recurrence: Type.Optional(NStr()),
@@ -80,6 +84,7 @@ export const TaskCreateSchema = Type.Object({
   size: Type.Optional(Type.Integer()),
   labels: Type.Optional(Type.Array(Type.String())),
   assigneeId: Type.Optional(NStr()),
+  position: Type.Optional(Type.Integer()),
 });
 export const TaskUpdateSchema = Type.Partial(
   Type.Object({
@@ -95,15 +100,18 @@ export const TaskUpdateSchema = Type.Partial(
     size: Type.Integer(),
     labels: Type.Array(Type.String()),
     assigneeId: NStr(),
+    position: Type.Integer(),
   }),
 );
 export const ProjectCreateSchema = Type.Object({
+  id: Type.Optional(Type.String()),
   name: Type.String(),
   parentId: Type.Optional(NStr()),
   color: Type.Optional(Type.String()),
   glyph: Type.Optional(Type.String()),
   collapsed: Type.Optional(Type.Boolean()),
   health: Type.Optional(Type.Array(Type.String())),
+  position: Type.Optional(Type.Integer()),
 });
 export const ProjectUpdateSchema = Type.Partial(
   Type.Object({
@@ -117,6 +125,7 @@ export const ProjectUpdateSchema = Type.Partial(
   }),
 );
 export const LabelCreateSchema = Type.Object({
+  id: Type.Optional(Type.String()),
   name: Type.String(),
   pinned: Type.Optional(Type.Boolean()),
 });
@@ -125,11 +134,13 @@ export const LabelUpdateSchema = Type.Partial(
 );
 export const LabelMergeSchema = Type.Object({ from: Type.String(), to: Type.String() });
 export const SavedQueryCreateSchema = Type.Object({
+  id: Type.Optional(Type.String()),
   name: Type.String(),
   query: Type.String(),
   glyph: Type.Optional(Type.String()),
   color: Type.Optional(NStr()),
   pinned: Type.Optional(Type.Boolean()),
+  position: Type.Optional(Type.Integer()),
 });
 export const SavedQueryUpdateSchema = Type.Partial(
   Type.Object({

@@ -48,10 +48,12 @@
 **API surface + cutover**
 - [x] Granular CRUD (tasks/projects/labels/saved-queries); `POST /api/tasks/:id/complete` spawns recurrence server-side (parity-checked vs `store.spawn` golden); archive cascade; label merge
 - [x] `POST /api/query` (server-side `Q.run` over the owner's live tasks) + `GET /api/bootstrap`
-- [x] Per-resource concurrency: `updated_at` ETag + `If-Match` → 412 (tasks/projects; labels/saved-queries unconditional, no `updated_at`). Removing legacy `PUT /api/state` happens at cutover.
-- [ ] Repoint the Vue app onto the granular API (thinner client; keep working + shell-friendly for D2) — **next step**
+- [x] Per-resource concurrency: `updated_at` ETag + `If-Match` → 412 (tasks/projects; labels/saved-queries unconditional, no `updated_at`).
+- [x] **Repoint the Vue app onto the granular API** — diff-sync (`frontend/js/sync.js`): the autosave watcher now diffs the store vs the last-synced baseline and emits granular `POST/PUT/DELETE`. `uid()`→UUID (client-authoritative ids; server accepts client `id`/`position`/`done` on create); `hydrate`→`GET /api/bootstrap`; soft-delete→`DELETE` + re-bootstrap. Snapshot `PUT /api/state` and `version/seq/409` are gone. The new server also serves the frontend statically (same-origin) for dev on :3001.
 
-> All of the above is integration-tested via `fastify.inject` (43 server tests green); the legacy `backend/` keeps running until the frontend repoint.
+> Server is integration-tested via `fastify.inject` (43 tests); the diff engine is unit-tested (`test/sync.test.cjs`, in the Phase-0 harness). **D1 is functionally complete** — remaining: the user's daily-drive on :3001, then deploy. The legacy `backend/` still runs on :3000 until then.
+>
+> **Not yet ported to `server/`:** the `/api/backups/*` admin routes (the backup screen 404s on :3001 — follow-up), and the app doesn't yet drive `/complete`·`/assign`·`/labels/merge`·grants/groups (CLI/agent surface).
 
 **Ship**
 - [ ] Deploy → daily-drive → log functionality lost (goldens as safety net)
