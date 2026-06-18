@@ -10,11 +10,13 @@ import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
 import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { type Backups, createBackups } from './backup.js';
 import { type DB, DEFAULT_DB_PATH, type Sqlite, openDatabase } from './db.js';
 import { registerAuth } from './plugins/auth.js';
 import { registerDb } from './plugins/db.js';
 import adminRoutes from './routes/admin.js';
 import authRoutes from './routes/auth.js';
+import backupRoutes from './routes/backup.js';
 import bootstrapRoutes from './routes/bootstrap.js';
 import labelRoutes from './routes/labels.js';
 import projectRoutes from './routes/projects.js';
@@ -23,12 +25,17 @@ import savedQueryRoutes from './routes/savedQueries.js';
 import taskRoutes from './routes/tasks.js';
 import tokenRoutes from './routes/tokens.js';
 
-const FRONTEND_DIR = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-  '..',
-  'frontend',
-);
+declare module 'fastify' {
+  interface FastifyInstance {
+    backups: Backups;
+  }
+}
+
+// FRONTEND_DIR is overridable so the compiled image (dist/) can point at the
+// right path; the default works for `tsx src/app.ts` in dev.
+const FRONTEND_DIR =
+  process.env.FRONTEND_DIR ||
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'frontend');
 
 export interface AppOpts {
   db?: DB;
@@ -53,6 +60,7 @@ export async function buildApp(opts: AppOpts = {}): Promise<FastifyInstance> {
 
   registerDb(app, handle);
   await registerAuth(app);
+  app.decorate('backups', createBackups(handle.sqlite));
 
   await app.register(authRoutes);
   await app.register(adminRoutes);
@@ -63,6 +71,7 @@ export async function buildApp(opts: AppOpts = {}): Promise<FastifyInstance> {
   await app.register(projectRoutes);
   await app.register(labelRoutes);
   await app.register(savedQueryRoutes);
+  await app.register(backupRoutes);
 
   app.get(
     '/health',
@@ -100,6 +109,7 @@ if (invokedDirectly) {
   const host = process.env.HOST || '0.0.0.0';
   try {
     await app.listen({ port, host });
+    app.backups.init(); // arm the daily backup scheduler (real boot only, not tests)
   } catch (err) {
     app.log.error(err);
     process.exit(1);

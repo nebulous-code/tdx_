@@ -51,12 +51,16 @@
 - [x] Per-resource concurrency: `updated_at` ETag + `If-Match` → 412 (tasks/projects; labels/saved-queries unconditional, no `updated_at`).
 - [x] **Repoint the Vue app onto the granular API** — diff-sync (`frontend/js/sync.js`): the autosave watcher now diffs the store vs the last-synced baseline and emits granular `POST/PUT/DELETE`. `uid()`→UUID (client-authoritative ids; server accepts client `id`/`position`/`done` on create); `hydrate`→`GET /api/bootstrap`; soft-delete→`DELETE` + re-bootstrap. Snapshot `PUT /api/state` and `version/seq/409` are gone. The new server also serves the frontend statically (same-origin) for dev on :3001.
 
-> Server is integration-tested via `fastify.inject` (43 tests); the diff engine is unit-tested (`test/sync.test.cjs`, in the Phase-0 harness). **D1 is functionally complete** — remaining: the user's daily-drive on :3001, then deploy. The legacy `backend/` still runs on :3000 until then.
->
-> **Not yet ported to `server/`:** the `/api/backups/*` admin routes (the backup screen 404s on :3001 — follow-up), and the app doesn't yet drive `/complete`·`/assign`·`/labels/merge`·grants/groups (CLI/agent surface).
+- [x] **Backups ported** — `server/src/backup.ts` + `routes/backup.ts` (admin-only config/run/list/browse/download, `sqlite.backup()` online copy, daily scheduler armed on real boot; `backup_config` singleton seeded in `001_init.sql`, legacy settings carried over by `migrate-from-legacy`). The app is now feature-complete on the new server.
 
-**Ship**
-- [ ] Deploy → daily-drive → log functionality lost (goldens as safety net)
+> Server is integration-tested via `fastify.inject` (**47 tests**); the diff engine is unit-tested (`test/sync.test.cjs`). **D1 is functionally complete** and the app runs entirely on `server/`. Remaining is the user's daily-drive on :3001, then the prod cutover.
+>
+> The app doesn't yet drive `/complete`·`/assign`·`/labels/merge`·grants/groups·PATs — that's the CLI/agent/portfolio surface, available but unused by the UI.
+
+**Ship** — deployment **prepped** (working tree, not deployed)
+- [x] `server/Dockerfile` (multi-stage tsc build → slim runtime; serves API + frontend); `compose.yaml` + `.github/workflows/docker.yml` point at `server/Dockerfile`; `FRONTEND_DIR`/`MIGRATIONS_DIR` env overrides for the image.
+- [x] `docs/DEPLOY.md` — ordered cutover runbook (back up → pause Watchtower → migrate prod DB with the new image → swap → deploy → verify → re-enable; rollback to legacy documented). ⚠️ Must migrate `data/tdx.db` **before** the new image goes live.
+- [ ] **Execute the cutover** (user's hands-on step, after daily-driving): follow `docs/DEPLOY.md`. Then retire `backend/` + `tools/`.
 
 ## Phase 2 — D2: notes & events (later)
 - [ ] `event` + `note` domains; `links` table + rel taxonomy; file-backed notes scanner (frontmatter UID, `scanFile`/`scanVault`, tombstones); app-shell + lazy route modules; calendar/notes UIs; CLI; MCP; RAG

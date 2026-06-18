@@ -12,7 +12,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const DEFAULT_DB_PATH =
   process.env.DB_PATH || path.join(__dirname, '..', 'data', 'tdx.dev.db');
-export const MIGRATIONS_DIR = path.join(__dirname, '..', 'migrations');
+// overridable so the compiled image (dist/) can point at the copied .sql files
+export const MIGRATIONS_DIR =
+  process.env.MIGRATIONS_DIR || path.join(__dirname, '..', 'migrations');
 
 // ---- Kysely schema types ---------------------------------------------------
 // SQLite has no boolean type; 0/1 integers are typed as `number`. Nullable

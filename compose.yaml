@@ -9,7 +9,11 @@ services:
     # and tags the image above. The host never passes --build, so it uses the pulled image.
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      # D1 TypeScript server (serves the API + the static frontend).
+      # ⚠️ Before this image goes live, the prod /data/tdx.db must be converted to
+      # the new UUID schema — the server will not start against the legacy DB.
+      # See docs/DEPLOY.md for the ordered cutover (migrate first, then push).
+      dockerfile: server/Dockerfile
     restart: unless-stopped
     labels:
       # let the Watchtower instance auto-update this container

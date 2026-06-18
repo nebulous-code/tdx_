@@ -30,9 +30,12 @@ jobs:
       - name: Build & push
         uses: docker/build-push-action@v6
         with:
-          # build context is the repo ROOT (the Dockerfile COPYs backend/ frontend/ tools/)
+          # build context is the repo ROOT (the Dockerfile COPYs server/ + frontend/).
+          # ⚠️ Pushing this builds + publishes the D1 server image, which Watchtower
+          # auto-deploys. Do NOT merge to main until prod /data/tdx.db has been
+          # converted to the new UUID schema — see docs/DEPLOY.md.
           context: .
-          file: backend/Dockerfile
+          file: server/Dockerfile
           push: true
           tags: |
             ghcr.io/nebulous-code/tdx:latest

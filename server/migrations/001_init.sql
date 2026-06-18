@@ -150,3 +150,4 @@ CREATE TABLE backup_config (
   last_error  TEXT,
   next_run_at TEXT
 );
+INSERT INTO backup_config (id) VALUES (1);  -- the singleton row (defaults above)
