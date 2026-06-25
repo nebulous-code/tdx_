@@ -98,6 +98,18 @@ export interface EventsTable {
   updated_at: string;
 }
 
+export interface LinksTable {
+  id: string;
+  owner_id: string;
+  t1_type: string;
+  t1_id: string;
+  t2_type: string;
+  t2_id: string;
+  rel: string;
+  data: string | null;
+  created_at: string;
+}
+
 export interface LabelsTable {
   id: string;
   owner_id: string;
@@ -175,6 +187,7 @@ export interface Database_ {
   projects: ProjectsTable;
   tasks: TasksTable;
   events: EventsTable;
+  links: LinksTable;
   labels: LabelsTable;
   task_labels: TaskLabelsTable;
   saved_queries: SavedQueriesTable;

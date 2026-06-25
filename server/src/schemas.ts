@@ -336,3 +336,28 @@ export function rowToEvent(row: EventsTable): EventJson {
     updatedAt: row.updated_at,
   };
 }
+
+// ---- links (generic entity graph) -----------------------------------------
+// Linkable types in 2b: event, task. A resolved link is always presented from
+// one entity's POV — `other` is the entity on the far side of the edge.
+const LinkTypeSchema = Type.Union([Type.Literal('event'), Type.Literal('task')]);
+export const EntityRefSchema = Type.Object({
+  type: LinkTypeSchema,
+  id: Type.String(),
+  title: Type.String(),
+});
+export const LinkCreateSchema = Type.Object({
+  aType: LinkTypeSchema,
+  aId: Type.String(),
+  bType: LinkTypeSchema,
+  bId: Type.String(),
+  data: Type.Optional(Type.Unknown()),
+});
+export const LinkResolvedSchema = Type.Object({
+  id: Type.String(),
+  rel: Type.String(),
+  other: EntityRefSchema,
+  createdAt: Type.String(),
+});
+export const LinkListSchema = Type.Array(LinkResolvedSchema);
+export const LinkQuerySchema = Type.Object({ type: LinkTypeSchema, id: Type.String() });

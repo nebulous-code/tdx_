@@ -95,9 +95,18 @@ window.CalendarView = {
 
 window.EventDetail = {
   props: ['store'],
-  data() { return { f: null }; },
+  data() { return { f: null, links: [], taskQuery: '' }; },
   computed: {
     open() { return this.store.eventDetailOpen; },
+    // tasks matching the picker query, not already linked, capped for the menu
+    candidates() {
+      const q = this.taskQuery.trim().toLowerCase();
+      if (!q) return [];
+      const linked = new Set(this.links.map((l) => l.other.id));
+      return this.store.tasks
+        .filter((t) => !t.archived && !linked.has(t.id) && (t.title || '').toLowerCase().includes(q))
+        .slice(0, 8);
+    },
   },
   watch: {
     open(v) { if (v) this.sync(); },
@@ -117,6 +126,22 @@ window.EventDetail = {
         recurrence: e.recurrence || '',
         notes: e.notes || '',
       };
+      this.links = [];
+      this.taskQuery = '';
+      this.loadLinks();
+    },
+    async loadLinks() {
+      if (!this.f || !this.f.id) { this.links = []; return; }
+      this.links = await this.store.fetchLinks('event', this.f.id);
+    },
+    async linkTask(t) {
+      if (await this.store.createLink({ type: 'event', id: this.f.id }, { type: 'task', id: t.id })) {
+        this.taskQuery = '';
+        await this.loadLinks();
+      }
+    },
+    async unlink(id) {
+      if (await this.store.deleteLink(id)) await this.loadLinks();
     },
     close() { this.store.eventDetailOpen = false; },
     async save() {
@@ -161,6 +186,19 @@ window.EventDetail = {
         <input v-model="f.location" placeholder="location" class="ti">
         <input v-model="f.recurrence" placeholder="recurrence (e.g. weekly on mon,wed,fri)" class="ti">
         <textarea v-model="f.notes" placeholder="notes" class="ti" rows="3"></textarea>
+        <div v-if="f.id" class="ev-links">
+          <div class="ev-links-h mut">linked tasks</div>
+          <div v-for="l in links" :key="l.id" class="ev-link">
+            <span class="ev-link-title" :title="l.other.title">{{ l.other.title }}</span>
+            <span class="qbtn ev-unlink" @click="unlink(l.id)" title="unlink">✕</span>
+          </div>
+          <div class="ev-link-add">
+            <input v-model="taskQuery" placeholder="link a task…" class="ti">
+            <div v-if="candidates.length" class="ev-link-menu">
+              <div v-for="t in candidates" :key="t.id" class="ev-link-opt" @click="linkTask(t)" :title="t.title">{{ t.title }}</div>
+            </div>
+          </div>
+        </div>
         <div class="ev-actions">
           <button class="btn" @click="close">cancel</button>
           <button v-if="f.id" class="btn danger" @click="del">delete</button>

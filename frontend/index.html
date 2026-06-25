@@ -863,6 +863,49 @@ const app = createApp({
       if(ok && this.store.calFrom) await this.store.fetchEvents(this.store.calFrom, this.store.calTo);
       return ok;
     };
+    // ---- links (D2 2b): the generic entity graph. event↔task edges, talked to
+    // directly like events. fetchLinks returns the resolved list; create/delete
+    // return ok and the caller refetches.
+    this.store.fetchLinks = async (type, id) => {
+      try{
+        const res = await fetch('/api/links?type='+type+'&id='+encodeURIComponent(id), { credentials:'include' });
+        if(res.status===401){ this.handleAuthExpired(); return []; }
+        if(res.ok) return await res.json();
+      }catch(e){ this.store.toast('offline — links not loaded'); }
+      return [];
+    };
+    this.store.createLink = (a, b) =>
+      this.apiSend('POST', '/api/links', { aType:a.type, aId:a.id, bType:b.type, bId:b.id });
+    this.store.deleteLink = (id) => this.apiSend('DELETE', '/api/links/'+id, null);
+    // open the event editor for a given event id (used by the task drawer's linked
+    // events) — fetch the full series, then hand it to the global event-detail drawer.
+    this.store.openEvent = async (id) => {
+      try{
+        const res = await fetch('/api/events/'+id, { credentials:'include' });
+        if(res.status===401){ this.handleAuthExpired(); return; }
+        if(res.ok) this.store.editEvent(await res.json());
+        else this.store.toast('event not found');
+      }catch(e){ this.store.toast('offline — event not loaded'); }
+    };
+    // distinct event series for the task-drawer's "link an event" picker. Events
+    // aren't all in the store (only the calendar's visible range), so read a wide
+    // window and dedupe recurring occurrences down to one entry per series.
+    this.store.fetchEventList = async () => {
+      const from = Rec.ymd(Rec.addDays(new Date(), -365));
+      const to   = Rec.ymd(Rec.addDays(new Date(),  365));
+      try{
+        const res = await fetch('/api/events?from='+from+'&to='+to, { credentials:'include' });
+        if(res.status===401){ this.handleAuthExpired(); return []; }
+        if(res.ok){
+          const seen = new Set(); const out = [];
+          for(const o of (await res.json()).occurrences){
+            if(!seen.has(o.id)){ seen.add(o.id); out.push({ id:o.id, title:o.title, startAt:o.startAt }); }
+          }
+          return out;
+        }
+      }catch(e){ this.store.toast('offline — events not loaded'); }
+      return [];
+    };
     // app-styled confirm / prompt (Promise-based) usable from any component
     this.store.askConfirm=(msg)=> new Promise((res)=>{ this.confirmState={ msg, resolve:res }; });
     this.store.askChoice=(msg)=> new Promise((res)=>{ this.choiceState={ msg, resolve:res }; });   // 'cancel' | 'no' | 'yes'

@@ -114,6 +114,21 @@ window.TaskDetail = {
           <input ref="addsub" v-model="subDraft" placeholder="add subtask…" @focus="kbFocusRow('addsub')" @keydown.enter="addSub" @keydown.esc.stop.prevent="blurField" />
         </div>
       </div>
+
+      <!-- linked events (D2 2b) -->
+      <div class="field">
+        <label>linked events</label>
+        <div v-for="l in linkedEvents" :key="l.id" class="task" style="padding:3px 0;border:none;">
+          <span class="qbtn" style="flex:1;" @click="openLinkedEvent(l)" :title="l.other.title">{{ l.other.title }}</span>
+          <span class="twist-sub" @click="unlinkEvent(l.id)" title="Unlink">✕</span>
+        </div>
+        <div class="ev-link-add" style="margin-top:4px;">
+          <input class="input" v-model="eventQuery" placeholder="link an event…" @focus="loadEventChoices" @keydown.esc.stop.prevent="blurField" />
+          <div v-if="eventCandidates.length" class="ev-link-menu">
+            <div v-for="ev in eventCandidates" :key="ev.id" class="ev-link-opt" @click="linkEvent(ev)" :title="ev.title">{{ ev.title }}</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div v-if="task" class="d-actions">
@@ -123,13 +138,22 @@ window.TaskDetail = {
     </div>
   </div>
   `,
-  data(){ return { subDraft:'', kbAutoListen:false, kbAutofocus:false, recurActive:false, recurTouched:false, subMoveId:null }; },
+  data(){ return { subDraft:'', kbAutoListen:false, kbAutofocus:false, recurActive:false, recurTouched:false, subMoveId:null, linkedEvents:[], eventChoices:[], eventQuery:'' }; },
   computed: {
     task(){ return this.store.taskById(this.store.selectedTaskId); },
     projectOptions(){ return this.store.projectTree(); },   // tree-ordered for the project select
     parentTask(){ return this.task && this.task.parentId ? this.store.taskById(this.task.parentId) : null; },
     subs(){ return this.task ? this.store.subtasks(this.task.id) : []; },
     doneSubs(){ return this.subs.filter(s=>s.done).length; },
+    // events matching the picker query, not already linked, capped for the menu
+    eventCandidates(){
+      const q = this.eventQuery.trim().toLowerCase();
+      if(!q) return [];
+      const linked = new Set(this.linkedEvents.map(l=>l.other.id));
+      return this.eventChoices
+        .filter(ev=>!linked.has(ev.id) && (ev.title||'').toLowerCase().includes(q))
+        .slice(0,8);
+    },
     dueRel(){
       if(!this.task || !this.task.due) return '';
       const d = Rec.daysBetween(Rec.startOfDay(new Date()), Rec.parseYMD(this.task.due));
@@ -145,8 +169,11 @@ window.TaskDetail = {
       // session — infer for the task we're leaving if its recurrence was changed.
       if(was && this.recurTouched) this.inferDueFromRecurrence(this.store.taskById(was));
       this.recurTouched = false;   // new task = fresh session
+      this.eventQuery = '';
+      this.loadTaskLinks();
     },
     'store.detailOpen'(v){
+      if(v) this.loadTaskLinks();
       if(v){ this.recurTouched = false; this.$nextTick(()=>{
         this.kbInit();
         if(this.store.pendingNotesFocus){   // quick-add / list Shift+Enter: land in the notes field
@@ -238,6 +265,19 @@ window.TaskDetail = {
     // keep the kbForm cursor on the held subtask as it changes array position
     _refocusSub(id){ const i=this.kbNav.findIndex(r=>r.id==='sub_'+id); if(i>=0) this.kbRow=i; },
     close(){ this.store.detailOpen=false; },
+    // linked events (D2 2b) — mouse-driven; the generic /api/links graph
+    async loadTaskLinks(){
+      this.linkedEvents = this.task ? await this.store.fetchLinks('task', this.task.id) : [];
+    },
+    openLinkedEvent(l){ this.store.openEvent(l.other.id); },
+    async unlinkEvent(id){ if(await this.store.deleteLink(id)) await this.loadTaskLinks(); },
+    async loadEventChoices(){ this.eventChoices = await this.store.fetchEventList(); },
+    async linkEvent(ev){
+      if(await this.store.createLink({ type:'task', id:this.task.id }, { type:'event', id:ev.id })){
+        this.eventQuery = '';
+        await this.loadTaskLinks();
+      }
+    },
     // recurrence-builder changed — remember it (so we only infer a due date when the
     // rule was actually edited this session, not merely viewed).
     onRecurrenceInput(val){ if(this.task){ this.task.recurrence = val; this.recurTouched = true; } },
