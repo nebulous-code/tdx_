@@ -68,10 +68,10 @@ window.CalendarView = {
   template: `
   <div class="calendar">
     <div class="cal-head">
-      <button class="qbtn" @click="prev" title="previous month">‹</button>
+      <span class="qbtn cal-nav" @click="prev" title="previous month">‹</span>
       <span class="cal-title">{{ monthLabel }}</span>
-      <button class="qbtn" @click="next" title="next month">›</button>
-      <button class="qbtn" @click="today" title="jump to today">today</button>
+      <span class="qbtn cal-nav" @click="next" title="next month">›</span>
+      <span class="qbtn" @click="today" title="jump to today">today</span>
       <span class="mut" style="margin-left:auto;font-size:11px;">click a day to add an event</span>
     </div>
     <div class="cal-weekdays">
@@ -145,11 +145,14 @@ window.EventDetail = {
       <div class="ev-head">
         <span class="hi">{{ f.id ? 'edit event' : 'new event' }}</span>
         <span class="grow"></span>
-        <button class="qbtn" @click="close">esc</button>
+        <span class="qbtn" @click="close">esc</span>
       </div>
       <div class="ev-body">
         <input v-model="f.title" placeholder="event title" class="ti" @keydown.enter="save">
-        <label class="ev-lbl"><input type="checkbox" v-model="f.allDay"> all-day</label>
+        <label class="ev-lbl">
+          <span class="checkbox" :class="{ on: f.allDay }" @click="f.allDay = !f.allDay">{{ f.allDay ? '✓' : '' }}</span>
+          all-day
+        </label>
         <div class="ev-row">
           <input type="date" v-model="f.date" class="ti">
           <input v-if="!f.allDay" type="time" v-model="f.time" class="ti">
@@ -159,9 +162,9 @@ window.EventDetail = {
         <input v-model="f.recurrence" placeholder="recurrence (e.g. weekly on mon,wed,fri)" class="ti">
         <textarea v-model="f.notes" placeholder="notes" class="ti" rows="3"></textarea>
         <div class="ev-actions">
-          <button class="qbtn primary" @click="save">save</button>
-          <button v-if="f.id" class="qbtn" @click="del">delete</button>
-          <button class="qbtn" @click="close">cancel</button>
+          <button class="btn" @click="close">cancel</button>
+          <button v-if="f.id" class="btn danger" @click="del">delete</button>
+          <button class="btn primary" @click="save">{{ f.id ? 'save ↵' : 'create ↵' }}</button>
         </div>
       </div>
     </div>

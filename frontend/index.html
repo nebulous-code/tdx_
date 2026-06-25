@@ -47,7 +47,7 @@
         </template>
       </div>
       <div class="right">
-        <span class="qbtn" :class="{ active: store.view.kind==='calendar' }" @click="toggleCalendar" title="calendar (c)">📅 cal</span>
+        <span class="qbtn" :class="{ active: store.view.kind==='calendar' }" @click="toggleCalendar" title="calendar (C)">cal</span>
         <span class="qbtn" @click="openAccount" title="account (@)">{{ store.currentUser && store.currentUser.username }}</span>
       </div>
     </header>
@@ -340,7 +340,7 @@ const app = createApp({
       }
       if(this.promptState) return;   // the prompt input handles its own enter/esc
       // KbForm-driven modals are takeovers: each owns the keyboard while open
-      if(this.accountOpen || this.backupOpen || this.sortOpen || this.projectModal || this.saveModal || this.labelModal || this.helpOpen) return;
+      if(this.accountOpen || this.backupOpen || this.sortOpen || this.projectModal || this.saveModal || this.labelModal || this.helpOpen || this.store.eventDetailOpen) return;
       const tag=(e.target.tagName||'').toLowerCase();
       const typing = tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable;
       // ⌘K / Ctrl+K everywhere
@@ -393,9 +393,13 @@ const app = createApp({
       if(e.key==='@' && !typing){ e.preventDefault(); this.openAccount(); return; }
       // 'S' (shift+s) opens the sort-preferences popup
       if(e.key==='S' && !typing){ e.preventDefault(); this.sortOpen=true; return; }
+      // 'C' (shift+c) toggles the calendar screen
+      if(e.key==='C' && !typing){ e.preventDefault(); this.toggleCalendar(); return; }
       // '/' opens the bottom-bar search (free-text across all tasks)
       if(e.key==='/' && !typing){ e.preventDefault(); this.openSearch(); return; }
       if(typing || this.paletteOpen) return;
+      // the calendar screen is mouse-driven — don't run the task-pane keys on it
+      if(this.store.view.kind==='calendar') return;
 
       // filter builder: F collapses the panel, f focuses into it (from any window)
       if(e.key==='F'){ e.preventDefault(); this.toggleBuilder(); return; }

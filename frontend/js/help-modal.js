@@ -20,6 +20,7 @@ window.HelpModal = {
         { k:'s  /  ^',       d:'cycle sort field / flip direction (^ asc · v desc)' },
         { k:'S',             d:'sort config (reorder m · disable d · direction ^)' },
         { k:'c',             d:'show / hide completed tasks' },
+        { k:'C',             d:'open / close the calendar' },
         { k:'!',             d:'cycle priority (none → very high → none)' },
         { k:'/',             d:'search tasks (title + notes, across everything)' },
         { k:'f',             d:'focus the filter builder' },

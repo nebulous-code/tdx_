@@ -152,6 +152,10 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 /* pinned chips live in the center and wrap as needed; the username corner stays put */
 .topbar .pin-flow { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 14px; }
 .topbar .right { display: flex; gap: 14px; align-items: center; }
+/* keep the corner buttons' click target tight to the text (line-height:1 collapses
+   the inflated line box that made the hover zone sit above the words) */
+.topbar .right .qbtn { line-height: 1; padding: 4px 3px; }
+.topbar .right .qbtn.active { color: var(--amber-hi); text-shadow: var(--glow); }
 /* pinned views in the header — clickable, lowercased, live count */
 .pin-view { cursor: pointer; }
 .pin-view:hover { color: var(--amber); }
@@ -793,8 +797,9 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
    calendar (D2) — month grid + event editor modal
    ============================================================ */
 .calendar { display: flex; flex-direction: column; min-height: 0; flex: 1; overflow: hidden; }
-.cal-head { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--bg-1); }
-.cal-title { font-family: var(--crt); font-size: 20px; color: var(--amber); text-shadow: var(--glow); min-width: 160px; }
+.cal-head { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--bg-1); }
+.cal-title { font-family: var(--crt); font-size: 20px; color: var(--amber); text-shadow: var(--glow); min-width: 150px; }
+.cal-nav { font-size: 18px; line-height: 1; padding: 0 2px; }
 .cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1px solid var(--line); }
 .cal-wd { padding: 4px 6px; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; text-align: right; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr; flex: 1; min-height: 0; }
@@ -809,7 +814,9 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .cal-ev, .cal-task { font-size: 10px; line-height: 1.3; padding: 1px 4px; border-radius: var(--radius); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .cal-ev { background: var(--amber-faint); color: var(--amber-hi); border: 1px solid var(--amber-mut); }
 .cal-ev:hover { background: var(--amber-mut); }
-.cal-evtime { font-size: 9px; }
+.cal-evtime { font-size: 9px; color: var(--amber-dim); }
+/* on hover the chip bg is amber-mut, so lift the time to the chip's own text color */
+.cal-ev:hover .cal-evtime { color: var(--amber-hi); }
 .cal-task { border: 1px solid var(--line-2); color: var(--amber-dim); }
 .cal-task:hover { color: var(--amber); border-color: var(--amber-mut); }
 .cal-task.done { color: var(--amber-faint); text-decoration: line-through; }
@@ -826,4 +833,4 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .ev-body .ti { background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--radius); color: var(--amber-hi); font-family: var(--mono); font-size: 12px; padding: 5px 7px; outline: none; width: 100%; }
 .ev-body .ti:focus { border-color: var(--amber-mut); }
 .ev-body input[type=date], .ev-body input[type=time] { width: auto; color-scheme: dark; }
-.ev-actions .qbtn.primary { color: var(--amber-hi); border-color: var(--amber-mut); }
+.ev-actions { justify-content: flex-end; }   /* .btn / .btn primary / .btn danger come from the shared button styles */
