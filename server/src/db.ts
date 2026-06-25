@@ -79,6 +79,25 @@ export interface TasksTable {
   updated_at: string;
 }
 
+export interface EventsTable {
+  id: string;
+  owner_id: string;
+  creator_id: string;
+  assignee_id: string | null;
+  title: string;
+  notes: string;
+  location: string | null;
+  all_day: number;
+  start_at: string;
+  end_at: string | null;
+  recurrence: string | null;
+  reminder: string | null;
+  position: number;
+  archived: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface LabelsTable {
   id: string;
   owner_id: string;
@@ -155,6 +174,7 @@ export interface Database_ {
   sessions: SessionsTable;
   projects: ProjectsTable;
   tasks: TasksTable;
+  events: EventsTable;
   labels: LabelsTable;
   task_labels: TaskLabelsTable;
   saved_queries: SavedQueriesTable;

@@ -4,7 +4,13 @@
 // so a raw int / unparsed JSON never leaks to a client.
 
 import { Type } from '@fastify/type-provider-typebox';
-import type { LabelsTable, ProjectsTable, SavedQueriesTable, TasksTable } from './db.js';
+import type {
+  EventsTable,
+  LabelsTable,
+  ProjectsTable,
+  SavedQueriesTable,
+  TasksTable,
+} from './db.js';
 
 const Nullable = <T extends ReturnType<typeof Type.Unsafe>>(t: T) => Type.Union([t, Type.Null()]);
 const NStr = () => Nullable(Type.String());
@@ -236,5 +242,97 @@ export function rowToSavedQuery(row: SavedQueriesTable) {
     color: row.color,
     position: row.position,
     pinned: !!row.pinned,
+  };
+}
+
+// ---- events (D2) -----------------------------------------------------------
+export const EventSchema = Type.Object({
+  id: Type.String(),
+  ownerId: Type.String(),
+  creatorId: Type.String(),
+  assigneeId: NStr(),
+  title: Type.String(),
+  notes: Type.String(),
+  location: NStr(),
+  allDay: Type.Boolean(),
+  startAt: Type.String(),
+  endAt: NStr(),
+  recurrence: NStr(),
+  reminder: NStr(),
+  position: Type.Integer(),
+  createdAt: Type.String(),
+  updatedAt: Type.String(),
+});
+export const EventCreateSchema = Type.Object({
+  id: Type.Optional(Type.String()),
+  title: Type.String(),
+  notes: Type.Optional(Type.String()),
+  location: Type.Optional(NStr()),
+  allDay: Type.Optional(Type.Boolean()),
+  startAt: Type.String(),
+  endAt: Type.Optional(NStr()),
+  recurrence: Type.Optional(NStr()),
+  reminder: Type.Optional(NStr()),
+  assigneeId: Type.Optional(NStr()),
+  position: Type.Optional(Type.Integer()),
+});
+export const EventUpdateSchema = Type.Partial(
+  Type.Object({
+    title: Type.String(),
+    notes: Type.String(),
+    location: NStr(),
+    allDay: Type.Boolean(),
+    startAt: Type.String(),
+    endAt: NStr(),
+    recurrence: NStr(),
+    reminder: NStr(),
+    assigneeId: NStr(),
+    position: Type.Integer(),
+  }),
+);
+// range read: each occurrence is an event plus the concrete date it falls on
+export const EventOccurrenceSchema = Type.Composite([
+  EventSchema,
+  Type.Object({ date: Type.String() }),
+]);
+export const EventRangeQuerySchema = Type.Object({ from: Type.String(), to: Type.String() });
+export const EventRangeResponseSchema = Type.Object({
+  occurrences: Type.Array(EventOccurrenceSchema),
+});
+
+export interface EventJson {
+  id: string;
+  ownerId: string;
+  creatorId: string;
+  assigneeId: string | null;
+  title: string;
+  notes: string;
+  location: string | null;
+  allDay: boolean;
+  startAt: string;
+  endAt: string | null;
+  recurrence: string | null;
+  reminder: string | null;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+export function rowToEvent(row: EventsTable): EventJson {
+  return {
+    id: row.id,
+    ownerId: row.owner_id,
+    creatorId: row.creator_id,
+    assigneeId: row.assignee_id,
+    title: row.title,
+    notes: row.notes,
+    location: row.location,
+    allDay: !!row.all_day,
+    startAt: row.start_at,
+    endAt: row.end_at,
+    recurrence: row.recurrence,
+    reminder: row.reminder,
+    position: row.position,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }

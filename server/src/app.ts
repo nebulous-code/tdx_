@@ -18,6 +18,7 @@ import adminRoutes from './routes/admin.js';
 import authRoutes from './routes/auth.js';
 import backupRoutes from './routes/backup.js';
 import bootstrapRoutes from './routes/bootstrap.js';
+import eventRoutes from './routes/events.js';
 import labelRoutes from './routes/labels.js';
 import projectRoutes from './routes/projects.js';
 import queryRoutes from './routes/query.js';
@@ -68,6 +69,7 @@ export async function buildApp(opts: AppOpts = {}): Promise<FastifyInstance> {
   await app.register(bootstrapRoutes);
   await app.register(queryRoutes);
   await app.register(taskRoutes);
+  await app.register(eventRoutes);
   await app.register(projectRoutes);
   await app.register(labelRoutes);
   await app.register(savedQueryRoutes);

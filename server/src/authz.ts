@@ -6,7 +6,7 @@
 
 import type { DB } from './db.js';
 
-export type ResourceType = 'task' | 'project' | 'label' | 'saved_query';
+export type ResourceType = 'task' | 'project' | 'label' | 'saved_query' | 'event';
 export type Action = 'read' | 'write';
 export type AccessLevel = 'none' | 'read' | 'write';
 
@@ -49,7 +49,15 @@ export async function accessLevel(
     if (p.owner_id === user.id) return 'write';
     return projectGrantLevel(db, user.id, id);
   }
-  // label | saved_query — owner-only in D1
+  // event | label | saved_query — owner-only in D1/D2
+  if (type === 'event') {
+    const row = await db
+      .selectFrom('events')
+      .select('owner_id')
+      .where('id', '=', id)
+      .executeTakeFirst();
+    return row && row.owner_id === user.id ? 'write' : 'none';
+  }
   if (type === 'label') {
     const row = await db
       .selectFrom('labels')

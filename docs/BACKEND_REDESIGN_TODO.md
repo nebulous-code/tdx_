@@ -60,7 +60,9 @@
 **Ship** — deployment **prepped** (working tree, not deployed)
 - [x] `server/Dockerfile` (multi-stage tsc build → slim runtime; serves API + frontend); `compose.yaml` + `.github/workflows/docker.yml` point at `server/Dockerfile`; `FRONTEND_DIR`/`MIGRATIONS_DIR` env overrides for the image.
 - [x] `docs/DEPLOY.md` — ordered cutover runbook (back up → pause Watchtower → migrate prod DB with the new image → swap → deploy → verify → re-enable; rollback to legacy documented). ⚠️ Must migrate `data/tdx.db` **before** the new image goes live.
-- [ ] **Execute the cutover** (user's hands-on step, after daily-driving): follow `docs/DEPLOY.md`. Then retire `backend/` + `tools/`.
+- [x] **Cutover executed** — prod runs the TS server on the migrated UUID DB (verified: counts match, restarts=0). Backups bind-mounted to a ZFS dataset. `backend/` + `tools/` retired = follow-up.
 
-## Phase 2 — D2: notes & events (later)
-- [ ] `event` + `note` domains; `links` table + rel taxonomy; file-backed notes scanner (frontmatter UID, `scanFile`/`scanVault`, tombstones); app-shell + lazy route modules; calendar/notes UIs; CLI; MCP; RAG
+## Phase 2 — D2: notes & events (on the `feat/backend_redesign` branch; dev-only, not merged)
+Roadmap (planned in `docs/PLATFORM_ARCHITECTURE.md`): **2a** events+calendar · **2b** generic `links` + rel taxonomy · **2c** file-backed notes (app-managed fresh vault, frontmatter UID, `scanFile`/`scanVault`, tombstones, FTS) · **2d** app-shell + lazy `/tasks` `/notes` `/events` routes (rebuild the calendar as the events module; unify list/calendar onto `POST /api/query type:task,event`) · **2e** CLI / MCP / RAG.
+- [x] **2a — Events + Calendar.** `events` domain server-side (mirrors the task pattern; `migrations/002_events.sql`; CRUD + If-Match + owner-only authz; **`GET /api/events?from=&to=`** expands recurring events virtually via `Rec`, not spawned). 4 integration tests (CRUD, range expansion, concurrency, authz); 51 server tests green. Frontend `js/calendar.js` (month grid showing events **and** dated tasks, + an event-editor modal), bolted into the SPA via `store.view.kind==='calendar'` (a "📅 cal" toggle); events use the granular API directly (not the diff-sync). **Intentionally rebuilt in 2d as the proper `/events` module.**
+- [ ] 2b–2e — to be planned when reached. Vault decision: **app-managed fresh vault** (plain `.md`, frontmatter UIDs).

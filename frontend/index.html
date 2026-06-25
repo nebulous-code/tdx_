@@ -47,6 +47,7 @@
         </template>
       </div>
       <div class="right">
+        <span class="qbtn" :class="{ active: store.view.kind==='calendar' }" @click="toggleCalendar" title="calendar (c)">📅 cal</span>
         <span class="qbtn" @click="openAccount" title="account (@)">{{ store.currentUser && store.currentUser.username }}</span>
       </div>
     </header>
@@ -65,23 +66,27 @@
 
     <!-- main -->
     <main class="main">
-      <query-bar ref="qbar" :store="store" @save-query="openSave"></query-bar>
-      <div class="view-title" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:5px 12px;border-bottom:1px solid var(--line);background:var(--bg);">
-        <span class="hi" style="font-family:var(--crt);font-size:18px;line-height:1;">{{ store.view.title }}</span>
-        <span class="mut view-q" style="font-size:11px;" v-if="store.currentQuery()">› {{ store.currentQuery() }}</span>
-        <span v-if="health" class="view-health">
-          <template v-if="healthGaps.length">
-            <template v-for="(s,i) in healthGaps" :key="s.key">
-              <span v-if="i>0" class="hb-sep">│</span>
-              <span class="hb-chip" :class="['hb-'+s.key, { active: store.healthFilter===s.key }]" @click="toggleHealth(s.key)"><span class="hb-icon">{{ s.icon }}</span> {{ s.count }} {{ s.label }}</span>
+      <template v-if="store.view.kind!=='calendar'">
+        <query-bar ref="qbar" :store="store" @save-query="openSave"></query-bar>
+        <div class="view-title" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:5px 12px;border-bottom:1px solid var(--line);background:var(--bg);">
+          <span class="hi" style="font-family:var(--crt);font-size:18px;line-height:1;">{{ store.view.title }}</span>
+          <span class="mut view-q" style="font-size:11px;" v-if="store.currentQuery()">› {{ store.currentQuery() }}</span>
+          <span v-if="health" class="view-health">
+            <template v-if="healthGaps.length">
+              <template v-for="(s,i) in healthGaps" :key="s.key">
+                <span v-if="i>0" class="hb-sep">│</span>
+                <span class="hb-chip" :class="['hb-'+s.key, { active: store.healthFilter===s.key }]" @click="toggleHealth(s.key)"><span class="hb-icon">{{ s.icon }}</span> {{ s.count }} {{ s.label }}</span>
+              </template>
+              <span v-if="store.healthFilter" class="hb-clear" @click="store.healthFilter=null" title="clear filter (esc)">✕</span>
             </template>
-            <span v-if="store.healthFilter" class="hb-clear" @click="store.healthFilter=null" title="clear filter (esc)">✕</span>
-          </template>
-          <span v-else class="hb-healthy"><span class="hb-check">✓</span> healthy</span>
-        </span>
-      </div>
-      <task-list ref="list" :store="store"></task-list>
+            <span v-else class="hb-healthy"><span class="hb-check">✓</span> healthy</span>
+          </span>
+        </div>
+        <task-list ref="list" :store="store"></task-list>
+      </template>
+      <calendar-view v-else ref="cal" :store="store"></calendar-view>
       <task-detail ref="detail" :store="store"></task-detail>
+      <event-detail ref="evdetail" :store="store"></event-detail>
     </main>
 
     <!-- status bar -->
@@ -181,6 +186,7 @@
 <script src="js/tasklist.js"></script>
 <script src="js/recurrence-builder.js"></script>
 <script src="js/task-detail.js"></script>
+<script src="js/calendar.js"></script>
 <script src="js/query-bar.js"></script>
 <script src="js/command-palette.js"></script>
 <script src="js/modals.js"></script>
@@ -231,6 +237,11 @@ const app = createApp({
   },
   methods: {
     toggleHealth(key){ this.store.healthFilter = this.store.healthFilter===key ? null : key; },
+    // switch between the calendar screen and the last task view (or the top saved view)
+    toggleCalendar(){
+      if(this.store.view.kind==='calendar'){ const top=this.store.savedQueries[0]; if(top) this.store.openQueryView(top); }
+      else this.store.openCalendar();
+    },
     openPalette(){ this.paletteOpen=true; },
     // tap "READY" to reload — useful as a PWA where there's no refresh button. Flush
     // any pending debounced save first so a refresh never drops unsaved edits.
@@ -826,6 +837,28 @@ const app = createApp({
     // soft-delete hooks (callable from child components, like saveNow)
     this.store.softDeleteProject = (id) => this.mutateDelete('/api/projects/'+id);
     this.store.softDeleteTask    = (id) => this.mutateDelete('/api/tasks/'+id);
+    // ---- events (D2): the calendar talks to the granular API directly (events
+    // aren't in the snapshot diff-sync). Refetch the visible range after a mutate.
+    this.store.fetchEvents = async (from, to) => {
+      this.store.calFrom = from; this.store.calTo = to;
+      try{
+        const res = await fetch('/api/events?from='+from+'&to='+to, { credentials:'include' });
+        if(res.status===401){ this.handleAuthExpired(); return; }
+        if(res.ok){ const j = await res.json(); this.store.events.splice(0, this.store.events.length, ...j.occurrences); }
+      }catch(e){ this.store.toast('offline — events not loaded'); }
+    };
+    this.store.saveEvent = async (ev) => {
+      const body = { title:ev.title, startAt:ev.startAt, endAt:ev.endAt||null, allDay:!!ev.allDay,
+        location:ev.location||null, recurrence:ev.recurrence||null, notes:ev.notes||'', reminder:ev.reminder||null };
+      const ok = await this.apiSend(ev.id?'PUT':'POST', ev.id?('/api/events/'+ev.id):'/api/events', body);
+      if(ok && this.store.calFrom) await this.store.fetchEvents(this.store.calFrom, this.store.calTo);
+      return ok;
+    };
+    this.store.deleteEvent = async (id) => {
+      const ok = await this.apiSend('DELETE', '/api/events/'+id, null);
+      if(ok && this.store.calFrom) await this.store.fetchEvents(this.store.calFrom, this.store.calTo);
+      return ok;
+    };
     // app-styled confirm / prompt (Promise-based) usable from any component
     this.store.askConfirm=(msg)=> new Promise((res)=>{ this.confirmState={ msg, resolve:res }; });
     this.store.askChoice=(msg)=> new Promise((res)=>{ this.choiceState={ msg, resolve:res }; });   // 'cancel' | 'no' | 'yes'
@@ -900,6 +933,8 @@ app.component('task-list', window.TaskList);
 app.component('task-row', window.TaskRow);
 app.component('recurrence-builder', window.RecurrenceBuilder);
 app.component('task-detail', window.TaskDetail);
+app.component('calendar-view', window.CalendarView);
+app.component('event-detail', window.EventDetail);
 app.component('query-bar', window.QueryBar);
 app.component('command-palette', window.CommandPalette);
 app.component('project-modal', window.ProjectModal);

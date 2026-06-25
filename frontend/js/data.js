@@ -154,6 +154,11 @@
     pendingNotesFocus: false,// set by quick-add Shift+Enter → detail opens focused in notes
     toasts: [],
     currentUser: null,       // { id, username, email } once authenticated; null = logged out
+    // ---- calendar / events (D2) ----
+    events: [],              // event occurrences for the calendar's visible range
+    eventDetailOpen: false,  // the event editor drawer
+    editingEvent: null,      // the event being created/edited
+    calFrom: null, calTo: null,  // current calendar range (to refetch after a mutate)
   });
 
   // ---- derived helpers (plain functions; components call them) ----
@@ -409,6 +414,9 @@
   store.openQueryView = (sv) => {
     store.setView({ kind:'query', id:sv.id, title:sv.name, query:sv.query });
   };
+  // ---- calendar (D2) ----
+  store.openCalendar = () => store.setView({ kind:'calendar', id:'calendar', title:'Calendar', query:'' });
+  store.editEvent = (ev) => { store.editingEvent = ev; store.eventDetailOpen = true; };
   store.openProjectView = (p) => {
     store.setView({ kind:'project', id:p.id, title:p.name, query:'' });
   };
