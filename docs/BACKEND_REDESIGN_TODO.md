@@ -74,6 +74,7 @@ Roadmap (planned in `docs/PLATFORM_ARCHITECTURE.md`): **2a** events+calendar · 
 - [ ] **Enter-to-save + `↵` everywhere.** Adopted globally during 2d; this sweep catches stragglers.
 - [ ] **Full keyboard + mouse accessibility pass** across the shell + all modules (the broad version of events hjkl / notes insert-normal, which 2d does only at a high level); wire `KbForm` (`docs/KEYBOARD_FRAMEWORK.md`) into every module.
 - [ ] **Notes list/detail layout polish** — title + labels beneath (like tasks), created/edited dates on the right.
+- [ ] **Global search → unified results.** Upgrade the `/` bottom-bar search (today: tasks only, client-side) to return **tasks + events + notes together** via `POST /api/query type:task,event,note` (the unified endpoint built in 2d slice 2). The only user-facing surface that shows mixed-type results outside of `tdx-query` note embeds.
 - [ ] *(general UI/UX wishlist — add items here as they surface; the user has more.)*
 
 ### After 2e, before 2f (ordered)

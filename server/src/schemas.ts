@@ -172,8 +172,15 @@ export const QueryRequestSchema = Type.Object({
   limit: Type.Optional(Type.Integer({ minimum: 0 })),
   offset: Type.Optional(Type.Integer({ minimum: 0 })),
 });
+// a unified-query hit: a `type` discriminator + the full entity fields (task/event/note).
+// additionalProperties carries the per-type fields through serialization without a strict
+// union (the new modules read what they need per type).
+export const EntityResultSchema = Type.Object(
+  { type: Type.Union([Type.Literal('task'), Type.Literal('event'), Type.Literal('note')]) },
+  { additionalProperties: true },
+);
 export const QueryResponseSchema = Type.Object({
-  items: Type.Array(TaskSchema),
+  items: Type.Array(EntityResultSchema),
   total: Type.Integer(),
 });
 

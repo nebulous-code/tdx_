@@ -33,6 +33,16 @@ window.HelpModal = {
         { k:'detail: enter', d:'save & close · u / d duplicate / delete' },
         { k:'detail: recur', d:'i enters the recurrence builder · esc exits' },
       ]},
+      { name:'calendar', code:'amber', items:[
+        { k:'h  /  l',   d:'previous / next day (flows across the month edge)' },
+        { k:'j  /  k',   d:'next / previous week' },
+        { k:'H  /  L',   d:'prev / next month — keeps the day-of-month (“every 13th”)' },
+        { k:'J  /  K',   d:'next / prev month — keeps the grid cell (“every Monday”)' },
+        { k:'i',         d:'new event on the focused day' },
+        { k:'today',     d:'jump back to today (button)' },
+        { k:'mouse',     d:'click a day to add an event · click an event to edit it' },
+        { k:'C',         d:'open / close the calendar' },
+      ]},
       { name:'nav', code:'amber', items:[
         { k:'h  /  ←',     d:'collapse project · walk up the tree · toggle section (never leaves the nav)' },
         { k:'j  /  k',     d:'move (headers · views · projects · labels)' },

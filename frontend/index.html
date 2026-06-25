@@ -95,7 +95,7 @@
         <task-list ref="list" :store="store"></task-list>
       </template>
       <task-detail ref="detail" :store="store"></task-detail>
-      <event-detail ref="evdetail" :store="store"></event-detail>
+      <event-detail v-if="store.eventDetailOpen" :store="store" @close="store.eventDetailOpen=false"></event-detail>
     </main>
 
     <!-- status bar -->
@@ -198,8 +198,8 @@
 <script src="js/task-detail.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/deep-nav.js"></script>
-<script src="js/calendar.js"></script>
-<!-- notes.js is lazy-loaded on first visit to the notes app (see app init) -->
+<script src="js/event-editor.js"></script>
+<!-- calendar.js + notes.js are lazy-loaded on first visit to their app (see app init) -->
 <script src="js/query-bar.js"></script>
 <script src="js/command-palette.js"></script>
 <script src="js/modals.js"></script>
@@ -442,8 +442,19 @@ const app = createApp({
       // '/' opens the bottom-bar search (free-text across all tasks)
       if(e.key==='/' && !typing){ e.preventDefault(); this.openSearch(); return; }
       if(typing || this.paletteOpen) return;
-      // the calendar screen is mouse-driven — don't run the task-pane keys on it
-      if(this.store.view.kind==='calendar' || this.store.view.kind==='notes') return;
+      // calendar: a focused-day cursor. Routed through here (not a private listener) so it
+      // inherits the modal gate above — keys don't leak to the grid behind an open menu.
+      if(this.store.view.kind==='calendar'){
+        const cal=this.$refs.cal;
+        if(cal){
+          const map={ h:()=>cal.moveCursor(-1), l:()=>cal.moveCursor(1), k:()=>cal.moveCursor(-7), j:()=>cal.moveCursor(7),
+            H:()=>cal.moveMonth(-1), L:()=>cal.moveMonth(1), K:()=>cal.moveMonthKeepCell(-1), J:()=>cal.moveMonthKeepCell(1),
+            i:()=>cal.newEvent(cal.cursor) };
+          const fn=map[e.key]; if(fn){ e.preventDefault(); fn(); }
+        }
+        return;
+      }
+      if(this.store.view.kind==='notes') return;
 
       // filter builder: F collapses the panel, f focuses into it (from any window)
       if(e.key==='F'){ e.preventDefault(); this.toggleBuilder(); return; }
@@ -1075,8 +1086,9 @@ app.component('task-row', window.TaskRow);
 app.component('recurrence-builder', window.RecurrenceBuilder);
 app.component('task-detail', window.TaskDetail);
 app.component('deep-nav', window.DeepNav);
-app.component('calendar-view', window.CalendarView);
-// notes module is lazy-loaded the first time you open the notes app
+// the calendar grid + notes module lazy-load the first time you open their app
+// (the event editor stays eager — it opens from task links too)
+app.component('calendar-view', defineAsyncComponent(() => loadScript('js/calendar.js').then(() => window.CalendarView)));
 app.component('notes-view', defineAsyncComponent(() => loadScript('js/notes.js').then(() => window.NotesView)));
 app.component('event-detail', window.EventDetail);
 app.component('query-bar', window.QueryBar);

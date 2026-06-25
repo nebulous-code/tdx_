@@ -1,10 +1,11 @@
-// routes/query.ts — POST /api/query: run the ported query engine server-side
-// over the owner's live tasks. Read scope is sufficient.
+// routes/query.ts — POST /api/query: the unified entity query. `type:task,event,note`
+// selects which entity types to return (default: task); every other predicate is run by
+// the parity-locked `Q` engine across all selected types (see services/unifiedQuery.ts).
+// Read scope is sufficient.
 
 import type { FastifyInstance } from 'fastify';
-import { type Ctx, Q } from '../query.js';
-import { QueryRequestSchema, QueryResponseSchema, type TaskJson } from '../schemas.js';
-import { readBootstrap } from '../services/bootstrap.js';
+import { QueryRequestSchema, QueryResponseSchema } from '../schemas.js';
+import { runUnifiedQuery } from '../services/unifiedQuery.js';
 
 export default async function queryRoutes(app: FastifyInstance): Promise<void> {
   app.post(
@@ -20,10 +21,7 @@ export default async function queryRoutes(app: FastifyInstance): Promise<void> {
         offset?: number;
       };
       const user = request.user!;
-      const { tasks, projects, labels } = await readBootstrap(app.db, user.id);
-      const ctx = { tasks, projects, labels, weekStart: user.week_start } as unknown as Ctx;
-
-      const all = Q.run(query, ctx) as unknown as TaskJson[];
+      const all = await runUnifiedQuery(app.db, user.id, user.week_start, query);
       const total = all.length;
       const start = offset ?? 0;
       const items = limit != null ? all.slice(start, start + limit) : all.slice(start);
