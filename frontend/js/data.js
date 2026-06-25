@@ -416,6 +416,7 @@
   };
   // ---- calendar (D2) ----
   store.openCalendar = () => store.setView({ kind:'calendar', id:'calendar', title:'Calendar', query:'' });
+  store.openNotes = () => store.setView({ kind:'notes', id:'notes', title:'Notes', query:'' });
   store.editEvent = (ev) => { store.editingEvent = ev; store.eventDetailOpen = true; };
   store.openProjectView = (p) => {
     store.setView({ kind:'project', id:p.id, title:p.name, query:'' });

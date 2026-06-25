@@ -7,6 +7,7 @@ import { Type } from '@fastify/type-provider-typebox';
 import type {
   EventsTable,
   LabelsTable,
+  NotesTable,
   ProjectsTable,
   SavedQueriesTable,
   TasksTable,
@@ -340,7 +341,11 @@ export function rowToEvent(row: EventsTable): EventJson {
 // ---- links (generic entity graph) -----------------------------------------
 // Linkable types in 2b: event, task. A resolved link is always presented from
 // one entity's POV — `other` is the entity on the far side of the edge.
-const LinkTypeSchema = Type.Union([Type.Literal('event'), Type.Literal('task')]);
+const LinkTypeSchema = Type.Union([
+  Type.Literal('event'),
+  Type.Literal('task'),
+  Type.Literal('note'),
+]);
 export const EntityRefSchema = Type.Object({
   type: LinkTypeSchema,
   id: Type.String(),
@@ -361,3 +366,65 @@ export const LinkResolvedSchema = Type.Object({
 });
 export const LinkListSchema = Type.Array(LinkResolvedSchema);
 export const LinkQuerySchema = Type.Object({ type: LinkTypeSchema, id: Type.String() });
+
+// ---- notes (file-backed; DB shadows the .md) -------------------------------
+export const NoteSchema = Type.Object({
+  id: Type.String(),
+  ownerId: Type.String(),
+  path: Type.String(),
+  title: Type.String(),
+  body: Type.String(), // read from disk, not stored in the DB
+  createdAt: Type.String(),
+  updatedAt: Type.String(),
+});
+export const NoteCreateSchema = Type.Object({
+  title: Type.String(),
+  body: Type.Optional(Type.String()),
+});
+export const NoteUpdateSchema = Type.Partial(
+  Type.Object({ title: Type.String(), body: Type.String() }),
+);
+export const NoteListItemSchema = Type.Object({
+  id: Type.String(),
+  path: Type.String(),
+  title: Type.String(),
+  mtime: Type.String(),
+  updatedAt: Type.String(),
+});
+export const NoteListSchema = Type.Array(NoteListItemSchema);
+export const NoteSearchHitSchema = Type.Object({
+  id: Type.String(),
+  title: Type.String(),
+  snippet: Type.String(),
+});
+export const NoteSearchQuerySchema = Type.Object({ q: Type.String() });
+export const NoteSearchResponseSchema = Type.Array(NoteSearchHitSchema);
+export const NoteSyncQuerySchema = Type.Object({
+  mode: Type.Optional(Type.Union([Type.Literal('incremental'), Type.Literal('full')])),
+});
+export const NoteSyncResponseSchema = Type.Object({
+  scanned: Type.Integer(),
+  updated: Type.Integer(),
+  tombstoned: Type.Integer(),
+});
+
+export interface NoteJson {
+  id: string;
+  ownerId: string;
+  path: string;
+  title: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export function rowToNote(row: NotesTable, body: string): NoteJson {
+  return {
+    id: row.id,
+    ownerId: row.owner_id,
+    path: row.path,
+    title: row.title,
+    body,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}

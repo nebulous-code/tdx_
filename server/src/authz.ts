@@ -6,7 +6,7 @@
 
 import type { DB } from './db.js';
 
-export type ResourceType = 'task' | 'project' | 'label' | 'saved_query' | 'event';
+export type ResourceType = 'task' | 'project' | 'label' | 'saved_query' | 'event' | 'note';
 export type Action = 'read' | 'write';
 export type AccessLevel = 'none' | 'read' | 'write';
 
@@ -57,6 +57,14 @@ export async function accessLevel(
       .where('id', '=', id)
       .executeTakeFirst();
     return row && row.owner_id === user.id ? 'write' : 'none';
+  }
+  if (type === 'note') {
+    const row = await db
+      .selectFrom('notes')
+      .select(['owner_id', 'tombstoned'])
+      .where('id', '=', id)
+      .executeTakeFirst();
+    return row && !row.tombstoned && row.owner_id === user.id ? 'write' : 'none';
   }
   if (type === 'label') {
     const row = await db

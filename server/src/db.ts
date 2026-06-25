@@ -98,6 +98,28 @@ export interface EventsTable {
   updated_at: string;
 }
 
+export interface NotesTable {
+  id: string;
+  owner_id: string;
+  path: string;
+  title: string;
+  mtime: string;
+  frontmatter: string | null;
+  tombstoned: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NoteLinksTable {
+  id: string;
+  owner_id: string;
+  origin_note_id: string;
+  target_type: string;
+  target_id: string;
+  rel: string;
+  created_at: string;
+}
+
 export interface LinksTable {
   id: string;
   owner_id: string;
@@ -187,6 +209,8 @@ export interface Database_ {
   projects: ProjectsTable;
   tasks: TasksTable;
   events: EventsTable;
+  notes: NotesTable;
+  note_links: NoteLinksTable;
   links: LinksTable;
   labels: LabelsTable;
   task_labels: TaskLabelsTable;

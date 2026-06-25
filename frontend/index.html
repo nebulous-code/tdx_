@@ -48,6 +48,7 @@
       </div>
       <div class="right">
         <span class="qbtn" :class="{ active: store.view.kind==='calendar' }" @click="toggleCalendar" title="calendar (C)">cal</span>
+        <span class="qbtn" :class="{ active: store.view.kind==='notes' }" @click="toggleNotes" title="notes">notes</span>
         <span class="qbtn" @click="openAccount" title="account (@)">{{ store.currentUser && store.currentUser.username }}</span>
       </div>
     </header>
@@ -66,7 +67,13 @@
 
     <!-- main -->
     <main class="main">
-      <template v-if="store.view.kind!=='calendar'">
+      <template v-if="store.view.kind==='calendar'">
+        <calendar-view ref="cal" :store="store"></calendar-view>
+      </template>
+      <template v-else-if="store.view.kind==='notes'">
+        <notes-view ref="notes" :store="store"></notes-view>
+      </template>
+      <template v-else>
         <query-bar ref="qbar" :store="store" @save-query="openSave"></query-bar>
         <div class="view-title" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:5px 12px;border-bottom:1px solid var(--line);background:var(--bg);">
           <span class="hi" style="font-family:var(--crt);font-size:18px;line-height:1;">{{ store.view.title }}</span>
@@ -84,7 +91,6 @@
         </div>
         <task-list ref="list" :store="store"></task-list>
       </template>
-      <calendar-view v-else ref="cal" :store="store"></calendar-view>
       <task-detail ref="detail" :store="store"></task-detail>
       <event-detail ref="evdetail" :store="store"></event-detail>
     </main>
@@ -187,6 +193,7 @@
 <script src="js/recurrence-builder.js"></script>
 <script src="js/task-detail.js"></script>
 <script src="js/calendar.js"></script>
+<script src="js/notes.js"></script>
 <script src="js/query-bar.js"></script>
 <script src="js/command-palette.js"></script>
 <script src="js/modals.js"></script>
@@ -241,6 +248,11 @@ const app = createApp({
     toggleCalendar(){
       if(this.store.view.kind==='calendar'){ const top=this.store.savedQueries[0]; if(top) this.store.openQueryView(top); }
       else this.store.openCalendar();
+    },
+    // switch between the notes screen and the last task view (or the top saved view)
+    toggleNotes(){
+      if(this.store.view.kind==='notes'){ const top=this.store.savedQueries[0]; if(top) this.store.openQueryView(top); }
+      else this.store.openNotes();
     },
     openPalette(){ this.paletteOpen=true; },
     // tap "READY" to reload — useful as a PWA where there's no refresh button. Flush
@@ -399,7 +411,7 @@ const app = createApp({
       if(e.key==='/' && !typing){ e.preventDefault(); this.openSearch(); return; }
       if(typing || this.paletteOpen) return;
       // the calendar screen is mouse-driven — don't run the task-pane keys on it
-      if(this.store.view.kind==='calendar') return;
+      if(this.store.view.kind==='calendar' || this.store.view.kind==='notes') return;
 
       // filter builder: F collapses the panel, f focuses into it (from any window)
       if(e.key==='F'){ e.preventDefault(); this.toggleBuilder(); return; }
@@ -887,6 +899,52 @@ const app = createApp({
         else this.store.toast('event not found');
       }catch(e){ this.store.toast('offline — event not loaded'); }
     };
+    // ---- notes (D2 2c): file-backed, talked to directly like events/links.
+    this.store.fetchNotes = async () => {
+      try{
+        const r = await fetch('/api/notes', { credentials:'include' });
+        if(r.status===401){ this.handleAuthExpired(); return []; }
+        if(r.ok) return await r.json();
+      }catch(e){ this.store.toast('offline — notes not loaded'); }
+      return [];
+    };
+    this.store.getNote = async (id) => {
+      try{
+        const r = await fetch('/api/notes/'+id, { credentials:'include' });
+        if(r.status===401){ this.handleAuthExpired(); return null; }
+        if(r.ok) return await r.json();
+      }catch(e){ this.store.toast('offline — note not loaded'); }
+      return null;
+    };
+    // returns the saved note (needs the body, not just ok) — POST creates, PUT updates
+    this.store.saveNote = async (n) => {
+      const method = n.id ? 'PUT' : 'POST';
+      const url = n.id ? '/api/notes/'+n.id : '/api/notes';
+      try{
+        const r = await fetch(url, { method, credentials:'include',
+          headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ title:n.title, body:n.body }) });
+        if(r.status===401){ this.handleAuthExpired(); return null; }
+        if(r.ok) return await r.json();
+        this.store.toast('save failed ('+r.status+')');
+      }catch(e){ this.store.toast('offline — change not saved'); }
+      return null;
+    };
+    this.store.deleteNote = (id) => this.apiSend('DELETE', '/api/notes/'+id, null);
+    this.store.searchNotes = async (q) => {
+      try{
+        const r = await fetch('/api/notes/search?q='+encodeURIComponent(q), { credentials:'include' });
+        if(r.ok) return await r.json();
+      }catch(e){ /* offline — empty results */ }
+      return [];
+    };
+    this.store.syncNotes = async () => {
+      try{
+        const r = await fetch('/api/notes/sync', { method:'POST', credentials:'include' });
+        if(r.status===401){ this.handleAuthExpired(); return null; }
+        if(r.ok) return await r.json();
+      }catch(e){ this.store.toast('offline — sync failed'); }
+      return null;
+    };
     // distinct event series for the task-drawer's "link an event" picker. Events
     // aren't all in the store (only the calendar's visible range), so read a wide
     // window and dedupe recurring occurrences down to one entry per series.
@@ -981,6 +1039,7 @@ app.component('task-row', window.TaskRow);
 app.component('recurrence-builder', window.RecurrenceBuilder);
 app.component('task-detail', window.TaskDetail);
 app.component('calendar-view', window.CalendarView);
+app.component('notes-view', window.NotesView);
 app.component('event-detail', window.EventDetail);
 app.component('query-bar', window.QueryBar);
 app.component('command-palette', window.CommandPalette);

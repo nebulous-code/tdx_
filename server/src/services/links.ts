@@ -10,7 +10,7 @@ import { accessLevel } from '../authz.js';
 import type { DB } from '../db.js';
 import { newId } from '../ids.js';
 
-export type LinkType = 'event' | 'task';
+export type LinkType = 'event' | 'task' | 'note';
 export interface LinkEndpoint {
   type: LinkType;
   id: string;
@@ -30,9 +30,11 @@ export interface LinkResolved {
 // The "tiny type registry" (§3): which table backs each linkable concept. Adding
 // `note` in 2c is one more entry here + its rels below. Both backing tables carry
 // `title` + `archived`, which is all link resolution needs.
-export const LINKABLE_TYPES: readonly LinkType[] = ['event', 'task'];
-// Finite, mechanical rel set (alphabetical pair-names). 2c adds event-note, note-task.
-const ALLOWED_RELS = new Set(['event-task']);
+export const LINKABLE_TYPES: readonly LinkType[] = ['event', 'task', 'note'];
+// Finite, mechanical rel set (alphabetical pair-names) for APP-asserted links.
+// note-note is intentionally absent — same-type note↔note edges are content-only
+// (parsed from [[wikilinks]] into `note_links`), never created through the API.
+const ALLOWED_RELS = new Set(['event-task', 'event-note', 'note-task']);
 
 // Thrown when a pair has no valid rel (same-type, or a pair outside the taxonomy).
 export class InvalidLink extends Error {}
@@ -54,9 +56,23 @@ function fetchRow(
   type: LinkType,
   id: string,
 ): Promise<{ title: string; archived: number } | undefined> {
-  return type === 'event'
-    ? db.selectFrom('events').select(['title', 'archived']).where('id', '=', id).executeTakeFirst()
-    : db.selectFrom('tasks').select(['title', 'archived']).where('id', '=', id).executeTakeFirst();
+  if (type === 'event')
+    return db
+      .selectFrom('events')
+      .select(['title', 'archived'])
+      .where('id', '=', id)
+      .executeTakeFirst();
+  if (type === 'note')
+    return db
+      .selectFrom('notes')
+      .select(['title', 'tombstoned as archived']) // tombstoned is the note hide-flag
+      .where('id', '=', id)
+      .executeTakeFirst();
+  return db
+    .selectFrom('tasks')
+    .select(['title', 'archived'])
+    .where('id', '=', id)
+    .executeTakeFirst();
 }
 
 // Access-checked, archive-hiding resolution (used by getLinksFor's reconcile-on-read).
@@ -122,15 +138,28 @@ export async function deleteLink(db: DB, owner: string, id: string): Promise<voi
   await db.deleteFrom('links').where('id', '=', id).where('owner_id', '=', owner).execute();
 }
 
-// Every link touching (type,id), both directions, each resolved to its far side.
-// Skips edges whose far endpoint is archived/missing (reconcile-on-read).
+// Every link touching (type,id), each resolved to its far side. Merges TWO
+// sources: 2b's app-asserted `links` (undirected, canonical) + 2c's file-derived
+// `note_links` (directional content edges parsed from markdown). Skips edges whose
+// far endpoint is archived/tombstoned/missing (reconcile-on-read), and dedups by
+// the far endpoint so a pair linked both ways shows once.
 export async function getLinksFor(
   db: DB,
   owner: string,
   type: LinkType,
   id: string,
 ): Promise<LinkResolved[]> {
-  const rows = await db
+  // (other-type, other-id, edge-id, rel, created_at) candidates from both sources
+  const candidates: {
+    otherType: LinkType;
+    otherId: string;
+    id: string;
+    rel: string;
+    createdAt: string;
+  }[] = [];
+
+  // app links — the entity is t1 or t2; the far side is the other endpoint
+  const appRows = await db
     .selectFrom('links')
     .selectAll()
     .where('owner_id', '=', owner)
@@ -141,15 +170,62 @@ export async function getLinksFor(
       ]),
     )
     .execute();
-
-  const out: LinkResolved[] = [];
-  for (const row of rows) {
+  for (const row of appRows) {
     const isT1 = row.t1_type === type && row.t1_id === id;
-    const otherType = (isT1 ? row.t2_type : row.t1_type) as LinkType;
-    const otherId = isT1 ? row.t2_id : row.t1_id;
-    const other = await resolveEntity(db, owner, otherType, otherId);
+    candidates.push({
+      otherType: (isT1 ? row.t2_type : row.t1_type) as LinkType,
+      otherId: isT1 ? row.t2_id : row.t1_id,
+      id: row.id,
+      rel: row.rel,
+      createdAt: row.created_at,
+    });
+  }
+
+  // content links — files that point AT this entity (far side = the origin note)…
+  const inbound = await db
+    .selectFrom('note_links')
+    .selectAll()
+    .where('owner_id', '=', owner)
+    .where('target_type', '=', type)
+    .where('target_id', '=', id)
+    .execute();
+  for (const row of inbound) {
+    candidates.push({
+      otherType: 'note',
+      otherId: row.origin_note_id,
+      id: row.id,
+      rel: row.rel,
+      createdAt: row.created_at,
+    });
+  }
+  // …and, when querying a note, the things ITS file points at (far side = target)
+  if (type === 'note') {
+    const outbound = await db
+      .selectFrom('note_links')
+      .selectAll()
+      .where('owner_id', '=', owner)
+      .where('origin_note_id', '=', id)
+      .execute();
+    for (const row of outbound) {
+      candidates.push({
+        otherType: row.target_type as LinkType,
+        otherId: row.target_id,
+        id: row.id,
+        rel: row.rel,
+        createdAt: row.created_at,
+      });
+    }
+  }
+
+  const seen = new Set<string>();
+  const out: LinkResolved[] = [];
+  for (const c of candidates) {
+    const key = `${c.otherType}:${c.otherId}`;
+    if (seen.has(key)) continue;
+    const other = await resolveEntity(db, owner, c.otherType, c.otherId);
     if (!other) continue;
-    out.push({ id: row.id, rel: row.rel, other, createdAt: row.created_at });
+    seen.add(key);
+    out.push({ id: c.id, rel: c.rel, other, createdAt: c.createdAt });
   }
   out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   return out;
