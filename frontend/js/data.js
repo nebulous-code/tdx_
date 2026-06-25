@@ -146,6 +146,8 @@
     builderOpen: false,
     sidebarOpen: false,      // mobile slide-in
     navCollapsed: false,     // desktop: hide the sidebar column (toggled with n)
+    deepNavCollapsed: false, // desktop: hide the app-switcher rail (toggled with N)
+    deepNavOpen: false,      // mobile: the rail's own slide-in (the > button), independent of the app nav
     navSections: { query:false, project:false, label:false },  // collapsed sidebar sections (Tab)
     focusPane: 'list',       // 'list' | 'side' | 'filter' — which window the keyboard drives
     sideFocusId: null,       // id of the keyboard-focused sidebar item

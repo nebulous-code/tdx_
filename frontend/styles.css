@@ -40,6 +40,7 @@
 
   --sidebar-w: 256px;
   --detail-w:  380px;
+  --deepnav-w: 46px;   /* app-switcher rail; collapse sets this to 0 (D2 2d) */
 }
 
 * { box-sizing: border-box; }
@@ -108,15 +109,16 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 #app { height: 100%; }
 .shell {
   display: grid;
-  grid-template-columns: var(--sidebar-w) 1fr;
+  grid-template-columns: var(--deepnav-w) var(--sidebar-w) 1fr;
   /* bars are content-sized (auto) so they grow when the pinned chips wrap; the middle
      row takes whatever's left, shrinking the sidebar/main/detail to fit — bars are
-     always present, never overlaid. min-height on each bar keeps the unwrapped size. */
+     always present, never overlaid. min-height on each bar keeps the unwrapped size.
+     The deep-nav rail (col 1) spans the side+status rows; the topbar spans all three. */
   grid-template-rows: auto 1fr auto;
   grid-template-areas:
-    "topbar topbar"
-    "side   main"
-    "status status";
+    "topbar  topbar  topbar"
+    "deepnav side    main"
+    "deepnav status  status";
   height: 100vh;
 }
 /* nav toggled off (n): collapse the sidebar column. Desktop only — on mobile the
@@ -126,11 +128,33 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
    columns here would cram the bars into the sidebar width and leave an empty
    (black) second column. */
 @media (min-width: 861px) {
-  .shell.detail-open { grid-template-columns: var(--sidebar-w) 1fr; }
-  .shell.nav-collapsed { grid-template-columns: 0 1fr; }
-  .shell.nav-collapsed.detail-open { grid-template-columns: 0 1fr; }
+  .shell.detail-open { grid-template-columns: var(--deepnav-w) var(--sidebar-w) 1fr; }
+  .shell.nav-collapsed { grid-template-columns: var(--deepnav-w) 0 1fr; }
+  .shell.nav-collapsed.detail-open { grid-template-columns: var(--deepnav-w) 0 1fr; }
   .shell.nav-collapsed .sidebar { display: none; }
+  /* deep-nav collapsed (N): zero its column + hide the rail (desktop only — on mobile
+     the rail rides in the sidebarOpen drawer, untouched by this class) */
+  .shell.deepnav-collapsed { --deepnav-w: 0px; }
+  .shell.deepnav-collapsed .deepnav { display: none; }
 }
+
+/* ---- deep-nav app-switcher rail (D2 2d) ----------------------------- */
+.deepnav {
+  grid-area: deepnav;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 8px 0; overflow: hidden;
+  background: var(--bg-1); border-right: 1px solid var(--line);
+}
+.dn-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; padding: 0; cursor: pointer;
+  background: transparent; border: 1px solid transparent; border-radius: var(--radius);
+  color: var(--amber-dim);   /* SVGs use currentColor → follows the theme color */
+}
+.dn-btn:hover { color: var(--amber); border-color: var(--line-2); }
+.dn-btn.on { color: var(--amber-hi); border-color: var(--amber-mut); }
+.dn-btn svg { width: 20px; height: 20px; display: block; }
+.dn-btn.on svg { filter: drop-shadow(0 0 3px currentColor); }   /* the CRT glow, on the active icon */
 
 /* top status bar (boot line) */
 .topbar {
@@ -669,11 +693,21 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
   /* minmax(0,1fr): the single column can't grow to its widest no-wrap content
      (which was stretching the whole app past the screen) — it stays viewport-wide */
   .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr auto; grid-template-areas: "topbar" "main" "status"; }
+  /* deep-nav rail and the app nav are INDEPENDENT mobile drawers (the bottom > owns the
+     rail, the top ≡ owns the nav). Each is a fixed left panel that fully hides when closed
+     (left:0 + translateX(-100%)). When BOTH are open, the nav shifts right by the rail
+     width (via transform) so the rail sits to its left — same spatial order as desktop. */
+  .deepnav {
+    position: fixed; top: var(--topbar-h, 28px); bottom: var(--statusbar-h, 22px); left: 0;
+    width: var(--deepnav-w); z-index: 51; transform: translateX(-100%); transition: transform .16s ease;
+  }
+  .deepnav.open { transform: translateX(0); }
   .sidebar {
     position: fixed; top: var(--topbar-h, 28px); bottom: var(--statusbar-h, 22px); left: 0; width: 80vw; max-width: 300px;
     z-index: 50; transform: translateX(-100%); transition: transform .16s ease;
   }
   .sidebar.open { transform: translateX(0); box-shadow: 16px 0 40px rgba(0,0,0,.6); }
+  .deepnav.open ~ .sidebar.open { transform: translateX(var(--deepnav-w)); }   /* both open → nav sits right of the rail */
   .scrim.show { display: block; position: fixed; inset: var(--topbar-h, 28px) 0 var(--statusbar-h, 22px) 0; background: rgba(0,0,0,.5); z-index: 40; }
   .detail { width: 100%; }
   .mobile-only { display: inline-flex; }

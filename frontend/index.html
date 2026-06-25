@@ -26,7 +26,12 @@
 <div id="app">
   <!-- auth gate: the whole app shell only renders once authenticated -->
   <login-screen v-if="!store.currentUser" @authed="onAuthed"></login-screen>
-  <div v-else class="shell" :class="{ 'detail-open': store.detailOpen, 'nav-collapsed': store.navCollapsed }">
+  <div v-else class="shell" :class="{ 'detail-open': store.detailOpen, 'nav-collapsed': store.navCollapsed, 'deepnav-collapsed': store.deepNavCollapsed }">
+
+    <!-- deep-nav app switcher (D2 2d). Owns its own toggle: the bottom-left > on mobile,
+         N on desktop. When open alongside the app nav it sits to the nav's left. -->
+    <deep-nav :store="store"></deep-nav>
+    <div class="scrim" :class="{ show: store.deepNavOpen }" @click="store.deepNavOpen=false"></div>
 
     <!-- top bar -->
     <header class="topbar">
@@ -47,8 +52,6 @@
         </template>
       </div>
       <div class="right">
-        <span class="qbtn" :class="{ active: store.view.kind==='calendar' }" @click="toggleCalendar" title="calendar (C)">cal</span>
-        <span class="qbtn" :class="{ active: store.view.kind==='notes' }" @click="toggleNotes" title="notes">notes</span>
         <span class="qbtn" @click="openAccount" title="account (@)">{{ store.currentUser && store.currentUser.username }}</span>
       </div>
     </header>
@@ -97,6 +100,7 @@
 
     <!-- status bar -->
     <footer class="statusbar">
+      <span class="mobile-only qbtn" style="padding:1px 7px;" @click="store.deepNavOpen=!store.deepNavOpen" title="apps">&gt;</span>
       <template v-if="store.searchActive">
         <span class="search-prompt">/</span>
         <input ref="search" class="searchbar" v-model="store.searchTerm" spellcheck="false"
@@ -192,8 +196,10 @@
 <script src="js/tasklist.js"></script>
 <script src="js/recurrence-builder.js"></script>
 <script src="js/task-detail.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/deep-nav.js"></script>
 <script src="js/calendar.js"></script>
-<script src="js/notes.js"></script>
+<!-- notes.js is lazy-loaded on first visit to the notes app (see app init) -->
 <script src="js/query-bar.js"></script>
 <script src="js/command-palette.js"></script>
 <script src="js/modals.js"></script>
@@ -203,7 +209,16 @@
 <script src="js/backup-screen.js"></script>
 <script src="js/sort-modal.js"></script>
 <script>
-const { createApp } = Vue;
+const { createApp, defineAsyncComponent } = Vue;
+// Lazy-load a module script once (for async route modules); resolves on execute.
+const _scriptCache = {};
+function loadScript(src){
+  if(!_scriptCache[src]) _scriptCache[src] = new Promise((res, rej)=>{
+    const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej;
+    document.head.appendChild(s);
+  });
+  return _scriptCache[src];
+}
 // Endpoint base per store array (granular API).
 const SYNC_EP = { tasks:'/api/tasks', projects:'/api/projects', labels:'/api/labels', savedQueries:'/api/saved-queries' };
 
@@ -230,7 +245,9 @@ const app = createApp({
     // project health bar (t_867) — rendered on the view-title row in project views
     healthProject(){ return (!this.store.searchActive && this.store.view.kind==='project') ? this.store.projectById(this.store.view.id) : null; },
     health(){ const p=this.healthProject; if(!p) return null; const en=Array.isArray(p.health)?p.health:[]; return en.length ? this.store.projectHealth(p.id) : null; },
-    healthGaps(){ return this.health ? this.health.filter(s=>s.count>0) : []; }
+    healthGaps(){ return this.health ? this.health.filter(s=>s.count>0) : []; },
+    // which "app" the current view belongs to — drives the deep-nav highlight + the URL
+    currentApp(){ const k=this.store.view.kind; return k==='calendar'?'events':k==='notes'?'notes':'tasks'; }
   },
   watch: {
     // the detail drawer is its own captured pane while open; restore the list when it closes
@@ -240,7 +257,9 @@ const app = createApp({
     },
     // the shell (with its bars) only exists once logged in — (re)attach the bar-height
     // observer when it mounts so the mobile overlays track the live bar sizes
-    'store.currentUser'(u){ if(u) this.$nextTick(()=>this._observeBars && this._observeBars()); }
+    'store.currentUser'(u){ if(u) this.$nextTick(()=>this._observeBars && this._observeBars()); },
+    // keep the URL hash in sync with the active app (bookmarkable + back/forward work)
+    currentApp(app){ this.syncHash(app); }
   },
   methods: {
     toggleHealth(key){ this.store.healthFilter = this.store.healthFilter===key ? null : key; },
@@ -249,10 +268,21 @@ const app = createApp({
       if(this.store.view.kind==='calendar'){ const top=this.store.savedQueries[0]; if(top) this.store.openQueryView(top); }
       else this.store.openCalendar();
     },
-    // switch between the notes screen and the last task view (or the top saved view)
-    toggleNotes(){
-      if(this.store.view.kind==='notes'){ const top=this.store.savedQueries[0]; if(top) this.store.openQueryView(top); }
-      else this.store.openNotes();
+    // ---- app router (hash ↔ active app). app-level only: #/tasks #/events #/notes,
+    // so a refresh lands back on the same app and back/forward move between apps.
+    syncHash(app){ const want='#/'+app; if(location.hash!==want) location.hash=want; },
+    routeFromHash(){
+      const m=(location.hash||'').match(/^#\/(tasks|events|notes)/);
+      const app=m?m[1]:'tasks';
+      if(app===this.currentApp) return;                 // already there → no-op (also breaks the loop)
+      if(app==='events') this.store.openCalendar();
+      else if(app==='notes') this.store.openNotes();
+      else { const top=this.store.savedQueries[0]; if(top) this.store.openQueryView(top); }
+    },
+    // N: collapse/expand the deep-nav rail (desktop) or toggle its own slide-in (mobile)
+    toggleDeepNav(){
+      if(window.matchMedia('(max-width: 860px)').matches) this.store.deepNavOpen=!this.store.deepNavOpen;
+      else this.store.deepNavCollapsed=!this.store.deepNavCollapsed;
     },
     openPalette(){ this.paletteOpen=true; },
     // tap "READY" to reload — useful as a PWA where there's no refresh button. Flush
@@ -407,6 +437,8 @@ const app = createApp({
       if(e.key==='S' && !typing){ e.preventDefault(); this.sortOpen=true; return; }
       // 'C' (shift+c) toggles the calendar screen
       if(e.key==='C' && !typing){ e.preventDefault(); this.toggleCalendar(); return; }
+      // N toggles the deep-nav app rail (works from any app, like C); n stays the in-app nav
+      if(e.key==='N' && !typing){ e.preventDefault(); this.toggleDeepNav(); return; }
       // '/' opens the bottom-bar search (free-text across all tasks)
       if(e.key==='/' && !typing){ e.preventDefault(); this.openSearch(); return; }
       if(typing || this.paletteOpen) return;
@@ -777,6 +809,7 @@ const app = createApp({
           // user's saved-query order rather than always landing on "Today"
           const top = this.store.savedQueries[0];
           if(top) this.store.openQueryView(top);
+          this.routeFromHash();   // honor the URL on load/refresh (#/events, #/notes)
           return;
         }
         this.store.toast('load failed ('+res.status+') — read only');
@@ -990,6 +1023,9 @@ const app = createApp({
       if(sb) this._barRO.observe(sb);
       this._measureBars();
     };
+    // app router: back/forward + manual hash edits switch apps
+    this._onHash=()=>this.routeFromHash();
+    window.addEventListener('hashchange', this._onHash);
     window.addEventListener('pagehide', this._flush);
     this._onVis=()=>{ if(document.visibilityState==='hidden') this._flush(); };
     document.addEventListener('visibilitychange', this._onVis);
@@ -1038,8 +1074,10 @@ app.component('task-list', window.TaskList);
 app.component('task-row', window.TaskRow);
 app.component('recurrence-builder', window.RecurrenceBuilder);
 app.component('task-detail', window.TaskDetail);
+app.component('deep-nav', window.DeepNav);
 app.component('calendar-view', window.CalendarView);
-app.component('notes-view', window.NotesView);
+// notes module is lazy-loaded the first time you open the notes app
+app.component('notes-view', defineAsyncComponent(() => loadScript('js/notes.js').then(() => window.NotesView)));
 app.component('event-detail', window.EventDetail);
 app.component('query-bar', window.QueryBar);
 app.component('command-palette', window.CommandPalette);
