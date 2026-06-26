@@ -1,11 +1,15 @@
 name: build-image
 
-# Build the app image and push it to GHCR on every push to main.
+# Run the server test suite on every PR and on pushes to main; only after it
+# passes do we build the app image and push it to GHCR (on main pushes only).
 # The image is consumed by compose.yaml (ghcr.io/nebulous-code/tdx:latest); a
 # Watchtower instance on the host auto-pulls new :latest images (see compose.watchtower.yml).
+# Because Watchtower auto-deploys :latest, the test gate below is what stops a broken
+# commit from reaching prod.
 on:
   push:
     branches: [main]
+  pull_request: {}
   workflow_dispatch: {}
 
 permissions:
@@ -13,7 +17,39 @@ permissions:
   packages: write
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install deps
+        working-directory: server
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: server
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: server
+        run: npm run lint
+
+      # Runs the suite WITH coverage and fails if line coverage drops below the floor
+      # in tools/coverage-floor.txt (currently 95%). Same script you run locally:
+      # `tools/test_coverage.sh` (use --bump locally to ratchet the floor up).
+      - name: Test + coverage gate
+        run: bash tools/test_coverage.sh
+
   build-push:
+    needs: test
+    # only build + publish on a real push to main — never on PRs (Watchtower would deploy it)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
