@@ -68,3 +68,53 @@ This is structure, not polish. The broad UI/UX pass is **2e** by design — poli
 
 ## Open threads (one conversation at a time)
 - **Long-term link ids.** Whether to give tasks human-readable ids (`t_001`, like the old scheme) and/or use project-scoped links `[[task:<project>|<name>]]` instead of injecting a UUID. Out of scope for 2d (we ship the aliased-picker now); a future conversation.
+- 
+
+## 2e UI Cleanup 
+
+### Add app type query 
+
+need to have chips in the filter/query section so that we can set which apps we're selecting. I think that all/none selected means we search all apps of those types. And then any subset will be filtered to those subsets.
+This begs the question what's the difference between a filter and query? they use the same language/syntax right? 
+
+### App Level Nav 
+I want a specific nav menu for each app. Right now the task app nav always shows up and it only toggles on tasks. 
+All navs will have labels available.
+Events will have calendars instead of projects. 
+    - This will require us to setup calendar names. 
+    - Events should be the color of the calender's icon color (similar to how projects let you select an icon and color that should be available for calenders)
+Notes will have folders instead of projects.
+    - This should map to folders in the vault. We're going to have to handle moving stuff around in folders and what not
+Since the query builder works for all of the apps that should be built into the top section. We could present them two ways either show all the user's queries that address the app type (so if you're querying for notes and tasks with the name grocery then that appears in notes app and task app but not events app). That would be my prefered solution if possible. This should get handled by the add app type query task above
+
+### Calender day detail
+
+By pressing E (shift e) on a day we should show a detailed hour by hour view of the day in a right hand side drawer (similar to task details). You should be able to nav around this with the keyboard. Selecting a task in the day will give you the event popup.
+
+### Note Detail drawer
+
+I'd like to design a note detail drawer that let's you setup metadata for the note such as label, folder, link to task, link to event, link to note (without having to put those links in the body)
+This detail drawer would be available on the notes screen any any time you press a link to a note (rather than navigating you away to the notes app). You should be able to edit the note in a small note textbox but it will be less conveinient than just doing it in the note itself.
+
+### Note button consistency
+
+There are back and edit/render buttons in the top right hand corner of the app. There are also buttons on the bottom right. 
+We should put all these buttons at the bottom and put them in a reasonable order (back, close on left side, edit/render then delete, then save on right hand side)
+
+### Deep Nav keyboard navigation
+
+You can't get to the deep nav menu through the keyboard. YOu should be able to press h when on the app nav (assuming you're at the top of a tree) to navigate to the deep nav. Additionally pressing N (shift N) to toggle it open should place you in the deep nav where you can use jk to navigate up and down the options. Space/enter will put you in the app your cursor is over. l will put you into the app nav menu without toggling the deep nav closed (yes that means you'll have to press N twice to toggle it closed and back open again, I'm willing to live with that). 
+
+### App Nav keyboard navigation
+
+This might come for free when we setup the note nav and event nav but i'd like to be able to navigate through them with the keyboard similar to how it works with the task app nav.  
+
+### item ids
+
+Switching to uuid was the right move for the backend but it looks bad on the front end. I'd like to generate per user ids for each item that the user interacts with like projects, folders, calendars, tasks, notes, and events. they'd use p_, f_, c_, t_, n_, e_, respectively and be followed with a #### (four should be enough we can overflow to 5 if necessary (could be worth rewriting it with an extra place if the user exceeds 4 numbers, tbd)). 
+This will make it easier for the user to interact with them. BUt the user would use f_01 to access another user's folder 1. These would be scoped per user so they'd be another field in the db. Then we would put these everywhere that the uuid is being used (including note links). We need to make sure they're searchable as well like the task ids were/are searchable. We don't need to worry about handling search on uuids though so we can remove that functionality.
+
+### Note navigation
+
+I'm not totally happy with the note presentation and navigation. At a minimum I think it should have a border around it at all times (although the render border can be the lighter/dimmer color we use for the theme). 
+I would really like to have a cursor that can be moved with hjkl similar to vim along with i and a and I and A insert options. Overall the navigation is very basic and not necessarily vim/keyboard friendly. This is going to be a lot of playing around to feel what's right. But getting a border and a terminal sytle cursor in normal mode that can move around the letters would be good progress.

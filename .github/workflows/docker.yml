@@ -40,9 +40,9 @@ jobs:
         working-directory: server
         run: npm run lint
 
-      # Runs the suite WITH coverage and fails if line coverage drops below the floor
-      # in tools/coverage-floor.txt (currently 95%). Same script you run locally:
-      # `tools/test_coverage.sh` (use --bump locally to ratchet the floor up).
+      # Runs the suite WITH coverage and fails if lines/branches/functions drop below the
+      # floors in tools/coverage-floor.txt (lines 95 / branches 94 / functions 95). Same
+      # script you run locally: `tools/test_coverage.sh` (use --bump to ratchet floors up).
       - name: Test + coverage gate
         run: bash tools/test_coverage.sh
 
