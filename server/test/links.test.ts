@@ -44,6 +44,7 @@ test('link is canonical + idempotent regardless of create order', async () => {
   });
   assert.equal(a.statusCode, 201);
   assert.equal(a.json().rel, 'event-task');
+  assert.equal(a.json().source, 'app'); // API-created → app (unlinkable)
   assert.deepEqual(a.json().other, { type: 'task', id: taskId, title: 'prep agenda' });
 
   // create again from the task side (swapped) → same canonical edge, same id

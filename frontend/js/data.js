@@ -408,10 +408,23 @@
     setTimeout(()=>{ const i = store.toasts.findIndex(t=>t.id===id); if(i>=0) store.toasts.splice(i,1); }, 2200);
   };
 
-  store.setView = (v) => {
+  // an editor with unsaved work registers store.dirtyCheck (() => bool); switching
+  // views (apps, saved queries, projects…) routes through here, so this one guard
+  // catches every "navigate away and lose my edits" path.
+  store.dirtyCheck = null;
+  const applyView = (v) => {
     store.view = v; store.selectedTaskId = null; store.sidebarOpen = false;
     store.searchActive = false;   // switching views exits search (the term is kept for the next '/')
     store.healthFilter = null;    // and drops any project health-bar filter
+  };
+  store.setView = (v) => {
+    if(store.dirtyCheck && store.dirtyCheck() && store.askConfirm){
+      store.askConfirm("Discard unsaved changes? You'll lose your edits.").then((ok)=>{
+        if(ok){ store.dirtyCheck = null; applyView(v); }
+      });
+      return;
+    }
+    applyView(v);
   };
   store.openQueryView = (sv) => {
     store.setView({ kind:'query', id:sv.id, title:sv.name, query:sv.query });

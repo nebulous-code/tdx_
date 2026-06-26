@@ -199,6 +199,7 @@
 <script src="js/icons.js"></script>
 <script src="js/deep-nav.js"></script>
 <script src="js/event-editor.js"></script>
+<script src="js/linked-items.js"></script>
 <!-- calendar.js + notes.js are lazy-loaded on first visit to their app (see app init) -->
 <script src="js/query-bar.js"></script>
 <script src="js/command-palette.js"></script>
@@ -454,7 +455,9 @@ const app = createApp({
         }
         return;
       }
-      if(this.store.view.kind==='notes') return;
+      // notes: routed to the module so it inherits this handler's modal/typing gate
+      // (insert-mode typing already returned at line 444; this fires only in normal/list)
+      if(this.store.view.kind==='notes'){ if(this.$refs.notes && this.$refs.notes.onKey) this.$refs.notes.onKey(e); return; }
 
       // filter builder: F collapses the panel, f focuses into it (from any window)
       if(e.key==='F'){ e.preventDefault(); this.toggleBuilder(); return; }
@@ -989,6 +992,19 @@ const app = createApp({
       }catch(e){ this.store.toast('offline — sync failed'); }
       return null;
     };
+    // open a note from anywhere (e.g. a link chip on a task/event): switch to the
+    // notes app and tell it which note to open (NotesView consumes pendingNoteId)
+    this.store.openNote = (id) => { this.store.pendingNoteId = id; this.store.openNotes(); };
+    // unified query (tasks+events+notes) — powers tdx-query embeds in notes
+    this.store.runQuery = async (query) => {
+      try{
+        const r = await fetch('/api/query', { method:'POST', credentials:'include',
+          headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ query }) });
+        if(r.status===401){ this.handleAuthExpired(); return []; }
+        if(r.ok) return (await r.json()).items;
+      }catch(e){ /* offline — empty */ }
+      return [];
+    };
     // distinct event series for the task-drawer's "link an event" picker. Events
     // aren't all in the store (only the calendar's visible range), so read a wide
     // window and dedupe recurring occurrences down to one entry per series.
@@ -1086,10 +1102,16 @@ app.component('task-row', window.TaskRow);
 app.component('recurrence-builder', window.RecurrenceBuilder);
 app.component('task-detail', window.TaskDetail);
 app.component('deep-nav', window.DeepNav);
+app.component('linked-items', window.LinkedItems);
 // the calendar grid + notes module lazy-load the first time you open their app
 // (the event editor stays eager — it opens from task links too)
 app.component('calendar-view', defineAsyncComponent(() => loadScript('js/calendar.js').then(() => window.CalendarView)));
-app.component('notes-view', defineAsyncComponent(() => loadScript('js/notes.js').then(() => window.NotesView)));
+app.component('notes-view', defineAsyncComponent(() =>
+  loadScript('js/markdown-it.min.js')
+    .then(() => loadScript('js/markdown-it-mark.min.js'))
+    .then(() => loadScript('js/markdown-render.js'))
+    .then(() => loadScript('js/notes.js'))
+    .then(() => window.NotesView)));
 app.component('event-detail', window.EventDetail);
 app.component('query-bar', window.QueryBar);
 app.component('command-palette', window.CommandPalette);

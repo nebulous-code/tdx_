@@ -370,6 +370,7 @@ export const LinkResolvedSchema = Type.Object({
   rel: Type.String(),
   other: EntityRefSchema,
   createdAt: Type.String(),
+  source: Type.Union([Type.Literal('app'), Type.Literal('content')]),
 });
 export const LinkListSchema = Type.Array(LinkResolvedSchema);
 export const LinkQuerySchema = Type.Object({ type: LinkTypeSchema, id: Type.String() });

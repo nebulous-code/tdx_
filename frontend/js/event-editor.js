@@ -30,24 +30,10 @@ window.EventDetail = {
     };
     return {
       f,
-      links: [],
-      taskQuery: '',
       _orig: JSON.stringify(evSnapshot(f)),
       kbAutofocus: !f.id, // new event → jump into the title; editing → start in nav mode
     };
   },
-  computed: {
-    // tasks matching the picker query, not already linked, capped for the menu
-    candidates() {
-      const q = this.taskQuery.trim().toLowerCase();
-      if (!q) return [];
-      const linked = new Set(this.links.map((l) => l.other.id));
-      return this.store.tasks
-        .filter((t) => !t.archived && !linked.has(t.id) && (t.title || '').toLowerCase().includes(q))
-        .slice(0, 8);
-    },
-  },
-  mounted() { this.loadLinks(); },
   methods: {
     // ---- KbForm wiring ----
     kbRows() {
@@ -60,7 +46,6 @@ window.EventDetail = {
         { id: 'location', type: 'input', ref: 'location' },
         { id: 'recurrence', type: 'input', ref: 'recurrence' },
         { id: 'notes', type: 'input', ref: 'notes', multiline: true },
-        { id: 'linkadd', type: 'input', ref: 'linkadd', when: () => !!this.f.id },
         { id: 'cancel', type: 'button', activate: () => this.kbAttemptClose() },
         { id: 'delete', type: 'button', activate: () => this.del(), when: () => !!this.f.id },
         { id: 'save', type: 'button', activate: () => this.save() },
@@ -68,20 +53,6 @@ window.EventDetail = {
     },
     kbSubmit() { this.save(); },
     kbDirty() { return JSON.stringify(evSnapshot(this.f)) !== this._orig; },
-    // ---- links ----
-    async loadLinks() {
-      if (!this.f.id) { this.links = []; return; }
-      this.links = await this.store.fetchLinks('event', this.f.id);
-    },
-    async linkTask(t) {
-      if (await this.store.createLink({ type: 'event', id: this.f.id }, { type: 'task', id: t.id })) {
-        this.taskQuery = '';
-        await this.loadLinks();
-      }
-    },
-    async unlink(id) {
-      if (await this.store.deleteLink(id)) await this.loadLinks();
-    },
     // ---- save / delete (close on success) ----
     async save() {
       if (!this.f.title.trim()) return;
@@ -125,19 +96,7 @@ window.EventDetail = {
         <input ref="location" v-model="f.location" placeholder="location" class="ti" :class="kbCls('location')" @focus="kbFocusRow('location')">
         <input ref="recurrence" v-model="f.recurrence" placeholder="recurrence (e.g. weekly on mon,wed,fri)" class="ti" :class="kbCls('recurrence')" @focus="kbFocusRow('recurrence')">
         <textarea ref="notes" v-model="f.notes" placeholder="notes" class="ti" :class="kbCls('notes')" rows="3" @focus="kbFocusRow('notes')"></textarea>
-        <div v-if="f.id" class="ev-links">
-          <div class="ev-links-h mut">linked tasks</div>
-          <div v-for="l in links" :key="l.id" class="ev-link">
-            <span class="ev-link-title" :title="l.other.title">{{ l.other.title }}</span>
-            <span class="qbtn ev-unlink" @click="unlink(l.id)" title="unlink">✕</span>
-          </div>
-          <div class="ev-link-add">
-            <input ref="linkadd" v-model="taskQuery" placeholder="link a task…" class="ti" :class="kbCls('linkadd')" @focus="kbFocusRow('linkadd')">
-            <div v-if="candidates.length" class="ev-link-menu">
-              <div v-for="t in candidates" :key="t.id" class="ev-link-opt" @click="linkTask(t)" :title="t.title">{{ t.title }}</div>
-            </div>
-          </div>
-        </div>
+        <linked-items v-if="f.id" :store="store" type="event" :id="f.id"></linked-items>
         <div class="ev-actions">
           <button class="btn" :class="kbCls('cancel')" @click="kbAttemptClose">cancel</button>
           <button v-if="f.id" class="btn danger" :class="kbCls('delete')" @click="del">delete</button>

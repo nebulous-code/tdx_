@@ -911,3 +911,57 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .note-link-type { min-width: 42px; font-size: 10px; text-transform: uppercase; }
 .note-link-title { color: var(--amber-hi); }
 .note-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+.note-mode { color: var(--amber-hi); }
+
+/* rendered markdown (normal mode) — D2 2d slice 4 */
+.md-body { flex: 1; overflow-y: auto; min-height: 46vh; padding: 4px 2px; font-size: 13px; line-height: 1.6; color: var(--amber-dim); }
+.md-body > *:first-child { margin-top: 0; }
+.md-body h1, .md-body h2, .md-body h3, .md-body h4 { color: var(--amber-hi); font-family: var(--crt); line-height: 1.2; margin: 16px 0 8px; }
+.md-body h1 { font-size: 22px; } .md-body h2 { font-size: 18px; } .md-body h3 { font-size: 15px; } .md-body h4 { font-size: 13px; }
+.md-body p { margin: 8px 0; }
+.md-body a { color: var(--amber); text-decoration: underline; }
+.md-body a:hover { text-shadow: var(--glow); }
+.md-body ul, .md-body ol { margin: 8px 0; padding-left: 22px; }
+.md-body li { margin: 3px 0; }
+.md-body li.md-task { list-style: none; margin-left: -18px; }
+.md-check { accent-color: var(--amber); margin-right: 6px; cursor: pointer; vertical-align: -1px; }
+.md-body code { background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--radius); padding: 0 4px; font-size: 12px; color: var(--amber-hi); }
+.md-body pre { background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--radius); padding: 8px 10px; overflow-x: auto; }
+.md-body pre code { background: none; border: none; padding: 0; }
+.md-body blockquote { border-left: 2px solid var(--amber-mut); margin: 8px 0; padding: 2px 10px; color: var(--amber-mut); }
+.md-body mark { background: var(--amber-mut); color: var(--on-accent); padding: 0 2px; border-radius: 2px; }
+.md-body hr { border: none; border-top: 1px solid var(--line); margin: 14px 0; }
+.md-body table { border-collapse: collapse; margin: 8px 0; }
+.md-body th, .md-body td { border: 1px solid var(--line-2); padding: 3px 8px; }
+.tdx-query { border: 1px dashed var(--line-2); border-radius: var(--radius); padding: 6px 8px; margin: 8px 0; font-size: 12px; }
+.tdx-query-q { font-size: 11px; margin-bottom: 4px; }
+.tdx-query-empty { font-size: 11px; }
+.tdx-query-item { padding: 2px 4px; cursor: pointer; border-radius: var(--radius); font-size: 12px; color: var(--amber-dim); }
+.tdx-query-item:hover { background: var(--bg-3); color: var(--amber-hi); }
+.tdx-query-item .tq-type, .link-opt-type { min-width: 40px; display: inline-block; font-size: 10px; text-transform: uppercase; }
+.md-body .wikilink { color: var(--amber-hi); cursor: pointer; border-bottom: 1px dotted var(--amber-mut); }
+.md-body .wikilink:hover { text-shadow: var(--glow); }
+
+/* notes list keyboard cursor + the [[ link picker dropdown */
+.notes-row.on { background: var(--bg-2); box-shadow: inset 2px 0 0 var(--amber-hi); }
+.note-body-wrap { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.note-body-wrap .note-body { flex: 1; }
+.link-menu { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 6; max-height: 200px; overflow-y: auto; background: var(--bg-1); border: 1px solid var(--line-2); border-radius: var(--radius); box-shadow: 0 6px 24px rgba(0,0,0,.5); }
+.link-opt { padding: 4px 8px; font-size: 12px; color: var(--amber-dim); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.link-opt.on, .link-opt:hover { background: var(--bg-3); color: var(--amber-hi); }
+
+/* shared cross-link UI (D2 2d slice 5): chips + "+ link" picker */
+.linkbox { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 8px; }
+.linkbox-h { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.link-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.link-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 2px 6px; font-size: 12px; color: var(--amber-hi); background: var(--bg-1); border: 1px solid var(--line-2); border-radius: var(--radius); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.link-chip:hover { border-color: var(--amber-mut); }
+.link-chip .lc-type { font-size: 9px; text-transform: uppercase; }
+.link-chip .lc-x { color: var(--amber-mut); cursor: pointer; }
+.link-chip .lc-x:hover { color: var(--red); }
+.link-chip .lc-src { cursor: help; }
+.lc-empty { font-size: 11px; }
+.link-add { position: relative; }
+.link-add .ti { width: 100%; background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--radius); color: var(--amber-hi); font-family: var(--mono); font-size: 12px; padding: 4px 7px; outline: none; }
+.link-add .ti:focus { border-color: var(--amber-mut); }
+.link-add .ev-link-opt .lc-type { font-size: 9px; text-transform: uppercase; margin-right: 4px; }

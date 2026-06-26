@@ -25,6 +25,7 @@ export interface LinkResolved {
   rel: string;
   other: EntityRef;
   createdAt: string;
+  source: 'app' | 'content'; // app-asserted (unlinkable) vs derived from a note's [[wikilink]]
 }
 
 // The "tiny type registry" (§3): which table backs each linkable concept. Adding
@@ -131,7 +132,7 @@ export async function createLink(
 
   const bRow = await fetchRow(db, b.type, b.id);
   const other: EntityRef = { type: b.type, id: b.id, title: bRow?.title ?? '' };
-  return { id: row.id, rel: row.rel, other, createdAt: row.created_at };
+  return { id: row.id, rel: row.rel, other, createdAt: row.created_at, source: 'app' };
 }
 
 export async function deleteLink(db: DB, owner: string, id: string): Promise<void> {
@@ -149,13 +150,14 @@ export async function getLinksFor(
   type: LinkType,
   id: string,
 ): Promise<LinkResolved[]> {
-  // (other-type, other-id, edge-id, rel, created_at) candidates from both sources
+  // (other-type, other-id, edge-id, rel, created_at, source) candidates from both sources
   const candidates: {
     otherType: LinkType;
     otherId: string;
     id: string;
     rel: string;
     createdAt: string;
+    source: 'app' | 'content';
   }[] = [];
 
   // app links — the entity is t1 or t2; the far side is the other endpoint
@@ -178,6 +180,7 @@ export async function getLinksFor(
       id: row.id,
       rel: row.rel,
       createdAt: row.created_at,
+      source: 'app',
     });
   }
 
@@ -196,6 +199,7 @@ export async function getLinksFor(
       id: row.id,
       rel: row.rel,
       createdAt: row.created_at,
+      source: 'content',
     });
   }
   // …and, when querying a note, the things ITS file points at (far side = target)
@@ -213,6 +217,7 @@ export async function getLinksFor(
         id: row.id,
         rel: row.rel,
         createdAt: row.created_at,
+        source: 'content',
       });
     }
   }
@@ -225,7 +230,7 @@ export async function getLinksFor(
     const other = await resolveEntity(db, owner, c.otherType, c.otherId);
     if (!other) continue;
     seen.add(key);
-    out.push({ id: c.id, rel: c.rel, other, createdAt: c.createdAt });
+    out.push({ id: c.id, rel: c.rel, other, createdAt: c.createdAt, source: c.source });
   }
   out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   return out;

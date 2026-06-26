@@ -70,7 +70,7 @@ export interface ExtractedLinks {
   notes: string[]; // note-name targets (resolved to ids during reconcile)
 }
 
-const TYPED = /\[\[(task|event):([\w-]+)\]\]/g;
+const TYPED = /\[\[(task|event):([\w-]+)(?:\|[^\]\n]*)?\]\]/g; // optional |display alias
 const WIKI = /\[\[([^\]]+)\]\]/g;
 
 export function extractLinks(body: string): ExtractedLinks {

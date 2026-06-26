@@ -182,7 +182,7 @@ test('incremental sync skips unchanged files (no-op second pass)', async () => {
 
 // ---- increment 3: content-derived links (wikilinks → the graph) ------------
 
-type Link = { id: string; rel: string; other: { type: string; id: string; title: string } };
+type Link = { id: string; rel: string; source: string; other: { type: string; id: string; title: string } };
 const links = (type: string, id: string) =>
   j('GET', `/api/links?type=${type}&id=${id}`).then((r) => r.json() as Link[]);
 
@@ -199,6 +199,16 @@ test('a [[task:id]] in a note materializes a content edge on that task', async (
   const noteSide = await links('note', note.id);
   assert.ok(noteSide.some((l) => l.other.type === 'task' && l.other.id === task.id));
   assert.equal(noteSide.find((l) => l.other.id === task.id)?.rel, 'note-task');
+  // wikilink-derived → source 'content' (so the UI knows it isn't app-unlinkable)
+  assert.equal(noteSide.find((l) => l.other.id === task.id)?.source, 'content');
+});
+
+test('the aliased link form [[task:id|Display]] (from the picker) also links', async () => {
+  const task = (await j('POST', '/api/tasks', { title: 'aliased task' })).json();
+  const note = (
+    await j('POST', '/api/notes', { title: 'Aliases', body: `prep [[task:${task.id}|Aliased Task]] today` })
+  ).json();
+  assert.ok((await links('task', task.id)).some((l) => l.other.id === note.id));
 });
 
 test('a [[event:id]] in a note materializes a content edge on that event', async () => {
