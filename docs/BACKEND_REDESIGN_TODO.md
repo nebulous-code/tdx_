@@ -81,3 +81,11 @@ Roadmap (planned in `docs/PLATFORM_ARCHITECTURE.md`): **2a** events+calendar · 
 - [ ] **Per-app secondary navs (Events, Notes).** Each app gets its own `n`-toggled nav (Tasks already has the project/label sidebar; `N` toggles the cross-app deep-nav drawer built in 2d). Tags will likely live in the Notes nav, so the navs come first.
 - [ ] **Notes tags.** Reuse the `labels` system across apps, persisted in the note's frontmatter header (`labels: #l1 #l2`, alongside `id:`) so they sync file↔DB; search/filter + shown on the notes list/detail. (Model decided — see `docs/2D_APP_SHELL.md` Decided #4.)
 - [ ] **2f — CLI / MCP / RAG** — to be planned when reached.
+
+### Backlog — perf / nice-to-have
+- [ ] **Autosave change-detection cost.** The frontend autosave watcher (`index.html startSession`) stringifies *all* tasks/projects/labels/savedQueries (`JSON.stringify([...])`) on every reactive tick just to detect "did anything change?" before debouncing a save. Correct but wasteful at scale. Replace with a deep watcher (or per-collection version counters / structural diff) so we don't serialize the whole dataset each keystroke. Low priority — fine at current data sizes. (Was `docs/CODE_REVIEW_2D.md` #13, second half; the note-search half is done.)
+
+### Pre-multi-user gate (before onboarding family — see `docs/CODE_REVIEW_2D.md` Tier 2) — **DONE**
+- [x] **Per-owner notes vault** — vault now rooted at `vault/<owner_id>/` (`vaultRoot(owner)`/`abs(owner, …)`); `scanFile` upsert is owner-scoped (foreign same-id = conflict, not update); idempotent boot migration relocates legacy flat files.
+- [x] **Vault path/symlink hardening** (`abs()` containment assert + `walkMd` skips symlinks) + owner-scoped service reads (`getNote`/`getEvent`/`updateEvent`/`archiveEvent` all take + filter `owner_id`). (`docs/CODE_REVIEW_2D.md` #6, #7.)
+> Tier 1 + Tier 2 review issues are fixed; Tier 3 nits are folded into 2e. Full list in `docs/CODE_REVIEW_2D.md`. Multi-user onboarding is unblocked.

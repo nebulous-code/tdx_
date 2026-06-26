@@ -11,34 +11,49 @@
 
 import type { DB } from '../db.js';
 import { type Ctx, Q, type Task } from '../query.js';
-import { type EventJson, type NoteJson, type TaskJson, rowToEvent } from '../schemas.js';
+import { Rec } from '../rec.js';
+import { type EventJson, type TaskJson, rowToEvent } from '../schemas.js';
 import { readBootstrap } from './bootstrap.js';
-import { getNote } from './notes.js';
+import { getNote, notesForQuery } from './notes.js';
 
 export type EntityType = 'task' | 'event' | 'note';
 const ENTITY_TYPES: readonly EntityType[] = ['task', 'event', 'note'];
+
+// Thrown when a `type:`/`-type:` token isn't one of ENTITY_TYPES. The route turns
+// this into a 400 with the message so the user sees their typo (e.g. `type:even`)
+// rather than silently getting nothing — we never guess what they meant.
+export class UnknownTypeError extends Error {
+  constructor(public readonly tokens: string[]) {
+    super(
+      `unknown type ${tokens.length > 1 ? 'tokens' : 'token'}: ${tokens.join(', ')} — valid types are ${ENTITY_TYPES.join(', ')}`,
+    );
+    this.name = 'UnknownTypeError';
+  }
+}
 
 export interface QueryItem {
   type: EntityType;
   [k: string]: unknown;
 }
 
-// Map an event onto Q's Task shape: free-text covers title+notes+location; date predicates
-// (due:/status:/before:/after:) read the series start date; recurring:true sees `recurrence`.
-function eventAsTask(e: EventJson): Task {
+// Map an event occurrence onto Q's Task shape: free-text covers title+notes+location; date
+// predicates (due:/status:) read the occurrence's date; recurring:true sees `recurrence`.
+// A past occurrence reads as DONE (so status:done matches and status:overdue does not) — an
+// event that already happened is complete, not overdue like a missed task.
+function eventAsTask(e: EventJson, occDate: string, todayYMD: string): Task {
   return {
     id: e.id,
     title: e.title,
     notes: `${e.notes} ${e.location ?? ''}`.trim(),
-    due: e.startAt.slice(0, 10),
+    due: occDate,
     reminder: e.reminder,
     recurrence: e.recurrence,
-    done: false,
+    done: occDate < todayYMD,
     labels: [],
   };
 }
 // Map a note: free-text covers title (filename) + body. No due/labels yet (labels land later).
-function noteAsTask(n: NoteJson): Task {
+function noteAsTask(n: { id: string; title: string; body: string }): Task {
   return { id: n.id, title: n.title, notes: n.body, due: null, done: false, labels: [] };
 }
 
@@ -49,18 +64,31 @@ export async function runUnifiedQuery(
   queryStr: string,
 ): Promise<QueryItem[]> {
   const parsed = Q.parse(queryStr);
-  const typeTerm = parsed.terms.find((t) => t.field === 'type' && !t.neg);
-  const types: EntityType[] = typeTerm
-    ? typeTerm.value
-        .split(',')
-        .map((s) => s.trim())
-        .filter((s): s is EntityType => (ENTITY_TYPES as readonly string[]).includes(s))
-    : ['task'];
+  // Collect type selectors. `type:` includes, `-type:` excludes; every token must be a
+  // known entity type (a typo errors out — we never fall back to a default that hides it).
+  const positives = new Set<EntityType>();
+  const negatives = new Set<EntityType>();
+  const unknown: string[] = [];
+  for (const t of parsed.terms.filter((t) => t.field === 'type')) {
+    for (const tok of t.value.split(',').map((s) => s.trim())) {
+      if (!tok) continue;
+      if (!(ENTITY_TYPES as readonly string[]).includes(tok)) unknown.push(tok);
+      else (t.neg ? negatives : positives).add(tok as EntityType);
+    }
+  }
+  if (unknown.length) throw new UnknownTypeError([...new Set(unknown)]);
+  // base set: explicit includes if any; else everything (when only excluding); else the
+  // task default. Then drop excluded types.
+  const base: EntityType[] =
+    positives.size > 0 ? [...positives] : negatives.size > 0 ? [...ENTITY_TYPES] : ['task'];
+  const types = base.filter((t) => !negatives.has(t));
   // everything except the type selector is the actual predicate set, shared across types
   const pq = { terms: parsed.terms.filter((t) => t.field !== 'type'), ok: true };
 
   const { tasks, projects, labels } = await readBootstrap(db, owner);
   const ctx = { tasks, projects, labels, weekStart } as unknown as Ctx;
+  const todayD = Rec.startOfDay(new Date());
+  const todayYMD = Rec.ymd(todayD);
   const out: QueryItem[] = [];
 
   if (types.includes('task')) {
@@ -73,21 +101,52 @@ export async function runUnifiedQuery(
       .where('owner_id', '=', owner)
       .where('archived', '=', 0)
       .execute();
+    // Recurring events are matched against their OCCURRENCES (not just the series start),
+    // but only when the query carries a date predicate (`due:`) — otherwise the start-date
+    // test is enough and we avoid pointless expansion. Each series yields at most ONE row,
+    // dated to the soonest relevant occurrence (next upcoming, else most recent past), with
+    // `count` = how many occurrences match inside the window. Open-ended date predicates
+    // (e.g. due:set) are bounded to today ± 1 year.
+    const hasDuePred = pq.terms.some((t) => t.field === 'due');
+    const winFrom = Rec.addDays(todayD, -365);
+    const winTo = Rec.addDays(todayD, 365);
     for (const row of rows) {
       const ev = rowToEvent(row);
-      if (Q.evaluate(eventAsTask(ev), pq, ctx)) out.push({ type: 'event', ...ev });
+      const start = ev.startAt.slice(0, 10);
+      const rule = ev.recurrence ? Rec.parse(ev.recurrence) : null;
+
+      if (!hasDuePred || !rule || rule.type === 'invalid') {
+        // non-recurring, or nothing date-sensitive to expand → test the start date once
+        if (Q.evaluate(eventAsTask(ev, start, todayYMD), pq, ctx))
+          out.push({ type: 'event', date: start, count: 1, ...ev });
+        continue;
+      }
+      // recurring + a due: predicate → walk the window, count matches, pick the display date
+      const anchor = Rec.parseYMD(start) as Date;
+      let count = 0;
+      let nextFuture: string | null = null;
+      let lastPast: string | null = null;
+      for (let d = new Date(winFrom); d <= winTo; d = Rec.addDays(d, 1)) {
+        const dymd = Rec.ymd(d);
+        if (dymd < start) continue; // before the series began
+        if (!Rec.matches(d, rule, anchor)) continue;
+        if (!Q.evaluate(eventAsTask(ev, dymd, todayYMD), pq, ctx)) continue;
+        count++;
+        if (dymd >= todayYMD) {
+          if (nextFuture === null) nextFuture = dymd; // soonest upcoming match
+        } else {
+          lastPast = dymd; // most recent past match (fallback when nothing's upcoming)
+        }
+      }
+      if (count > 0) out.push({ type: 'event', date: nextFuture ?? lastPast, count, ...ev });
     }
   }
   if (types.includes('note')) {
-    const rows = await db
-      .selectFrom('notes')
-      .select('id')
-      .where('owner_id', '=', owner)
-      .where('tombstoned', '=', 0)
-      .execute();
-    for (const { id } of rows) {
-      const n = await getNote(db, id);
-      if (n && Q.evaluate(noteAsTask(n), pq, ctx)) out.push({ type: 'note', ...n });
+    // Evaluate against the FTS-indexed title+body (in memory); only hit disk for matches.
+    for (const row of await notesForQuery(db, owner)) {
+      if (!Q.evaluate(noteAsTask(row), pq, ctx)) continue;
+      const n = await getNote(db, owner, row.id); // full entity (path/frontmatter/timestamps)
+      if (n) out.push({ type: 'note', ...n });
     }
   }
   return out;

@@ -412,6 +412,17 @@
   // views (apps, saved queries, projects…) routes through here, so this one guard
   // catches every "navigate away and lose my edits" path.
   store.dirtyCheck = null;
+  // Modals (event/task editors) stack OVER the main editor, so they can't use the
+  // single dirtyCheck slot without clobbering it. They register here instead; the
+  // refresh/close-tab guard (beforeunload) consults dirtyCheck + every registered
+  // checker. Returns an unregister fn for the component's beforeUnmount.
+  store._dirtyCheckers = new Set();
+  store.registerDirty = (fn) => { store._dirtyCheckers.add(fn); return () => store._dirtyCheckers.delete(fn); };
+  store.isAnyDirty = () => {
+    try { if(store.dirtyCheck && store.dirtyCheck()) return true; } catch(e){ /* ignore a torn-down checker */ }
+    for(const fn of store._dirtyCheckers){ try { if(fn()) return true; } catch(e){ /* ignore */ } }
+    return false;
+  };
   const applyView = (v) => {
     store.view = v; store.selectedTaskId = null; store.sidebarOpen = false;
     store.searchActive = false;   // switching views exits search (the term is kept for the next '/')

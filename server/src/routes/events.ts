@@ -48,7 +48,7 @@ export default async function eventRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/events/:id', { preHandler: app.authenticate }, async (request, reply) => {
     const { id } = request.params as { id: string };
     if (await denyAccess(app, request, reply, 'event', id, 'read')) return;
-    const event = await getEvent(app.db, id);
+    const event = await getEvent(app.db, request.user!.id, id);
     if (!event) return reply.code(404).send({ error: 'not found' });
     return reply.header('etag', etag(event.updatedAt)).send(event);
   });
@@ -62,15 +62,18 @@ export default async function eventRoutes(app: FastifyInstance): Promise<void> {
       try {
         const event = await updateEvent(
           app.db,
+          request.user!.id,
           id,
-          request.body as Parameters<typeof updateEvent>[2],
+          request.body as Parameters<typeof updateEvent>[3],
           ifMatchOf(request),
         );
         if (!event) return reply.code(404).send({ error: 'not found' });
         return reply.header('etag', etag(event.updatedAt)).send(event);
       } catch (err) {
         if (err instanceof PreconditionFailed) {
-          return reply.code(412).send({ error: 'stale', current: await getEvent(app.db, id) });
+          return reply
+            .code(412)
+            .send({ error: 'stale', current: await getEvent(app.db, request.user!.id, id) });
         }
         throw err;
       }
@@ -80,7 +83,7 @@ export default async function eventRoutes(app: FastifyInstance): Promise<void> {
   app.delete('/api/events/:id', { preHandler: app.requireWrite }, async (request, reply) => {
     const { id } = request.params as { id: string };
     if (await denyAccess(app, request, reply, 'event', id, 'write')) return;
-    await archiveEvent(app.db, id);
+    await archiveEvent(app.db, request.user!.id, id);
     return reply.code(204).send();
   });
 }

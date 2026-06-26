@@ -27,6 +27,7 @@ import queryRoutes from './routes/query.js';
 import savedQueryRoutes from './routes/savedQueries.js';
 import taskRoutes from './routes/tasks.js';
 import tokenRoutes from './routes/tokens.js';
+import { migrateVaultLayout } from './services/notes.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -62,6 +63,7 @@ export async function buildApp(opts: AppOpts = {}): Promise<FastifyInstance> {
   await app.register(fastifySwaggerUi, { routePrefix: '/docs' });
 
   registerDb(app, handle);
+  await migrateVaultLayout(handle.db); // one-time: move legacy flat notes into per-owner subdirs
   await registerAuth(app);
   app.decorate('backups', createBackups(handle.sqlite));
 

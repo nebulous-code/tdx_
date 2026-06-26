@@ -55,7 +55,11 @@ window.NotesView = {
       this.$nextTick(() => { const el = this.$refs.titleInput; if (el) el.focus(); });
     },
     // ---- vim modes ----
-    toInsert() { this.mode = 'insert'; this.$nextTick(() => { const el = this.$refs.bodyArea; if (el) el.focus(); }); },
+    toInsert() {
+      this.mode = 'insert';
+      this.store.fetchEventList().then((e) => { this.eventList = e; }); // refresh [[ picker candidates
+      this.$nextTick(() => { const el = this.$refs.bodyArea; if (el) el.focus(); });
+    },
     // leaving insert (Esc or the toggle) WRITES the file, then renders — no manual save
     async commitAndNormal() {
       if (this.draft.title.trim() && this.dirty) { if (this.sel) await this.persist(); else await this.save(); }
@@ -135,7 +139,8 @@ window.NotesView = {
         e.preventDefault();
         const line = parseInt(cb.getAttribute('data-line'), 10);
         this.draft.body = window.MdRender.toggleCheckbox(this.draft.body, line);
-        this.persist();
+        if (this.sel) this.persist();   // existing note → quiet save
+        else this.save();               // unsaved note → create it (toasts to name it first if untitled)
         return;
       }
       const wl = e.target.closest && e.target.closest('.wikilink');

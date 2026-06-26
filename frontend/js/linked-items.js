@@ -7,7 +7,7 @@
 
 window.LinkedItems = {
   props: ['store', 'type', 'id'],
-  data() { return { links: [], query: '', events: [], notes: [], sourcesLoaded: false }; },
+  data() { return { links: [], query: '', events: [], notes: [] }; },
   computed: {
     pickTypes() { return ['task', 'event', 'note'].filter((t) => t !== this.type); },
     candidates() {
@@ -28,10 +28,9 @@ window.LinkedItems = {
   mounted() { this.load(); },
   methods: {
     async load() { this.links = this.type && this.id ? await this.store.fetchLinks(this.type, this.id) : []; },
-    // pull the picker's candidate lists only when the user actually opens the picker
-    async ensureSources() {
-      if (this.sourcesLoaded) return;
-      this.sourcesLoaded = true;
+    // pull the picker's candidate lists when the user opens the picker (refreshed each
+    // focus so newly-created events/notes show up without a reload)
+    ensureSources() {
       if (this.type !== 'event') this.store.fetchEventList().then((e) => { this.events = e; });
       if (this.type !== 'note') this.store.fetchNotes().then((n) => { this.notes = n; });
     },

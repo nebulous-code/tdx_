@@ -8,7 +8,7 @@
 // the saveable subset, for the dirty-guard (excludes the transient link picker)
 const evSnapshot = (f) => ({
   title: f.title, allDay: f.allDay, date: f.date, time: f.time,
-  endDate: f.endDate, location: f.location, recurrence: f.recurrence, notes: f.notes,
+  endDate: f.endDate, endTime: f.endTime, location: f.location, recurrence: f.recurrence, notes: f.notes,
 });
 
 window.EventDetail = {
@@ -24,6 +24,7 @@ window.EventDetail = {
       date: start.slice(0, 10),
       time: start.length > 10 ? start.slice(11, 16) : '09:00',
       endDate: e.endAt ? e.endAt.slice(0, 10) : '',
+      endTime: e.endAt && e.endAt.length > 10 ? e.endAt.slice(11, 16) : '10:00',
       location: e.location || '',
       recurrence: e.recurrence || '',
       notes: e.notes || '',
@@ -34,6 +35,11 @@ window.EventDetail = {
       kbAutofocus: !f.id, // new event → jump into the title; editing → start in nav mode
     };
   },
+  // register with the global data-loss guard so a refresh/close-tab with unsaved
+  // event edits also trips the browser's "leave site?" prompt (Esc/close already
+  // guard via kbAttemptClose). Unregister on close so a stale checker can't linger.
+  mounted() { this._unreg = this.store.registerDirty(() => this.kbDirty()); },
+  beforeUnmount() { if (this._unreg) this._unreg(); },
   methods: {
     // ---- KbForm wiring ----
     kbRows() {
@@ -43,6 +49,7 @@ window.EventDetail = {
         { id: 'date', type: 'input', ref: 'date' },
         { id: 'time', type: 'input', ref: 'time', when: () => !this.f.allDay },
         { id: 'endDate', type: 'input', ref: 'endDate' },
+        { id: 'endTime', type: 'input', ref: 'endTime', when: () => !this.f.allDay },
         { id: 'location', type: 'input', ref: 'location' },
         { id: 'recurrence', type: 'input', ref: 'recurrence' },
         { id: 'notes', type: 'input', ref: 'notes', multiline: true },
@@ -57,12 +64,15 @@ window.EventDetail = {
     async save() {
       if (!this.f.title.trim()) return;
       const startAt = this.f.allDay ? this.f.date : this.f.date + 'T' + (this.f.time || '00:00');
+      const endAt = !this.f.endDate
+        ? null
+        : this.f.allDay ? this.f.endDate : this.f.endDate + 'T' + (this.f.endTime || '00:00');
       const ok = await this.store.saveEvent({
         id: this.f.id,
         title: this.f.title.trim(),
         allDay: this.f.allDay,
         startAt,
-        endAt: this.f.endDate ? this.f.endDate : null,
+        endAt,
         location: this.f.location.trim() || null,
         recurrence: this.f.recurrence.trim() || null,
         notes: this.f.notes,
@@ -89,10 +99,15 @@ window.EventDetail = {
           all-day
         </label>
         <div class="ev-row">
+          <span class="ev-rl">starts</span>
           <input ref="date" type="date" v-model="f.date" class="ti" :class="kbCls('date')" @focus="kbFocusRow('date')">
           <input v-if="!f.allDay" ref="time" type="time" v-model="f.time" class="ti" :class="kbCls('time')" @focus="kbFocusRow('time')">
         </div>
-        <label class="ev-lbl" :class="kbCls('endDate')">ends <input ref="endDate" type="date" v-model="f.endDate" class="ti" @focus="kbFocusRow('endDate')"></label>
+        <div class="ev-row">
+          <span class="ev-rl">ends</span>
+          <input ref="endDate" type="date" v-model="f.endDate" class="ti" :class="kbCls('endDate')" @focus="kbFocusRow('endDate')">
+          <input v-if="!f.allDay" ref="endTime" type="time" v-model="f.endTime" class="ti" :class="kbCls('endTime')" @focus="kbFocusRow('endTime')">
+        </div>
         <input ref="location" v-model="f.location" placeholder="location" class="ti" :class="kbCls('location')" @focus="kbFocusRow('location')">
         <input ref="recurrence" v-model="f.recurrence" placeholder="recurrence (e.g. weekly on mon,wed,fri)" class="ti" :class="kbCls('recurrence')" @focus="kbFocusRow('recurrence')">
         <textarea ref="notes" v-model="f.notes" placeholder="notes" class="ti" :class="kbCls('notes')" rows="3" @focus="kbFocusRow('notes')"></textarea>

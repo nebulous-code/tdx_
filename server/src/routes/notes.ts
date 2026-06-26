@@ -74,7 +74,7 @@ export default async function noteRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/notes/:id', { preHandler: app.authenticate }, async (request, reply) => {
     const { id } = request.params as { id: string };
     if (await denyAccess(app, request, reply, 'note', id, 'read')) return;
-    const note = await getNote(app.db, id);
+    const note = await getNote(app.db, request.user!.id, id);
     if (!note) return reply.code(404).send({ error: 'not found' });
     return reply.send(note);
   });

@@ -62,18 +62,19 @@ window.HelpModal = {
         { k:'j  /  k',       d:'move between options in a group' },
         { k:'space  /  enter', d:'toggle the focused option' },
         { k:'i',             d:'edit the raw query text' },
+        { k:'- (negate)',    d:'prefix any term with - to exclude it (type in the raw query, i) — e.g. -status:done, -label:quick' },
         { k:'s',             d:'save the query as a smart view' },
         { k:'x',             d:'clear the query' },
         { k:'esc',           d:'back to the task list' },
       ]},
-      { name:'new task', code:'cyan', items:[
+      { name:'new task', code:'amber', items:[
         { k:'#label',     d:'add or create a label on the task (forced lowercase)' },
         { k:'!3',         d:'set priority 1–5 (very low → very high); !0 clears · other values stay text' },
         { k:'enter',      d:'add the task' },
         { k:'esc',        d:'leave the box, back to the list' },
         { k:'in a view',  d:'new tasks inherit the view’s filters: status · due · labels · project' },
       ]},
-      { name:'query syntax', code:'cyan', items:[
+      { name:'query syntax', code:'amber', items:[
         { k:'project:home',     d:'in a project (and its subprojects)' },
         { k:'label:urgent,bug', d:'has any of these labels (comma = OR)' },
         { k:'status:…',         d:'open · done · overdue · today' },
@@ -85,7 +86,7 @@ window.HelpModal = {
         { k:'recurring:true',   d:'has a recurrence rule (or false)' },
         { k:'is:…',             d:'task · subtask · recurring · open · done' },
         { k:'has:…',            d:'subtasks · label · due' },
-        { k:'-label:quick',     d:'negate any term with a leading -' },
+        { k:'- (negate)',       d:'prefix any term with - to exclude it — e.g. -status:done, -label:quick' },
         { k:'"exact phrase"',   d:'bare words / quotes match title + notes' },
       ]},
     ],

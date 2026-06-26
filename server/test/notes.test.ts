@@ -5,12 +5,14 @@ import path from 'node:path';
 import { after, before, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import { createUser } from '../src/seed.js';
+import { migrateVaultLayout } from '../src/services/notes.js';
 import { buildTestApp, createAndLogin, login } from './support/app.js';
 
 let ctx: Awaited<ReturnType<typeof buildTestApp>>;
 let app: FastifyInstance;
 let cookie: string;
 let vault: string;
+let ownerId: string;
 
 const j = (method: string, url: string, payload?: object, c = cookie) =>
   app.inject({
@@ -19,14 +21,18 @@ const j = (method: string, url: string, payload?: object, c = cookie) =>
     headers: { cookie: c },
     ...(payload ? { payload } : {}),
   });
-const onDisk = (rel: string) => fs.readFileSync(path.join(vault, rel), 'utf8');
+// files live under the owner's vault subdir now (vault/<owner_id>/…)
+const vp = (rel: string) => path.join(vault, ownerId, rel);
+const onDisk = (rel: string) => fs.readFileSync(vp(rel), 'utf8');
 
 before(async () => {
   vault = fs.mkdtempSync(path.join(os.tmpdir(), 'tdx-vault-'));
   process.env.VAULT_DIR = vault;
   ctx = await buildTestApp();
   app = ctx.app;
-  ({ cookie } = await createAndLogin(app, ctx.db));
+  const li = await createAndLogin(app, ctx.db);
+  cookie = li.cookie;
+  ownerId = li.user.id;
 });
 after(async () => {
   await app.close();
@@ -74,7 +80,7 @@ test('editing the title renames the file on disk (id preserved)', async () => {
   assert.equal(upd.json().path, 'Final.md'); // renamed on disk
   assert.equal(upd.json().body, 'v2 content');
 
-  assert.ok(!fs.existsSync(path.join(vault, 'Draft.md'))); // old filename gone
+  assert.ok(!fs.existsSync(vp('Draft.md'))); // old filename gone
   const raw = onDisk('Final.md');
   assert.match(raw, new RegExp(`id: ${note.id}`)); // same identity across the rename
   assert.match(raw, /v2 content/);
@@ -100,7 +106,7 @@ test('delete tombstones: gone from get / list / search, file removed', async () 
   assert.equal((await j('GET', `/api/notes/${note.id}`)).statusCode, 404);
   assert.ok(!(await j('GET', '/api/notes')).json().some((n: { id: string }) => n.id === note.id));
   assert.equal((await j('GET', '/api/notes/search?q=unique-token-xyz')).json().length, 0);
-  assert.ok(!fs.existsSync(path.join(vault, note.path)));
+  assert.ok(!fs.existsSync(vp(note.path)));
 });
 
 test('notes are owner-only: another user gets 404', async () => {
@@ -118,12 +124,12 @@ test('notes are owner-only: another user gets 404', async () => {
 // ---- increment 2: vault scan / external edits ------------------------------
 
 test('sync indexes an externally-created file and writes back a frontmatter id', async () => {
-  fs.writeFileSync(path.join(vault, 'external.md'), '# Hand Written\n\nfrom nvim with zebraword');
+  fs.writeFileSync(vp('external.md'), '# Hand Written\n\nfrom nvim with zebraword');
   const res = await j('POST', '/api/notes/sync');
   assert.equal(res.statusCode, 200);
   assert.ok(res.json().updated >= 1);
 
-  const raw = fs.readFileSync(path.join(vault, 'external.md'), 'utf8');
+  const raw = fs.readFileSync(vp('external.md'), 'utf8');
   assert.match(raw, /^---\nid: [0-9a-f-]{36}\n/); // id written back, rest preserved
   assert.match(raw, /from nvim with zebraword/);
 
@@ -134,7 +140,7 @@ test('sync indexes an externally-created file and writes back a frontmatter id',
 
 test('a rename on disk keeps the note id (so its links would survive)', async () => {
   const note = (await j('POST', '/api/notes', { title: 'Movable', body: 'stays put' })).json();
-  fs.renameSync(path.join(vault, note.path), path.join(vault, 'moved-note.md'));
+  fs.renameSync(vp(note.path), vp('moved-note.md'));
   assert.equal((await j('POST', '/api/notes/sync')).statusCode, 200);
 
   const got = await j('GET', `/api/notes/${note.id}`); // same id
@@ -147,7 +153,7 @@ test('an external edit is reindexed (FTS reflects the new content)', async () =>
   const note = (
     await j('POST', '/api/notes', { title: 'Editable', body: 'original alphaword' })
   ).json();
-  const p = path.join(vault, note.path);
+  const p = vp(note.path);
   fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('original alphaword', 'updated betaword'));
   await j('POST', '/api/notes/sync');
 
@@ -166,7 +172,7 @@ test('an external edit is reindexed (FTS reflects the new content)', async () =>
 
 test('removing a file on disk + sync tombstones the note', async () => {
   const note = (await j('POST', '/api/notes', { title: 'Doomed', body: 'goodbye' })).json();
-  fs.unlinkSync(path.join(vault, note.path));
+  fs.unlinkSync(vp(note.path));
   const sum = await j('POST', '/api/notes/sync');
   assert.ok(sum.json().tombstoned >= 1);
   assert.equal((await j('GET', `/api/notes/${note.id}`)).statusCode, 404);
@@ -182,7 +188,12 @@ test('incremental sync skips unchanged files (no-op second pass)', async () => {
 
 // ---- increment 3: content-derived links (wikilinks → the graph) ------------
 
-type Link = { id: string; rel: string; source: string; other: { type: string; id: string; title: string } };
+type Link = {
+  id: string;
+  rel: string;
+  source: string;
+  other: { type: string; id: string; title: string };
+};
 const links = (type: string, id: string) =>
   j('GET', `/api/links?type=${type}&id=${id}`).then((r) => r.json() as Link[]);
 
@@ -206,7 +217,10 @@ test('a [[task:id]] in a note materializes a content edge on that task', async (
 test('the aliased link form [[task:id|Display]] (from the picker) also links', async () => {
   const task = (await j('POST', '/api/tasks', { title: 'aliased task' })).json();
   const note = (
-    await j('POST', '/api/notes', { title: 'Aliases', body: `prep [[task:${task.id}|Aliased Task]] today` })
+    await j('POST', '/api/notes', {
+      title: 'Aliases',
+      body: `prep [[task:${task.id}|Aliased Task]] today`,
+    })
   ).json();
   assert.ok((await links('task', task.id)).some((l) => l.other.id === note.id));
 });
@@ -263,4 +277,63 @@ test('the API can still app-link a note to a task (note-task rel)', async () => 
   assert.equal(res.statusCode, 201);
   assert.equal(res.json().rel, 'note-task');
   assert.ok((await links('note', note.id)).some((l) => l.other.id === task.id));
+});
+
+// ---- multi-tenant: per-owner vault isolation (Tier 2) ----------------------
+
+test('vault is per-owner: same title for two users does not collide or leak', async () => {
+  const carol = await createUser(
+    ctx.db,
+    { username: 'carol', email: 'carol@x.com', password: 'C@rol1234' },
+    { isAdmin: false },
+  );
+  const carolCookie = await login(app, 'carol', 'C@rol1234');
+
+  const aliceNote = (
+    await j('POST', '/api/notes', { title: 'Shared Title', body: 'alice' })
+  ).json();
+  const carolNote = (
+    await j('POST', '/api/notes', { title: 'Shared Title', body: 'carol' }, carolCookie)
+  ).json();
+
+  // same filename, but separate owner subdirs → no collision suffix, no overwrite
+  assert.equal(aliceNote.path, 'Shared Title.md');
+  assert.equal(carolNote.path, 'Shared Title.md');
+  assert.ok(fs.existsSync(path.join(vault, ownerId, 'Shared Title.md')));
+  assert.ok(fs.existsSync(path.join(vault, carol.id, 'Shared Title.md')));
+
+  // carol can't see or read alice's note; her sync doesn't touch it
+  const carolList = (await j('GET', '/api/notes', undefined, carolCookie)).json();
+  assert.ok(!carolList.some((n: { id: string }) => n.id === aliceNote.id));
+  assert.equal(
+    (await j('GET', `/api/notes/${aliceNote.id}`, undefined, carolCookie)).statusCode,
+    404,
+  );
+  await j('POST', '/api/notes/sync', undefined, carolCookie);
+  assert.equal((await j('GET', `/api/notes/${aliceNote.id}`)).statusCode, 200); // alice's note intact
+});
+
+test('migrateVaultLayout moves a legacy flat file into the owner subdir', async () => {
+  const id = '00000000-0000-0000-0000-0000000000aa';
+  const now = new Date().toISOString();
+  await ctx.db
+    .insertInto('notes')
+    .values({
+      id,
+      owner_id: ownerId,
+      path: 'Legacy.md',
+      title: 'Legacy',
+      mtime: now,
+      frontmatter: null,
+      tombstoned: 0,
+      created_at: now,
+      updated_at: now,
+    })
+    .execute();
+  fs.writeFileSync(path.join(vault, 'Legacy.md'), `---\nid: ${id}\n---\n\nlegacy body`); // flat (pre-migration)
+
+  const moved = await migrateVaultLayout(ctx.db);
+  assert.ok(moved >= 1);
+  assert.ok(!fs.existsSync(path.join(vault, 'Legacy.md'))); // moved out of the flat base
+  assert.ok(fs.existsSync(path.join(vault, ownerId, 'Legacy.md'))); // into the owner subdir
 });

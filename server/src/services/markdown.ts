@@ -70,19 +70,17 @@ export interface ExtractedLinks {
   notes: string[]; // note-name targets (resolved to ids during reconcile)
 }
 
-const TYPED = /\[\[(task|event):([\w-]+)(?:\|[^\]\n]*)?\]\]/g; // optional |display alias
-const WIKI = /\[\[([^\]]+)\]\]/g;
-
 export function extractLinks(body: string): ExtractedLinks {
+  // Construct locally so the stateful `/g` `lastIndex` can never leak between calls.
+  const typed = /\[\[(task|event):([\w-]+)(?:\|[^\]\n]*)?\]\]/g; // optional |display alias
+  const wiki = /\[\[([^\]]+)\]\]/g;
   const tasks = new Set<string>();
   const events = new Set<string>();
   const notes = new Set<string>();
-  TYPED.lastIndex = 0;
-  for (let m = TYPED.exec(body); m; m = TYPED.exec(body)) {
+  for (let m = typed.exec(body); m; m = typed.exec(body)) {
     (m[1] === 'task' ? tasks : events).add(m[2]);
   }
-  WIKI.lastIndex = 0;
-  for (let m = WIKI.exec(body); m; m = WIKI.exec(body)) {
+  for (let m = wiki.exec(body); m; m = wiki.exec(body)) {
     const inner = m[1].trim();
     if (/^(task|event):/.test(inner)) continue; // handled above as a typed link
     const name = inner.split('|')[0].split('#')[0].trim(); // strip [[Name|alias]] / [[Name#heading]]

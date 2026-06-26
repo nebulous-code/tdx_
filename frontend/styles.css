@@ -866,6 +866,8 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .ev-head .grow { flex: 1; }
 .ev-body { display: flex; flex-direction: column; gap: 8px; padding: 12px; }
 .ev-row { display: flex; gap: 6px; align-items: center; }
+/* fixed-width row label so the date inputs line up despite "starts"/"ends" differing in width */
+.ev-rl { flex: 0 0 46px; font-size: 11px; color: var(--amber-mut); }
 .ev-lbl { font-size: 11px; color: var(--amber-mut); display: flex; align-items: center; gap: 6px; }
 .ev-actions { display: flex; gap: 8px; margin-top: 4px; }
 .ev-body .ti { background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--radius); color: var(--amber-hi); font-family: var(--mono); font-size: 12px; padding: 5px 7px; outline: none; width: 100%; }

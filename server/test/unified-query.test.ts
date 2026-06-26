@@ -88,3 +88,44 @@ test('task-only predicates exclude events/notes (project:/label:)', async () => 
   const res = await query('type:task,event,note project:nonexistent');
   assert.equal(res.items.length, 0);
 });
+
+test('-type: excludes that type', async () => {
+  // negating a type drops it from the result set
+  const noNotes = await query('type:task,event,note -type:note');
+  assert.ok(noNotes.items.every((i: Item) => i.type !== 'note'));
+  assert.ok(noNotes.items.some((i: Item) => i.type === 'task'));
+  // exclude-only (no positive type:) defaults to "everything but the excluded type"
+  const allButNote = await query('-type:note');
+  const kinds = new Set(allButNote.items.map((i: Item) => i.type));
+  assert.ok(kinds.has('task') && kinds.has('event') && !kinds.has('note'));
+});
+
+test('unknown type token errors (400) instead of silently hiding it', async () => {
+  const r = await j('POST', '/api/query', { query: 'type:even' });
+  assert.equal(r.statusCode, 400);
+  assert.match(r.json().error, /unknown type token: even/);
+});
+
+test('a past event reads as done (complete), not overdue', async () => {
+  await j('POST', '/api/events', { title: 'past standup', startAt: '2020-01-01' });
+  const done = await query('type:event status:done');
+  assert.ok(done.items.some((i: Item) => i.title === 'past standup'));
+  const overdue = await query('type:event status:overdue');
+  assert.ok(!overdue.items.some((i: Item) => i.title === 'past standup'));
+});
+
+test('recurring event matches a date predicate via its occurrences, deduped with a count', async () => {
+  // a daily series that started in the past — it has an occurrence every day, so it falls in
+  // any 7-day window even though its START date does not.
+  await j('POST', '/api/events', {
+    title: 'daily ritual',
+    startAt: '2026-06-01',
+    recurrence: 'daily',
+  });
+  const wk = await query('type:event due:week');
+  const ritual = wk.items.filter((i: Item) => i.title === 'daily ritual');
+  assert.equal(ritual.length, 1); // ONE row per series, not one per occurrence
+  // due:week = today..today+7 inclusive → 8 daily occurrences
+  assert.equal((ritual[0] as { count: number }).count, 8);
+  assert.ok((ritual[0] as { date: string }).date); // dated to the soonest matching occurrence
+});

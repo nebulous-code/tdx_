@@ -11,7 +11,7 @@ import { sql } from 'kysely';
 import type { DB } from '../db.js';
 import { newId } from '../ids.js';
 import { type NoteJson, rowToNote } from '../schemas.js';
-import { abs, vaultRoot } from '../vault.js';
+import { abs, vaultBase, vaultRoot } from '../vault.js';
 import {
   type ExtractedLinks,
   extractLinks,
@@ -48,7 +48,7 @@ function ftsQuery(q: string): string {
 // file is missing (scanVault turns that into a tombstone). Assigns + writes back
 // a frontmatter id when the file lacks one.
 export async function scanFile(db: DB, owner: string, relPath: string): Promise<NoteJson | null> {
-  const absPath = abs(relPath);
+  const absPath = abs(owner, relPath);
   let raw: string;
   try {
     raw = fs.readFileSync(absPath, 'utf8');
@@ -66,16 +66,19 @@ export async function scanFile(db: DB, owner: string, relPath: string): Promise<
   const now = new Date().toISOString();
   const fmJson = Object.keys(parsed.frontmatter).length ? JSON.stringify(parsed.frontmatter) : null;
 
+  // owner-scoped lookup: a foreign note with the same frontmatter id is NOT ours to update
   const existing = await db
     .selectFrom('notes')
     .select('id')
     .where('id', '=', id)
+    .where('owner_id', '=', owner)
     .executeTakeFirst();
   if (existing) {
     await db
       .updateTable('notes')
       .set({ path: relPath, title, mtime, frontmatter: fmJson, tombstoned: 0, updated_at: now })
       .where('id', '=', id)
+      .where('owner_id', '=', owner)
       .execute();
   } else {
     await db
@@ -95,7 +98,7 @@ export async function scanFile(db: DB, owner: string, relPath: string): Promise<
   }
   await refreshFts(db, id, owner, title, parsed.body);
   await reconcileFileLinks(db, owner, id, extractLinks(parsed.body));
-  return getNote(db, id);
+  return getNote(db, owner, id);
 }
 
 // ---- file-derived links (content edges → note_links) -----------------------
@@ -189,6 +192,7 @@ function walkMd(root: string): string[] {
   const walk = (dir: string) => {
     for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
       if (ent.name.startsWith('.')) continue; // skip dotfiles/dirs (e.g. .obsidian)
+      if (ent.isSymbolicLink()) continue; // don't follow symlinks out of the vault
       const full = path.join(dir, ent.name);
       if (ent.isDirectory()) walk(full);
       else if (ent.isFile() && ent.name.endsWith('.md')) out.push(path.relative(root, full));
@@ -208,7 +212,7 @@ export async function scanVault(
   owner: string,
   mode: 'incremental' | 'full' = 'incremental',
 ): Promise<ScanSummary> {
-  const root = vaultRoot();
+  const root = vaultRoot(owner);
   const files = walkMd(root);
   const live = await db
     .selectFrom('notes')
@@ -222,7 +226,8 @@ export async function scanVault(
   for (const relPath of files) {
     if (mode === 'incremental') {
       const knownMtime = byPath.get(relPath);
-      if (knownMtime && fs.statSync(abs(relPath)).mtime.toISOString() === knownMtime) continue;
+      if (knownMtime && fs.statSync(abs(owner, relPath)).mtime.toISOString() === knownMtime)
+        continue;
     }
     await scanFile(db, owner, relPath); // resolves moves (upsert by frontmatter id)
     updated++;
@@ -237,7 +242,7 @@ export async function scanVault(
     .where('tombstoned', '=', 0)
     .execute();
   for (const r of fresh) {
-    if (fs.existsSync(abs(r.path))) continue;
+    if (fs.existsSync(abs(owner, r.path))) continue;
     await db
       .updateTable('notes')
       .set({ tombstoned: 1, updated_at: new Date().toISOString() })
@@ -269,10 +274,10 @@ function sanitizeName(title: string): string {
 }
 // First free `Name.md`, `Name 2.md`, … (Obsidian-style). `keep` is the note's own
 // current path, which never counts as a collision (a no-op rename stays put).
-function uniqueFile(name: string, keep?: string): string {
+function uniqueFile(owner: string, name: string, keep?: string): string {
   for (let n = 1; ; n++) {
     const candidate = n === 1 ? `${name}.md` : `${name} ${n}.md`;
-    if (candidate === keep || !fs.existsSync(abs(candidate))) return candidate;
+    if (candidate === keep || !fs.existsSync(abs(owner, candidate))) return candidate;
   }
 }
 
@@ -281,10 +286,10 @@ export async function createNote(
   owner: string,
   input: { title: string; body?: string },
 ): Promise<NoteJson> {
-  vaultRoot(); // ensure the dir exists
+  vaultRoot(owner); // ensure the owner's dir exists
   const id = newId();
-  const relPath = uniqueFile(sanitizeName(input.title));
-  fs.writeFileSync(abs(relPath), serializeNote({ id, body: input.body ?? '' }));
+  const relPath = uniqueFile(owner, sanitizeName(input.title));
+  fs.writeFileSync(abs(owner, relPath), serializeNote({ id, body: input.body ?? '' }));
   return (await scanFile(db, owner, relPath))!;
 }
 
@@ -304,14 +309,16 @@ export async function updateNote(
     .executeTakeFirst();
   if (!row || row.tombstoned) return null;
   const oldRel = row.path;
-  const parsed = parseNote(fs.readFileSync(abs(oldRel), 'utf8'));
+  const parsed = parseNote(fs.readFileSync(abs(owner, oldRel), 'utf8'));
   const body = patch.body ?? parsed.body;
   const wantName =
     patch.title !== undefined ? sanitizeName(patch.title) : path.basename(oldRel, '.md');
-  const newRel = uniqueFile(wantName, oldRel);
+  const newRel = uniqueFile(owner, wantName, oldRel);
   const content = serializeNote({ id, body, frontmatter: parsed.frontmatter });
-  fs.writeFileSync(abs(newRel), content);
-  if (newRel !== oldRel) fs.unlinkSync(abs(oldRel)); // rename = write-new + remove-old
+  // Write content in place, then atomically rename — so a crash never leaves two
+  // files sharing one frontmatter id (the old write-new + unlink-old window).
+  fs.writeFileSync(abs(owner, oldRel), content);
+  if (newRel !== oldRel) fs.renameSync(abs(owner, oldRel), abs(owner, newRel));
   return scanFile(db, owner, newRel);
 }
 
@@ -324,7 +331,7 @@ export async function deleteNote(db: DB, owner: string, id: string): Promise<boo
     .executeTakeFirst();
   if (!row) return false;
   try {
-    fs.unlinkSync(abs(row.path));
+    fs.unlinkSync(abs(owner, row.path));
   } catch {
     /* already gone — tombstone anyway */
   }
@@ -342,13 +349,46 @@ export async function deleteNote(db: DB, owner: string, id: string): Promise<boo
   return true;
 }
 
+// One-time, idempotent migration to the per-owner vault layout: move any legacy
+// flat file (vault/<path>) into its owner's subdir (vault/<owner_id>/<path>), based
+// on the DB rows. Re-runs are no-ops once files live under their owner. Run at boot.
+export async function migrateVaultLayout(db: DB): Promise<number> {
+  const base = vaultBase();
+  const rows = await db
+    .selectFrom('notes')
+    .select(['owner_id', 'path'])
+    .where('tombstoned', '=', 0)
+    .execute();
+  let moved = 0;
+  for (const r of rows) {
+    const flat = path.join(base, r.path); // legacy location
+    const dest = path.join(base, r.owner_id, r.path);
+    if (flat === dest) continue;
+    try {
+      if (fs.existsSync(flat) && !fs.existsSync(dest)) {
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.renameSync(flat, dest);
+        moved++;
+      }
+    } catch {
+      /* skip a file we can't move; a later scan tombstones it if truly gone */
+    }
+  }
+  return moved;
+}
+
 // ---- reads -----------------------------------------------------------------
-export async function getNote(db: DB, id: string): Promise<NoteJson | null> {
-  const row = await db.selectFrom('notes').selectAll().where('id', '=', id).executeTakeFirst();
+export async function getNote(db: DB, owner: string, id: string): Promise<NoteJson | null> {
+  const row = await db
+    .selectFrom('notes')
+    .selectAll()
+    .where('id', '=', id)
+    .where('owner_id', '=', owner)
+    .executeTakeFirst();
   if (!row || row.tombstoned) return null;
   let body = '';
   try {
-    body = parseNote(fs.readFileSync(abs(row.path), 'utf8')).body;
+    body = parseNote(fs.readFileSync(abs(owner, row.path), 'utf8')).body;
   } catch {
     /* file vanished out from under us — return empty body */
   }
@@ -384,6 +424,20 @@ export interface NoteSearchHit {
   title: string;
   snippet: string;
 }
+// Every live note's title + body straight from the FTS index — no per-file disk reads.
+// The unified query uses this to evaluate predicates in memory (the body is already
+// duplicated in notes_fts), so only the notes that actually MATCH get read from disk to
+// build the full entity. (Evaluation sees the indexed body; a not-yet-synced external
+// edit reconciles on the next sync, same as the rest of the index.)
+export async function notesForQuery(
+  db: DB,
+  owner: string,
+): Promise<{ id: string; title: string; body: string }[]> {
+  const res = await sql<{ id: string; title: string; body: string }>`
+    SELECT note_id AS id, title, body FROM notes_fts WHERE owner_id = ${owner}`.execute(db);
+  return res.rows;
+}
+
 export async function searchNotes(db: DB, owner: string, q: string): Promise<NoteSearchHit[]> {
   const match = ftsQuery(q);
   if (!match) return [];

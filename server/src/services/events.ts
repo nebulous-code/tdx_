@@ -38,8 +38,13 @@ export interface EventOccurrence extends EventJson {
   date: string; // the concrete YYYY-MM-DD this occurrence falls on
 }
 
-export async function getEvent(db: DB, id: string): Promise<EventJson | null> {
-  const row = await db.selectFrom('events').selectAll().where('id', '=', id).executeTakeFirst();
+export async function getEvent(db: DB, owner: string, id: string): Promise<EventJson | null> {
+  const row = await db
+    .selectFrom('events')
+    .selectAll()
+    .where('id', '=', id)
+    .where('owner_id', '=', owner)
+    .executeTakeFirst();
   return row ? rowToEvent(row) : null;
 }
 
@@ -76,17 +81,23 @@ export async function createEvent(
       updated_at: now,
     })
     .execute();
-  return (await getEvent(db, id))!;
+  return (await getEvent(db, owner, id))!;
 }
 
 export async function updateEvent(
   db: DB,
+  owner: string,
   id: string,
   patch: EventPatch,
   ifMatch?: string,
 ): Promise<EventJson | null> {
   return db.transaction().execute(async (trx) => {
-    const row = await trx.selectFrom('events').selectAll().where('id', '=', id).executeTakeFirst();
+    const row = await trx
+      .selectFrom('events')
+      .selectAll()
+      .where('id', '=', id)
+      .where('owner_id', '=', owner)
+      .executeTakeFirst();
     if (!row) return null;
     checkIfMatch(ifMatch, row.updated_at);
     const set: Updateable<EventsTable> = { updated_at: new Date().toISOString() };
@@ -100,7 +111,12 @@ export async function updateEvent(
     if (patch.reminder !== undefined) set.reminder = patch.reminder;
     if (patch.assigneeId !== undefined) set.assignee_id = patch.assigneeId;
     if (patch.position !== undefined) set.position = patch.position;
-    await trx.updateTable('events').set(set).where('id', '=', id).execute();
+    await trx
+      .updateTable('events')
+      .set(set)
+      .where('id', '=', id)
+      .where('owner_id', '=', owner)
+      .execute();
     const fresh = await trx
       .selectFrom('events')
       .selectAll()
@@ -110,11 +126,12 @@ export async function updateEvent(
   });
 }
 
-export async function archiveEvent(db: DB, id: string): Promise<void> {
+export async function archiveEvent(db: DB, owner: string, id: string): Promise<void> {
   await db
     .updateTable('events')
     .set({ archived: 1, updated_at: new Date().toISOString() })
     .where('id', '=', id)
+    .where('owner_id', '=', owner)
     .execute();
 }
 

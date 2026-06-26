@@ -215,7 +215,9 @@ const { createApp, defineAsyncComponent } = Vue;
 const _scriptCache = {};
 function loadScript(src){
   if(!_scriptCache[src]) _scriptCache[src] = new Promise((res, rej)=>{
-    const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej;
+    const s=document.createElement('script'); s.src=src; s.onload=res;
+    // drop the cached promise on failure so a later visit retries (don't strand the app blank)
+    s.onerror=()=>{ delete _scriptCache[src]; rej(new Error('failed to load '+src)); };
     document.head.appendChild(s);
   });
   return _scriptCache[src];
@@ -279,6 +281,9 @@ const app = createApp({
       if(app==='events') this.store.openCalendar();
       else if(app==='notes') this.store.openNotes();
       else { const top=this.store.savedQueries[0]; if(top) this.store.openQueryView(top); }
+      // setView's dirty-guard may defer/cancel the switch (async confirm); re-assert the
+      // hash to whatever the view actually is now, so Back+cancel doesn't desync the URL.
+      this.syncHash(this.currentApp);
     },
     // N: collapse/expand the deep-nav rail (desktop) or toggle its own slide-in (mobile)
     toggleDeepNav(){
@@ -1002,6 +1007,7 @@ const app = createApp({
           headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ query }) });
         if(r.status===401){ this.handleAuthExpired(); return []; }
         if(r.ok) return (await r.json()).items;
+        if(r.status===400){ const b = await r.json().catch(()=>null); this.store.toast(b && b.error ? b.error : 'invalid query'); return []; }
       }catch(e){ /* offline — empty */ }
       return [];
     };
@@ -1053,6 +1059,11 @@ const app = createApp({
     // app router: back/forward + manual hash edits switch apps
     this._onHash=()=>this.routeFromHash();
     window.addEventListener('hashchange', this._onHash);
+    // refresh / close-tab guard: any editor with unsaved work (the notes editor via
+    // store.dirtyCheck, or a stacked modal via the dirty-checker registry) triggers
+    // the browser's native "leave site?" prompt so edits aren't silently lost
+    this._beforeUnload=(e)=>{ if(this.store.isAnyDirty && this.store.isAnyDirty()){ e.preventDefault(); e.returnValue=''; } };
+    window.addEventListener('beforeunload', this._beforeUnload);
     window.addEventListener('pagehide', this._flush);
     this._onVis=()=>{ if(document.visibilityState==='hidden') this._flush(); };
     document.addEventListener('visibilitychange', this._onVis);
