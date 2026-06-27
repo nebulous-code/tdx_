@@ -70,17 +70,17 @@ Roadmap (planned in `docs/PLATFORM_ARCHITECTURE.md`): **2a** events+calendar · 
 - [x] **2c — File-backed notes.** Note content lives as `.md` files in an app-managed vault (`VAULT_DIR`, `src/vault.ts`); the DB shadows them (`migrations/004_notes.sql`: `notes` + `note_links` + `notes_fts` FTS5). Identity = a machine-managed frontmatter UID (rename-safe). `scanFile` atom (parse → writeback id → upsert → FTS refresh → reconcile links) + `scanVault(incremental|full)` with mtime-skip + deletion→**tombstone**; file-owning CRUD (`services/notes.ts`, `routes/notes.ts`: CRUD + `/search` FTS + `/sync`). Links **derived from content**: `[[task:ID]]`/`[[event:ID]]`/`[[Note Name]]` → `note_links` (directional, reconciled per file), merged into `getLinksFor` alongside 2b's app links (so a `[[task:ID]]` shows under that task); note↔note is content-only (2b `links`/`canonicalize` untouched; app-link rels extended with `event-note`/`note-task`). Hand-rolled markdown parser, zero new deps; FTS5 ships in better-sqlite3. **16 notes tests** (CRUD/file round-trip, external edit + id writeback, rename keeps id, rm→tombstone, FTS, content edges, note↔note, dangling-resolves-on-rescan); **72 server tests green**. Minimal UI (`frontend/js/notes.js`, bolted in like the calendar): notes list + FTS search + **sync** button + a title/body editor showing linked items. Follow-up: notes use the **Obsidian filename-as-title model** — the `.md` filename *is* the title, editing the title renames the file (identity stays in the frontmatter id, so links survive), filenames are sanitized (`/ : * ? …` stripped) with `Name 2.md` collision suffixes; the UI is **create-on-save** (no file until named). **Deferred:** live `tdx-query` embeds + unified `POST /api/query type:…` → 2d; RAG → 2f.
 - [ ] **2d — App-shell.** Planned in `docs/2D_APP_SHELL.md` (shell + router + lazy modules, deep-nav drawer, rebuild `/events` + `/notes`, unified `POST /api/query type:…`, cross-link UI + link-by-name). Open decisions live at the bottom of that doc.
 
-### 2e — polish + keyboard/accessibility sweep
-- [ ] **Enter-to-save + `↵` everywhere.** Adopted globally during 2d; this sweep catches stragglers.
-- [ ] **Full keyboard + mouse accessibility pass** across the shell + all modules (the broad version of events hjkl / notes insert-normal, which 2d does only at a high level); wire `KbForm` (`docs/KEYBOARD_FRAMEWORK.md`) into every module.
-- [ ] **Notes list/detail layout polish** — title + labels beneath (like tasks), created/edited dates on the right.
-- [ ] **Global search → unified results.** Upgrade the `/` bottom-bar search (today: tasks only, client-side) to return **tasks + events + notes together** via `POST /api/query type:task,event,note` (the unified endpoint built in 2d slice 2). The only user-facing surface that shows mixed-type results outside of `tdx-query` note embeds.
-- [ ] *(general UI/UX wishlist — add items here as they surface; the user has more.)*
+### 2e — UI polish + keyboard/accessibility
+Full living plan in **`docs/2E_UI_POLISH.md`** (per-app navs, query chips, detail drawers, note-editor feel, human-readable ids, etc., each with open decisions). Headline items:
+- [ ] **Per-app secondary navs (Tasks/Events/Notes)** — Tasks→projects, Events→**calendars** (new entity, colored), Notes→**folders** (vault subdirs); labels in every nav. *(Pulled into 2e — it gates the keyboard-nav + query-chip items; was previously parked "after 2e".)*
+- [ ] **Notes tags** — reuse `labels`, stored in the note's frontmatter header (model decided — `2D_APP_SHELL.md` Decided #4); rides along with the notes nav/folders work.
+- [ ] **App-type query chips + global search → unified results** — chips emit `type:…`; `/` search returns tasks+events+notes via `POST /api/query`.
+- [ ] **Keyboard everywhere** — deep-nav + per-app navs keyboard-navigable; `KbForm` into every module; calendar day-detail drawer (`E`); note detail drawer; note-editor cursor/feel.
+- [ ] **Human-readable per-user item ids** (`t_0001`, `n_0001`, …) shown wherever UUIDs are — likely its own slice (backend column + backfill + search).
+- [ ] **Enter-to-save + `↵` sweep**, **notes list/detail layout polish**.
 
-### After 2e, before 2f (ordered)
-- [ ] **Per-app secondary navs (Events, Notes).** Each app gets its own `n`-toggled nav (Tasks already has the project/label sidebar; `N` toggles the cross-app deep-nav drawer built in 2d). Tags will likely live in the Notes nav, so the navs come first.
-- [ ] **Notes tags.** Reuse the `labels` system across apps, persisted in the note's frontmatter header (`labels: #l1 #l2`, alongside `id:`) so they sync file↔DB; search/filter + shown on the notes list/detail. (Model decided — see `docs/2D_APP_SHELL.md` Decided #4.)
-- [ ] **2f — CLI / MCP / RAG** — to be planned when reached.
+### 2f — CLI / MCP / RAG
+- [ ] To be planned when reached.
 
 ### Backlog — perf / nice-to-have
 - [ ] **Autosave change-detection cost.** The frontend autosave watcher (`index.html startSession`) stringifies *all* tasks/projects/labels/savedQueries (`JSON.stringify([...])`) on every reactive tick just to detect "did anything change?" before debouncing a save. Correct but wasteful at scale. Replace with a deep watcher (or per-collection version counters / structural diff) so we don't serialize the whole dataset each keystroke. Low priority — fine at current data sizes. (Was `docs/CODE_REVIEW_2D.md` #13, second half; the note-search half is done.)
