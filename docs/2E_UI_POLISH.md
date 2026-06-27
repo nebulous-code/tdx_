@@ -74,19 +74,8 @@ These rely on the §3.3 date model (universal `created:`/`edited:`, `due:`-per-t
 
 ## 3. Query system everywhere
 
-### 3.1 App-type selector + the `type:` rule
-Chips in the query builder choose which app types a query covers; mechanically they write the `type:task,event,note` predicate the unified query already understands (`services/unifiedQuery.ts`).
-
-**Decided**
-- **Chip → predicate.** The builder emits `type:<types>` only when ≥1 chip is selected; no chips → no `type:` term (same way omitting `label:` doesn't constrain labels).
-- **Default semantics (changed).** No `type:` term → **all item types** (not tasks). An explicit `type:` with nothing after the colon → **return nothing** (respect "items with no type"); never fall back to tasks. This intentionally **breaks** the slice-2 default (`no type: → tasks`) in `unifiedQuery.ts` + its tests — the rewrite already breaks backward-compat broadly, so saved queries get hand-updated (add `type:task` where you meant tasks-only). Can't be auto-migrated: some queries want everything-this-weekend (events+tasks), some tasks-only, some missing-label scans across all three.
-- **One word: "query."** The chip builder and the raw box are two front-ends to one language. "Filter" is **retired** as user-facing vocabulary (`STYLE_GUIDE.md` §12). When consolidating, keep the help modal's *filter*-tab layout — it reads better than the *query-syntax* tab's.
-- **Query ≠ search.** Distinct systems (`STYLE_GUIDE.md` §12): **query** = repeatable categorical metadata predicates, no free-text on content; **search** (`/`) = throwaway live text find. Chips live only in the query builder. A hand-authored `search:<text>` predicate is deep backlog, untracked.
-
-**"filter" → "query" rename inventory** (codebase scan):
-- *User-facing (rename):* the `?` help modal's **"filter" tab** + the `f`/`F` "focus the filter builder" lines (`help-modal.js`); the **`⊞ filter` button** + "Filter builder" tooltip (`query-bar.js`).
-- *Code-internal (rename opportunistically):* `store.focusPane === 'filter'`, `filterKey`, `toggleFilterFocus`, "filter builder" comments. The `f` keybinding's "filter" mnemonic is worth revisiting.
-- *Leave alone:* `Array.filter`, CSS `filter:`, `healthFilter`, the "view filters on params" task-inheritance logic.
+### 3.1 App-type selector + the `type:` rule — ✅ DONE (see "Completed")
+Built at the larger "live mixed results" scope, which also delivered the §3.2 **inline cross-type rendering**. Full record in the **Completed** section.
 
 ### 3.2 Per-app query bar (bring it to Events & Notes)
 Only **Tasks** has the top query bar today; the unified query already works for events and notes, so the query top-drawer should appear on **all three** app screens. Each app's builder offers the chip groups that fit its type (Tasks: project/status/due/labels; Events: calendar/date/labels; Notes: folder/labels), all writing the same language, results rendering in that app.
@@ -95,7 +84,7 @@ Only **Tasks** has the top query bar today; the unified query already works for 
 - **Auto-default `type:<app_type>`, expandable** — a query written in Tasks defaults to `type:task`; select the Note chip to also pull in notes. This is the nudge that makes the `type:` rule self-enforcing: an old task query surfacing under Notes is annoying enough that you'll scope it.
 - **Nav shows queries whose `type:` includes the app's type, or has no `type:`** (= all).
 - **One shared, app-aware `query-bar.js`** (swap chip groups by app, not three copies); rename "filter" → "query" (§12); focus key + layout carry over per app.
-- **Cross-type results render inline**, each prefixed with its **deep-nav SVG type icon** (always at first; later we may show it only when `type:` resolves to >1 type if it feels busy). Per-type result formats will differ (task → checkbox, event → start date, note → edited date) — refine once they're all in one result view; the icon is the simple call for now.
+- **Cross-type results render inline** — ✅ **done in §3.1** (the `mixed-list` component with deep-nav type icons, on the Tasks screen). Remaining: per-type result-format polish (task → checkbox, event → start date, note → edited date), refined once all types share a result view.
 
 ### 3.3 Unified query date model (created / edited · due-per-type · note "review" date)
 Make the date predicates work **consistently across all item types**, so a mixed query like `type:task,note created:>=-7d` behaves sensibly instead of silently matching nothing.
@@ -223,3 +212,23 @@ Wire the shared `KbForm` model (`KEYBOARD_FRAMEWORK.md`) into **every** module a
 
 ### 6.5 Notes list/detail layout polish
 Lay out the notes list/detail like tasks: title with **labels beneath**, created/edited dates on the right. Overlaps with the notes-tags + note-drawer work — likely lands with §4.3 / §2.3 rather than standalone.
+
+---
+
+## Completed
+
+### §3.1 — App-type selector + the `type:` rule ✅
+Built at the **"live mixed results"** scope, which also delivered §3.2's inline cross-type rendering early.
+
+*Original design (for the record):*
+- **Chip → predicate.** The builder emits `type:<types>` only when ≥1 chip is selected; no chips → no `type:` term.
+- **Default semantics (changed).** No `type:` term → **all item types**; explicit empty `type:` → **return nothing**; never fall back to tasks. Intentionally breaks the old `no type: → tasks` default; saved queries get hand-updated (add `type:task`).
+- **One word: "query."** Chip builder + raw box are one language; "filter" retired as user-facing vocabulary (`STYLE_GUIDE.md` §12). **Query ≠ search** (search = throwaway live text find).
+
+*Implemented:*
+- **Backend** `server/src/services/unifiedQuery.ts`: no-type→all, empty-type→nothing, no task fallback. Tests updated/added in `server/test/unified-query.test.ts`.
+- **Query builder** `frontend/js/query-bar.js`: additive `type` chip group (tasks/events/notes) collapsed to one comma-joined `type:` term (`toggleType`/`hasType`).
+- **Mixed results** `frontend/js/mixed-list.js` (new) + `store.isMixedView()`/`queryTypes()`/`taskQuery()` (`data.js`): the Tasks screen renders mixed items (deep-nav type icons) via the server unified endpoint when `type:` spans beyond tasks; pure task / no-type / project keep the instant client `Q.run` path. Act-on: task → detail, **event → editor popup, note → full Notes nav** (§4 drawers will replace these). `type:` is stripped before client `Q.run`, so the parity engine stays frozen (no `query.ts` change, no golden regen).
+- **Rename** filter→query, user-facing **and** internal (`focusPane:'query'`, `enterQuery`/`exitQuery`/`toggleQueryFocus`/`queryKey`; help-modal tab + lines; `⊞ query` button + tooltip). Fixed the pre-existing `enterQuery` focus-row nit (`status`→`type`).
+- **Verified:** 360 server tests (incl. parity) + tsc + lint green; live curl smokes on :3001 (no-type→mixed, empty-type→0, `type:task,note`→scoped, `type:even`→400).
+- **Carryover:** §3.2 now only needs the per-app query bar on the Events/Notes *screens* + auto-default `type:<app>` + saved-query routing; §3.4 (global `/` search) still pending. Per-type result-format polish deferred.

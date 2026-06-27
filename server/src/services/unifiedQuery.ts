@@ -77,10 +77,13 @@ export async function runUnifiedQuery(
     }
   }
   if (unknown.length) throw new UnknownTypeError([...new Set(unknown)]);
-  // base set: explicit includes if any; else everything (when only excluding); else the
-  // task default. Then drop excluded types.
-  const base: EntityType[] =
-    positives.size > 0 ? [...positives] : negatives.size > 0 ? [...ENTITY_TYPES] : ['task'];
+  // an explicit but empty `type:` (term present, no valid value, no exclusions) means "items
+  // with no type" → nothing. We never silently fall back to a default that hides that intent.
+  const hasPosTypeTerm = parsed.terms.some((t) => t.field === 'type' && !t.neg);
+  if (hasPosTypeTerm && positives.size === 0 && negatives.size === 0) return [];
+  // base set: explicit includes if any; else ALL types (no `type:` term → everything, never
+  // a tasks-only fallback). Then drop excluded types (so `-type:note` alone = all but note).
+  const base: EntityType[] = positives.size > 0 ? [...positives] : [...ENTITY_TYPES];
   const types = base.filter((t) => !negatives.has(t));
   // everything except the type selector is the actual predicate set, shared across types
   const pq = { terms: parsed.terms.filter((t) => t.field !== 'type'), ok: true };

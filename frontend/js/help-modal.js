@@ -23,7 +23,7 @@ window.HelpModal = {
         { k:'C',             d:'open / close the calendar' },
         { k:'!',             d:'cycle priority (none → very high → none)' },
         { k:'/',             d:'search tasks (title + notes, across everything)' },
-        { k:'f',             d:'focus the filter builder' },
+        { k:'f',             d:'focus the query builder' },
         { k:'n',             d:'show / hide the nav' },
         { k:'@',             d:'account screen' },
         { k:'⌘K  /  ctrl+K', d:'command palette (jump anywhere, run actions)' },
@@ -56,9 +56,9 @@ window.HelpModal = {
         { k:'esc',         d:'back to the task list' },
         { k:'mouse',       d:'› edit · ✕ delete view · + add' },
       ]},
-      { name:'filter', code:'amber', items:[
-        { k:'f  /  F',       d:'focus the filter builder / collapse the panel' },
-        { k:'h  /  l',       d:'move between groups (status·due·labels·project·flags)' },
+      { name:'query', code:'amber', items:[
+        { k:'f  /  F',       d:'focus the query builder / collapse the panel' },
+        { k:'h  /  l',       d:'move between groups (type·due·labels·project·flags)' },
         { k:'j  /  k',       d:'move between options in a group' },
         { k:'space  /  enter', d:'toggle the focused option' },
         { k:'i',             d:'edit the raw query text' },
@@ -72,7 +72,7 @@ window.HelpModal = {
         { k:'!3',         d:'set priority 1–5 (very low → very high); !0 clears · other values stay text' },
         { k:'enter',      d:'add the task' },
         { k:'esc',        d:'leave the box, back to the list' },
-        { k:'in a view',  d:'new tasks inherit the view’s filters: status · due · labels · project' },
+        { k:'in a view',  d:'new tasks inherit the view’s query: status · due · labels · project' },
       ]},
       { name:'query syntax', code:'amber', items:[
         { k:'project:home',     d:'in a project (and its subprojects)' },

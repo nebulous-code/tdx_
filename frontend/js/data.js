@@ -149,7 +149,7 @@
     deepNavCollapsed: false, // desktop: hide the app-switcher rail (toggled with N)
     deepNavOpen: false,      // mobile: the rail's own slide-in (the > button), independent of the app nav
     navSections: { query:false, project:false, label:false },  // collapsed sidebar sections (Tab)
-    focusPane: 'list',       // 'list' | 'side' | 'filter' — which window the keyboard drives
+    focusPane: 'list',       // 'list' | 'side' | 'query' — which window the keyboard drives
     sideFocusId: null,       // id of the keyboard-focused sidebar item
     moveId: null,            // id of the sidebar item being reordered (m = move mode)
     taskMoveId: null,        // id of the subtask being reordered in the task list (m = move mode)
@@ -266,6 +266,25 @@
     const v = store.view;
     return v.kind==='project' ? 'project:'+v.id : (v.query||'');
   };
+  // the app types the active query selects (non-negated type: tokens; [] = no type: term)
+  store.queryTypes = () => {
+    const set = new Set();
+    for(const t of Q.parse(store.currentQuery()).terms){
+      if(t.field==='type' && !t.neg) for(const tok of String(t.value).split(',').map(s=>s.trim())) if(tok) set.add(tok);
+    }
+    return [...set];
+  };
+  // mixed view = the results span beyond tasks (a non-task type selected, or task excluded).
+  // Projects + no-type + task-only stay on the fast client-side Q.run path (no regression).
+  store.isMixedView = () => {
+    if(store.view.kind==='project') return false;
+    const ts = store.queryTypes();
+    return ts.length>0 && !(ts.length===1 && ts[0]==='task');
+  };
+  // the current query with type:/-type: stripped — fed to the client Q engine, which has no
+  // 'type' field (a type: term would hit the text-match fallback and wrongly empty the list).
+  // NOT applied to currentQuery() itself, which must keep type: for display + the mixed path.
+  store.taskQuery = () => Q.build(Q.parse(store.currentQuery()).terms.filter(t => t.field!=='type'));
   // vim '/' search: title+notes substring across ALL tasks (ignores the active
   // view), respecting the completed toggle, including subtasks (surfacing parents),
   // relevance-ordered. Drives both the render and j/k nav via visibleRoots.
@@ -293,7 +312,7 @@
   store.visibleRoots = () => {
     if(store.searchActive) return store.searchRoots();
     const ctx = store.ctx();
-    const q = store.currentQuery();
+    const q = store.taskQuery();   // type: stripped — client Q has no 'type' field
     let matched = Q.run(q, ctx);
     if(!/status:done|is:done/.test(q)) matched = matched.filter(store.completionPass);
     const matchedIds = new Set(matched.map(t=>t.id));

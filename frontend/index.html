@@ -92,7 +92,8 @@
             <span v-else class="hb-healthy"><span class="hb-check">✓</span> healthy</span>
           </span>
         </div>
-        <task-list ref="list" :store="store"></task-list>
+        <task-list v-if="!store.isMixedView()" ref="list" :store="store"></task-list>
+        <mixed-list v-else ref="mixed" :store="store"></mixed-list>
       </template>
       <task-detail ref="detail" :store="store"></task-detail>
       <event-detail v-if="store.eventDetailOpen" :store="store" @close="store.eventDetailOpen=false"></event-detail>
@@ -194,6 +195,7 @@
 <script src="js/kbform.js"></script>
 <script src="js/sidebar.js"></script>
 <script src="js/tasklist.js"></script>
+<script src="js/mixed-list.js"></script>
 <script src="js/recurrence-builder.js"></script>
 <script src="js/task-detail.js"></script>
 <script src="js/icons.js"></script>
@@ -464,15 +466,18 @@ const app = createApp({
       // (insert-mode typing already returned at line 444; this fires only in normal/list)
       if(this.store.view.kind==='notes'){ if(this.$refs.notes && this.$refs.notes.onKey) this.$refs.notes.onKey(e); return; }
 
-      // filter builder: F collapses the panel, f focuses into it (from any window)
+      // query builder: F collapses the panel, f focuses into it (from any window)
       if(e.key==='F'){ e.preventDefault(); this.toggleBuilder(); return; }
-      if(e.key==='f'){ e.preventDefault(); this.toggleFilterFocus(); return; }
-      // n toggles the sidebar nav column (parallel to f/F for the filter)
+      if(e.key==='f'){ e.preventDefault(); this.toggleQueryFocus(); return; }
+      // n toggles the sidebar nav column (parallel to f/F for the query builder)
       if(e.key==='n'){ e.preventDefault(); this.toggleNav(); return; }
 
       // each pane has its own navigation while focused
       if(this.store.focusPane==='side'){ this.sidebarKey(e); return; }
-      if(this.store.focusPane==='filter'){ this.filterKey(e); return; }
+      if(this.store.focusPane==='query'){ this.queryKey(e); return; }
+
+      // mixed-type results (type: spans beyond tasks) are a flat list, not the task tree
+      if(this.store.isMixedView()){ this.mixedKey(e); return; }
 
       // subtask move mode (m): j/k reorder the held subtask among its siblings;
       // m/enter/esc drop it. selectedTaskId stays on it, so .sel / .moving track it.
@@ -589,32 +594,42 @@ const app = createApp({
         if(this.store.focusPane==='side') this.exitSidebar();
       }
     },
-    // ---- filter builder keyboard navigation ----
-    enterFilter(){
+    // ---- query builder keyboard navigation ----
+    enterQuery(){
       this.store.builderOpen=true;
-      this.store.focusPane='filter';
-      this.$nextTick(()=>{ const qb=this.$refs.qbar; if(qb){ qb.kbInit(); qb.kbFocusRow('status'); } });
+      this.store.focusPane='query';
+      this.$nextTick(()=>{ const qb=this.$refs.qbar; if(qb){ qb.kbInit(); qb.kbFocusRow('type'); } });
     },
-    exitFilter(){
+    exitQuery(){
       this.store.focusPane='list';
       if(!this.store.selectedTaskId){ const r=this.store.visibleRoots(); if(r.length) this.store.selectedTaskId=r[0].id; }
     },
-    toggleFilterFocus(){ if(this.store.focusPane==='filter') this.exitFilter(); else this.enterFilter(); },
+    toggleQueryFocus(){ if(this.store.focusPane==='query') this.exitQuery(); else this.enterQuery(); },
     toggleBuilder(){
       this.store.builderOpen=!this.store.builderOpen;
-      if(!this.store.builderOpen && this.store.focusPane==='filter') this.exitFilter();
+      if(!this.store.builderOpen && this.store.focusPane==='query') this.exitQuery();
     },
-    filterKey(e){
+    queryKey(e){
       const qb=this.$refs.qbar; if(!qb) return;
       switch(e.key){
         case 'i': e.preventDefault(); qb.focus(); return;        // into the raw query editor (from anywhere)
         case 's': e.preventDefault(); qb.save(); return;         // save as smart view
         case 'x': e.preventDefault(); qb.clearQuery(); return;   // clear the query
-        case 'Escape': e.preventDefault(); this.exitFilter(); return;
-        case 'Enter': e.preventDefault(); this.exitFilter(); return;  // apply & view results
+        case 'Escape': e.preventDefault(); this.exitQuery(); return;
+        case 'Enter': e.preventDefault(); this.exitQuery(); return;  // apply & view results
       }
       // j/k between groups · h/l within a group · space toggles — handled by KbForm
       qb.kbKey(e);
+    },
+    // mixed-type results list keyboard (first cut; full parity + drawers are §4)
+    mixedKey(e){
+      const m=this.$refs.mixed; if(!m) return;
+      switch(e.key){
+        case 'j': case 'ArrowDown': e.preventDefault(); m.kbMove(1); break;
+        case 'k': case 'ArrowUp':   e.preventDefault(); m.kbMove(-1); break;
+        case 'l': case 'ArrowRight': case 'e': case 'Enter': e.preventDefault(); m.kbActivate(); break;
+        case 'h': case 'ArrowLeft': e.preventDefault(); this.enterSidebar(); break;
+      }
     },
     sidebarKey(e){
       const items=this.store.sideItems();
@@ -1109,6 +1124,7 @@ const app = createApp({
 app.component('app-sidebar', window.AppSidebar);
 app.component('tree-row', window.TreeRow);
 app.component('task-list', window.TaskList);
+app.component('mixed-list', window.MixedList);
 app.component('task-row', window.TaskRow);
 app.component('recurrence-builder', window.RecurrenceBuilder);
 app.component('task-detail', window.TaskDetail);

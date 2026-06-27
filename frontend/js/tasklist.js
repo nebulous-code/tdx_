@@ -125,7 +125,7 @@ window.TaskList = {
     },
     matched(){
       const ctx = this.store.ctx();
-      const q = this.store.currentQuery();
+      const q = this.store.taskQuery();   // type: stripped — client Q has no 'type' field
       let list = Q.run(q, ctx);
       if(!/status:done|is:done/.test(q)) list = list.filter(this.store.completionPass);
       return list;

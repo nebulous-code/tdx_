@@ -39,11 +39,16 @@ after(async () => {
   fs.rmSync(vault, { recursive: true, force: true });
 });
 
-test('default (no type:) returns only tasks, tagged', async () => {
+test('default (no type:) returns ALL item types', async () => {
   const res = await query('');
-  assert.ok(res.items.length >= 1);
-  assert.ok(res.items.every((i: Item) => i.type === 'task'));
+  const kinds = new Set(res.items.map((i: Item) => i.type));
+  assert.ok(kinds.has('task') && kinds.has('event') && kinds.has('note'));
   assert.ok(res.items.some((i: Item) => i.title === 'alpha task'));
+});
+
+test('explicit empty type: returns nothing (never falls back to tasks)', async () => {
+  const res = await query('type:');
+  assert.equal(res.items.length, 0);
 });
 
 test('type: selects each entity type (tagged)', async () => {

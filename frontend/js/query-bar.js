@@ -2,7 +2,7 @@
    The builder is keyboard-navigable via the shared KbForm mixin: the groups are
    stacked full-width rows (j/k move between groups, h/l move within a group's chips,
    space toggles). It's always mounted, so it uses kbAutoListen:false and is driven
-   from index.html's onKey (filterKey) like the task-detail drawer. See
+   from index.html's onKey (queryKey) like the task-detail drawer. See
    docs/KEYBOARD_FRAMEWORK.md. */
 window.QueryBar = {
   props: ['store'],
@@ -14,9 +14,9 @@ window.QueryBar = {
       <input class="qinput" ref="q" v-model="queryString" spellcheck="false"
              placeholder="query… e.g.  label:urgent due:<7d status:open"
              @keydown.enter="run" @keydown.esc="blur" />
-      <span class="qbtn" :class="{on: store.builderOpen}" @click="store.builderOpen=!store.builderOpen" title="Filter builder (f · F to collapse)">⊞<span><u>f</u>ilter</span></span>
-      <span v-if="store.focusPane==='filter'" class="qbtn" @click="save" title="Save as smart view (s)">★<span><u>s</u>ave</span></span>
-      <span v-if="store.focusPane==='filter'" class="qbtn" @click="clearQuery" title="Clear (x)"><u>x</u></span>
+      <span class="qbtn" :class="{on: store.builderOpen}" @click="store.builderOpen=!store.builderOpen" title="Query builder (f · F to collapse)">⊞<span>query</span></span>
+      <span v-if="store.focusPane==='query'" class="qbtn" @click="save" title="Save as smart view (s)">★<span><u>s</u>ave</span></span>
+      <span v-if="store.focusPane==='query'" class="qbtn" @click="clearQuery" title="Clear (x)"><u>x</u></span>
     </div>
 
     <div v-if="store.builderOpen" class="builder">
@@ -25,7 +25,7 @@ window.QueryBar = {
         <div class="chips">
           <template v-for="(c,idx) in g.chips" :key="idx">
             <span v-if="c.sepBefore" class="chip-sep"></span>
-            <span class="chip" :class="[c.dueDay?'chip-day':'', {on: chipOn(c)}, store.focusPane==='filter' ? kbCls(g.key, idx) : null]"
+            <span class="chip" :class="[c.dueDay?'chip-day':'', {on: chipOn(c)}, store.focusPane==='query' ? kbCls(g.key, idx) : null]"
                   @click="kbPick(g.key, idx)">
               <span v-if="c.glyph" :style="{color:c.color}">{{ c.glyph }}</span>{{ c.glyph ? ' ' : '' }}{{ c.text }}
             </span>
@@ -37,7 +37,7 @@ window.QueryBar = {
   `,
   data(){
     return {
-      kbAutoListen:false,   // driven from index.html filterKey (always-mounted)
+      kbAutoListen:false,   // driven from index.html queryKey (always-mounted)
       kbAutofocus:false,    // never steal focus into the query input on load
       dueOpts:[
         {v:'today',t:'today'},{v:'tomorrow',t:'tomorrow'},{v:'overdue',t:'overdue'},
@@ -55,6 +55,11 @@ window.QueryBar = {
     // KbForm's kbRows(); each chip carries display + toggle metadata.
     navGroups(){
       return [
+        { key:'type', label:'type', chips:[
+            {field:'type',value:'task', text:'☑ tasks',  isType:true},
+            {field:'type',value:'event',text:'◷ events', isType:true},
+            {field:'type',value:'note', text:'✎ notes',  isType:true},
+          ] },
         { key:'due', label:'due', chips:[
             ...this.dueOpts.map(o=>({field:'due',value:o.v,text:o.t,exclusive:true})),
             ...this.dueDays.map((d,i)=>({field:'due',value:d.l,text:d.t,dueDay:true,sepBefore:i===0})),
@@ -95,9 +100,10 @@ window.QueryBar = {
       }
       return rows;
     },
-    chipOn(c){ return c.compl ? this.store.completion[c.compl] : c.dueDay ? this.hasDueDay(c.value) : this.has(c.field,c.value); },
+    chipOn(c){ return c.compl ? this.store.completion[c.compl] : c.isType ? this.hasType(c.value) : c.dueDay ? this.hasDueDay(c.value) : this.has(c.field,c.value); },
     chipToggle(c){
       if(c.compl) this.store.toggleCompletion(c.compl);
+      else if(c.isType) this.toggleType(c.value);
       else if(c.dueDay) this.toggleDueWeekday(c.value);
       else if(c.untag) this.toggleUntagged();
       else if(c.exclusive) this.toggleExclusive(c.field,c.value);
@@ -146,6 +152,21 @@ window.QueryBar = {
       const on=this.has(field,value);
       let terms=this.terms.filter(t=>t.field!==field);
       if(!on) terms.push({field,value,neg:false});
+      this.setTerms(terms);
+    },
+    // ---- app-type selector (one comma-joined type: term) ----
+    typeValues(){
+      const t=this.terms.find(t=>t.field==='type' && !t.neg);
+      return t ? t.value.split(',').map(s=>s.trim()).filter(Boolean) : [];
+    },
+    hasType(v){ return this.typeValues().includes(v); },
+    toggleType(v){
+      const ORDER=['task','event','note'];
+      const set=new Set(this.typeValues());
+      set.has(v) ? set.delete(v) : set.add(v);
+      const val=ORDER.filter(x=>set.has(x)).join(',');
+      const terms=this.terms.filter(t=>t.field!=='type');   // collapse to a single type: term
+      if(val) terms.push({field:'type', value:val, neg:false}); // none selected → drop type: entirely
       this.setTerms(terms);
     },
     // ---- weekday window (due:<letters>) ----
