@@ -10,10 +10,16 @@ window.CalendarView = {
   props: ['store'],
   data() {
     const now = new Date();
-    return { year: now.getFullYear(), month: now.getMonth(), cursor: Rec.ymd(now) };
+    return { year: now.getFullYear(), month: now.getMonth(), cursor: Rec.ymd(now), matchIds: null, _fseq: 0 };
   },
   computed: {
     weekStart() { return (this.store.currentUser && this.store.currentUser.week_start) ?? 1; },
+    // when a specific calendar is selected in the nav, show only its events
+    calFilter() { return this.store.view.calendarId || null; },
+    activeCalendar() { return this.calFilter ? this.store.calendarById(this.calFilter) : null; },
+    // the active query (type:event by default); a real predicate beyond type: narrows the grid
+    activeQuery() { return this.store.currentQuery(); },
+    hasPredicate() { return Q.parse(this.activeQuery()).terms.some((t) => t.field !== 'type'); },
     weekdays() {
       const ws = this.weekStart;
       return Array.from({ length: 7 }, (_, i) => WD_BASE[(ws + i) % 7]);
@@ -38,8 +44,9 @@ window.CalendarView = {
           inMonth: d.getMonth() === this.month,
           isToday: ymd === today,
           isCursor: ymd === this.cursor,
-          events: this.store.events.filter((e) => e.date === ymd),
-          tasks: this.store.tasks.filter((t) => t.due === ymd),
+          events: this.store.events.filter((e) => e.date === ymd && (!this.calFilter || e.calendarId === this.calFilter) && (!this.matchIds || this.matchIds.has(e.id))),
+          // a query predicate narrows the grid to events → hide the dated-task overlay
+          tasks: this.matchIds ? [] : this.store.tasks.filter((t) => t.due === ymd),
         });
       }
       return out;
@@ -52,8 +59,20 @@ window.CalendarView = {
       return { from: Rec.ymd(start), to: Rec.ymd(Rec.addDays(start, 41)) };
     },
   },
-  mounted() { this.load(); },
+  watch: {
+    activeQuery() { this.refilter(); },
+  },
+  mounted() { this.load(); this.refilter(); },
   methods: {
+    // run the query through the unified engine and keep the set of matching event ids;
+    // a query with only type: (no real predicate) clears the filter (show every event)
+    async refilter() {
+      if (!this.hasPredicate) { this.matchIds = null; return; }
+      const seq = ++this._fseq;
+      const items = await this.store.runQuery(this.activeQuery());
+      if (seq !== this._fseq) return;
+      this.matchIds = new Set((items || []).filter((i) => i.type === 'event').map((i) => i.id));
+    },
     // start (top-left cell) of the 6-week grid for a given month
     gridStart(y, m) {
       const first = new Date(y, m, 1);
@@ -105,13 +124,16 @@ window.CalendarView = {
       this.load();
     },
     timeOf(e) { return e.allDay ? '' : (e.startAt.length > 10 ? e.startAt.slice(11, 16) + ' ' : ''); },
+    // an event is tinted by its calendar's color (falls back to the theme accent)
+    evColor(e) { const c = e.calendarId && this.store.calendarById(e.calendarId); return c ? this.store.resolveColor(c.color) : 'var(--amber)'; },
+    evStyle(e) { const col = this.evColor(e); return { color: col, borderLeft: '2px solid ' + col }; },
     openEvent(occ) {
       // edit the SERIES (occ carries the event fields + the occurrence date)
       const { date, ...ev } = occ;
       this.store.editEvent({ ...ev });
     },
     onCell(ymd) { this.cursor = ymd; this.newEvent(ymd); },
-    newEvent(ymd) { this.store.editEvent({ startAt: ymd, allDay: true, title: '' }); },
+    newEvent(ymd) { this.store.editEvent({ startAt: ymd, allDay: true, title: '', calendarId: this.calFilter || null }); },
     openTask(t) { this.store.selectedTaskId = t.id; this.store.detailOpen = true; },
   },
   template: `
@@ -121,6 +143,7 @@ window.CalendarView = {
       <span class="cal-title">{{ monthLabel }}</span>
       <span class="qbtn cal-nav" @click="moveMonth(1)" title="next month (L)">›</span>
       <span class="qbtn" @click="today" title="jump to today">today</span>
+      <span v-if="activeCalendar" class="cal-filter" :style="{ color: store.resolveColor(activeCalendar.color) }" title="filtered to this calendar">{{ activeCalendar.glyph }} {{ activeCalendar.name }} <span class="cal-filter-x" @click="store.openCalendar()" title="show all calendars">✕</span></span>
       <span class="mut cal-hint">hjkl move · H/L · J/K month · i new event</span>
     </div>
     <div class="cal-weekdays">
@@ -130,7 +153,7 @@ window.CalendarView = {
       <div v-for="c in cells" :key="c.ymd" class="cal-cell" :class="{ out: !c.inMonth, today: c.isToday, cursor: c.isCursor }" @click="onCell(c.ymd)">
         <div class="cal-daynum">{{ c.day }}</div>
         <div class="cal-items" @click.stop>
-          <div v-for="e in c.events" :key="e.id+e.date" class="cal-ev" :title="e.title" @click="openEvent(e)">
+          <div v-for="e in c.events" :key="e.id+e.date" class="cal-ev" :style="evStyle(e)" :title="e.title" @click="openEvent(e)">
             <span class="cal-evtime mut" v-if="timeOf(e)">{{ timeOf(e) }}</span>{{ e.title }}
           </div>
           <div v-for="t in c.tasks" :key="t.id" class="cal-task" :class="{ done: t.done }" :title="t.title" @click="openTask(t)">

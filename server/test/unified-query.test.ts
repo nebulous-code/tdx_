@@ -134,3 +134,24 @@ test('recurring event matches a date predicate via its occurrences, deduped with
   assert.equal((ritual[0] as { count: number }).count, 8);
   assert.ok((ritual[0] as { date: string }).date); // dated to the soonest matching occurrence
 });
+
+test('created: spans all types (just-created items match created:today)', async () => {
+  const res = await query('type:task,event,note created:today');
+  const kinds = new Set(res.items.map((i: Item) => i.type));
+  // the seeded task/event/note were all created during this test run → all match created:today
+  assert.ok(kinds.has('task') && kinds.has('event') && kinds.has('note'));
+});
+
+test('note due: maps to the review date', async () => {
+  // review/due are LOCAL calendar dates (date-only), so use local today (not UTC slice)
+  const n = new Date();
+  const p = (x: number) => String(x).padStart(2, '0');
+  const today = `${n.getFullYear()}-${p(n.getMonth() + 1)}-${p(n.getDate())}`;
+  await j('POST', '/api/notes', { title: 'ReviewMe', reviewAt: today });
+  const due = await query('type:note due:today');
+  assert.ok(due.items.some((i: Item) => i.title === 'ReviewMe'));
+  // a note without a review date is invisible to due:set
+  const set = await query('type:note due:set');
+  assert.ok(set.items.some((i: Item) => i.title === 'ReviewMe'));
+  assert.ok(!set.items.some((i: Item) => i.title === 'Beta'));
+});

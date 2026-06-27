@@ -14,7 +14,7 @@ import { type Ctx, Q, type Task } from '../query.js';
 import { Rec } from '../rec.js';
 import { type EventJson, type TaskJson, rowToEvent } from '../schemas.js';
 import { readBootstrap } from './bootstrap.js';
-import { getNote, notesForQuery } from './notes.js';
+import { type NoteForQuery, getNote, notesForQuery } from './notes.js';
 
 export type EntityType = 'task' | 'event' | 'note';
 const ENTITY_TYPES: readonly EntityType[] = ['task', 'event', 'note'];
@@ -40,7 +40,12 @@ export interface QueryItem {
 // predicates (due:/status:) read the occurrence's date; recurring:true sees `recurrence`.
 // A past occurrence reads as DONE (so status:done matches and status:overdue does not) — an
 // event that already happened is complete, not overdue like a missed task.
-function eventAsTask(e: EventJson, occDate: string, todayYMD: string): Task {
+function eventAsTask(
+  e: EventJson,
+  occDate: string,
+  todayYMD: string,
+  calName: string | null,
+): Task {
   return {
     id: e.id,
     title: e.title,
@@ -49,12 +54,28 @@ function eventAsTask(e: EventJson, occDate: string, todayYMD: string): Task {
     reminder: e.reminder,
     recurrence: e.recurrence,
     done: occDate < todayYMD,
-    labels: [],
+    labels: e.labels,
+    createdAt: e.createdAt,
+    updatedAt: e.updatedAt,
+    kind: 'event',
+    category: calName, // its calendar's name → category:/calendar: join key
   };
 }
-// Map a note: free-text covers title (filename) + body. No due/labels yet (labels land later).
-function noteAsTask(n: { id: string; title: string; body: string }): Task {
-  return { id: n.id, title: n.title, notes: n.body, due: null, done: false, labels: [] };
+// Map a note: free-text covers title (filename) + body; `due:` reads the note's REVIEW date
+// (the per-type due mapping); created:/edited: read the note's timestamps.
+function noteAsTask(n: NoteForQuery, folderName: string | null): Task {
+  return {
+    id: n.id,
+    title: n.title,
+    notes: n.body,
+    due: n.reviewAt ?? null,
+    done: false,
+    labels: [],
+    createdAt: n.createdAt,
+    updatedAt: n.updatedAt,
+    kind: 'note',
+    category: folderName, // its folder's name → category:/folder: join key
+  };
 }
 
 export async function runUnifiedQuery(
@@ -88,8 +109,11 @@ export async function runUnifiedQuery(
   // everything except the type selector is the actual predicate set, shared across types
   const pq = { terms: parsed.terms.filter((t) => t.field !== 'type'), ok: true };
 
-  const { tasks, projects, labels } = await readBootstrap(db, owner);
+  const { tasks, projects, labels, calendars, folders } = await readBootstrap(db, owner);
   const ctx = { tasks, projects, labels, weekStart } as unknown as Ctx;
+  // categorizer-id → name maps for the cross-app category:/calendar:/folder: join
+  const calName = new Map(calendars.map((c) => [c.id, c.name]));
+  const folderName = new Map(folders.map((f) => [f.id, f.name]));
   const todayD = Rec.startOfDay(new Date());
   const todayYMD = Rec.ymd(todayD);
   const out: QueryItem[] = [];
@@ -115,12 +139,13 @@ export async function runUnifiedQuery(
     const winTo = Rec.addDays(todayD, 365);
     for (const row of rows) {
       const ev = rowToEvent(row);
+      const cal = ev.calendarId ? (calName.get(ev.calendarId) ?? null) : null;
       const start = ev.startAt.slice(0, 10);
       const rule = ev.recurrence ? Rec.parse(ev.recurrence) : null;
 
       if (!hasDuePred || !rule || rule.type === 'invalid') {
         // non-recurring, or nothing date-sensitive to expand → test the start date once
-        if (Q.evaluate(eventAsTask(ev, start, todayYMD), pq, ctx))
+        if (Q.evaluate(eventAsTask(ev, start, todayYMD, cal), pq, ctx))
           out.push({ type: 'event', date: start, count: 1, ...ev });
         continue;
       }
@@ -133,7 +158,7 @@ export async function runUnifiedQuery(
         const dymd = Rec.ymd(d);
         if (dymd < start) continue; // before the series began
         if (!Rec.matches(d, rule, anchor)) continue;
-        if (!Q.evaluate(eventAsTask(ev, dymd, todayYMD), pq, ctx)) continue;
+        if (!Q.evaluate(eventAsTask(ev, dymd, todayYMD, cal), pq, ctx)) continue;
         count++;
         if (dymd >= todayYMD) {
           if (nextFuture === null) nextFuture = dymd; // soonest upcoming match
@@ -147,7 +172,8 @@ export async function runUnifiedQuery(
   if (types.includes('note')) {
     // Evaluate against the FTS-indexed title+body (in memory); only hit disk for matches.
     for (const row of await notesForQuery(db, owner)) {
-      if (!Q.evaluate(noteAsTask(row), pq, ctx)) continue;
+      const fn = row.folderId ? (folderName.get(row.folderId) ?? null) : null;
+      if (!Q.evaluate(noteAsTask(row, fn), pq, ctx)) continue;
       const n = await getNote(db, owner, row.id); // full entity (path/frontmatter/timestamps)
       if (n) out.push({ type: 'note', ...n });
     }

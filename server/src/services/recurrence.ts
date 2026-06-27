@@ -5,7 +5,7 @@
 
 import type { Kysely } from 'kysely';
 import type { DB, Database_, TasksTable } from '../db.js';
-import { newId } from '../ids.js';
+import { allocateReadableId, newId } from '../ids.js';
 import { Rec } from '../rec.js';
 import type { TaskJson } from '../schemas.js';
 import { loadTask } from './tasks.js';
@@ -64,6 +64,7 @@ async function cloneTask(
       created_at: now,
       completed_at: null,
       updated_at: now,
+      readable_id: await allocateReadableId(trx, src.owner_id, 'task'),
     })
     .execute();
   const labs = await trx

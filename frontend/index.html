@@ -64,6 +64,12 @@
       @new-project="openProjectModal('new', $event)"
       @edit-project="openProjectModal('edit', null, $event)"
       @delete-project="deleteProject"
+      @new-calendar="openCalendarModal('new')"
+      @edit-calendar="openCalendarModal('edit', $event)"
+      @delete-calendar="deleteCalendar"
+      @new-folder="openFolderModal('new', $event)"
+      @edit-folder="openFolderModal('edit', null, $event)"
+      @delete-folder="deleteFolder"
       @edit-label="openLabelEdit"
       @delete-label="deleteLabel"></app-sidebar>
     <div class="scrim" :class="{ show: store.sidebarOpen }" @click="store.sidebarOpen=false"></div>
@@ -71,10 +77,14 @@
     <!-- main -->
     <main class="main">
       <template v-if="store.view.kind==='calendar'">
-        <calendar-view ref="cal" :store="store"></calendar-view>
+        <query-bar ref="qbar" :store="store" @save-query="openSave"></query-bar>
+        <mixed-list v-if="store.isMixedView()" ref="mixed" :store="store"></mixed-list>
+        <calendar-view v-else ref="cal" :store="store"></calendar-view>
       </template>
       <template v-else-if="store.view.kind==='notes'">
-        <notes-view ref="notes" :store="store"></notes-view>
+        <query-bar ref="qbar" :store="store" @save-query="openSave"></query-bar>
+        <mixed-list v-if="store.isMixedView()" ref="mixed" :store="store"></mixed-list>
+        <notes-view v-else ref="notes" :store="store"></notes-view>
       </template>
       <template v-else>
         <query-bar ref="qbar" :store="store" @save-query="openSave"></query-bar>
@@ -134,6 +144,8 @@
 
   <!-- modals -->
   <project-modal v-if="projectModal" :store="store" :model="projectModal" @close="projectModal=null"></project-modal>
+  <calendar-modal v-if="calendarModal" :store="store" :model="calendarModal" @close="calendarModal=null"></calendar-modal>
+  <folder-modal v-if="folderModal" :store="store" :model="folderModal" @close="folderModal=null"></folder-modal>
   <save-query-modal v-if="saveModal" :store="store" :model="saveModal" @close="saveModal=null"></save-query-modal>
   <label-modal v-if="labelModal" :store="store" :model="labelModal" @close="labelModal=null"></label-modal>
   <help-modal v-if="helpOpen" @close="helpOpen=false"></help-modal>
@@ -225,13 +237,15 @@ function loadScript(src){
   return _scriptCache[src];
 }
 // Endpoint base per store array (granular API).
-const SYNC_EP = { tasks:'/api/tasks', projects:'/api/projects', labels:'/api/labels', savedQueries:'/api/saved-queries' };
+const SYNC_EP = { tasks:'/api/tasks', projects:'/api/projects', calendars:'/api/calendars', folders:'/api/folders', labels:'/api/labels', savedQueries:'/api/saved-queries' };
 
 const app = createApp({
   data(){ return {
     store: window.store,
     paletteOpen: false,
     projectModal: null,
+    calendarModal: null,
+    folderModal: null,
     saveModal: null,
     clock: '',
     selIndex: 0,
@@ -302,6 +316,30 @@ const app = createApp({
     newTask(){ this.$nextTick(()=>{ this.$refs.list && this.$refs.list.focusAdd(); }); },
     openProjectModal(mode, parentId, project){
       this.projectModal = { mode, parentId: parentId||null, project: project||null };
+    },
+    openCalendarModal(mode, calendar){
+      this.calendarModal = { mode, calendar: calendar||null };
+    },
+    openFolderModal(mode, parentId, folder){
+      this.folderModal = { mode, parentId: parentId||null, folder: folder||null };
+    },
+    async deleteCalendar(c){
+      if(await this.store.askConfirm('Delete calendar "'+c.name+'"? Its events will be archived.')){
+        const ok = await this.store.softDeleteCalendar(c.id);
+        if(ok){
+          if(this.store.view.kind==='calendar' && this.store.view.calendarId===c.id) this.store.openCalendar();
+          this.store.toast('✓ deleted');
+        }
+      }
+    },
+    async deleteFolder(f){
+      if(await this.store.askConfirm('Delete folder "'+f.name+'"? (only works when it\'s empty)')){
+        const ok = await this.store.softDeleteFolder(f.id);
+        if(ok){
+          if(this.store.view.kind==='notes' && this.store.view.folderId===f.id) this.store.openNotes();
+          this.store.toast('✓ deleted');
+        }
+      }
     },
     openSave(query){ this.saveModal = { mode:'new', query: query||'' }; },
     openViewEdit(sv){ this.saveModal = { mode:'edit', view: sv }; },
@@ -450,6 +488,22 @@ const app = createApp({
       // '/' opens the bottom-bar search (free-text across all tasks)
       if(e.key==='/' && !typing){ e.preventDefault(); this.openSearch(); return; }
       if(typing || this.paletteOpen) return;
+
+      // The query builder + the focused panes work in EVERY app (Tasks/Events/Notes),
+      // so these are handled before the per-app native keys below.
+      // query builder: F collapses the panel, f focuses into it (from any window)
+      if(e.key==='F'){ e.preventDefault(); this.toggleBuilder(); return; }
+      if(e.key==='f'){ e.preventDefault(); this.toggleQueryFocus(); return; }
+      // n toggles the sidebar nav column (parallel to f/F for the query builder)
+      if(e.key==='n'){ e.preventDefault(); this.toggleNav(); return; }
+
+      // each pane has its own navigation while focused (per-app nav + query bar)
+      if(this.store.focusPane==='side'){ this.sidebarKey(e); return; }
+      if(this.store.focusPane==='query'){ this.queryKey(e); return; }
+
+      // a query broadened beyond the app's own type → the flat mixed list (any app)
+      if(this.store.isMixedView()){ this.mixedKey(e); return; }
+
       // calendar: a focused-day cursor. Routed through here (not a private listener) so it
       // inherits the modal gate above — keys don't leak to the grid behind an open menu.
       if(this.store.view.kind==='calendar'){
@@ -465,19 +519,6 @@ const app = createApp({
       // notes: routed to the module so it inherits this handler's modal/typing gate
       // (insert-mode typing already returned at line 444; this fires only in normal/list)
       if(this.store.view.kind==='notes'){ if(this.$refs.notes && this.$refs.notes.onKey) this.$refs.notes.onKey(e); return; }
-
-      // query builder: F collapses the panel, f focuses into it (from any window)
-      if(e.key==='F'){ e.preventDefault(); this.toggleBuilder(); return; }
-      if(e.key==='f'){ e.preventDefault(); this.toggleQueryFocus(); return; }
-      // n toggles the sidebar nav column (parallel to f/F for the query builder)
-      if(e.key==='n'){ e.preventDefault(); this.toggleNav(); return; }
-
-      // each pane has its own navigation while focused
-      if(this.store.focusPane==='side'){ this.sidebarKey(e); return; }
-      if(this.store.focusPane==='query'){ this.queryKey(e); return; }
-
-      // mixed-type results (type: spans beyond tasks) are a flat list, not the task tree
-      if(this.store.isMixedView()){ this.mixedKey(e); return; }
 
       // subtask move mode (m): j/k reorder the held subtask among its siblings;
       // m/enter/esc drop it. selectedTaskId stays on it, so .sel / .moving track it.
@@ -570,9 +611,13 @@ const app = createApp({
       let id=this.store.sideFocusId;
       if(!items.some(i=>i.id===id)){
         const v=this.store.view;
+        const ck=this.store.categoryKind();
+        // are we on a category view (a project / a specific calendar / a specific folder)?
+        const onCategory=(v.kind==='project') || (v.kind==='calendar'&&v.calendarId) || (v.kind==='notes'&&v.folderId);
+        const catId=v.calendarId ?? v.folderId ?? v.id;
         const cur=items.find(i =>
-          (v.kind==='project' && i.kind==='project' && i.id===v.id) ||
-          (v.kind==='query'   && i.kind!=='project' && i.kind!=='head' && i.id===v.id));
+          (onCategory && i.kind===ck && i.id===catId) ||
+          (!onCategory && i.kind==='query' && i.id===v.id));   // a saved view (any app) by id
         id=cur ? cur.id : (items.find(i=>i.kind!=='head') || items[0]).id;
       }
       this.store.sideFocusId=id;
@@ -613,7 +658,8 @@ const app = createApp({
       const qb=this.$refs.qbar; if(!qb) return;
       switch(e.key){
         case 'i': e.preventDefault(); qb.focus(); return;        // into the raw query editor (from anywhere)
-        case 's': e.preventDefault(); qb.save(); return;         // save as smart view
+        case 's': e.preventDefault(); qb.save(); return;         // save as a NEW smart view
+        case 'u': e.preventDefault(); qb.update(); return;       // update the active saved view in place
         case 'x': e.preventDefault(); qb.clearQuery(); return;   // clear the query
         case 'Escape': e.preventDefault(); this.exitQuery(); return;
         case 'Enter': e.preventDefault(); this.exitQuery(); return;  // apply & view results
@@ -637,13 +683,29 @@ const app = createApp({
       let idx=items.findIndex(i=>i.id===this.store.sideFocusId);
       if(idx<0) idx=0;
 
+      // the per-app "category" kind (project / calendar / folder) + a test for it
+      const cat = this.store.categoryKind();
+      const isCat = (k)=> k==='project' || k==='calendar' || k==='folder';
       // which section the focused row belongs to — drives a/A "add the right kind"
-      const sectionOf=(it)=> !it ? 'project'
+      const sectionOf=(it)=> !it ? cat
         : it.kind==='head'  ? it.section
         : it.kind==='query' ? 'query'
         : it.kind==='label' ? 'label'
-        : 'project';
+        : it.kind;   // a category row → its own section name
       const addLabelPrompt=()=> this.store.askPrompt('New label name').then(nm=>{ if(nm && nm.trim()) this.store.addLabel(nm.trim()); });
+      // open the new/edit modal for whichever category kind is given
+      const newCat=(kind, parentId)=> kind==='calendar' ? this.openCalendarModal('new')
+        : kind==='folder' ? this.openFolderModal('new', parentId)
+        : this.openProjectModal('new', parentId);
+      const editCat=(kind, node)=> kind==='calendar' ? this.openCalendarModal('edit', node)
+        : kind==='folder' ? this.openFolderModal('edit', null, node)
+        : this.openProjectModal('edit', null, node);
+      const deleteCat=(kind, node)=> kind==='calendar' ? this.deleteCalendar(node)
+        : kind==='folder' ? this.deleteFolder(node)
+        : this.deleteProject(node);
+      const moveCat=(kind, node, dir)=> kind==='calendar' ? this.store.moveCalendar(node, dir)
+        : kind==='folder' ? this.store.moveFolder(node, dir)
+        : this.store.moveProject(node, dir);
 
       // move mode: j/k reorder the held item; m/enter/esc drop it
       if(this.store.moveId){
@@ -651,7 +713,7 @@ const app = createApp({
         const reorder=(dir)=>{
           if(!moved) return;
           if(moved.kind==='query') this.store.moveView(moved.ref, dir);
-          else if(moved.kind==='project') this.store.moveProject(moved.ref, dir);
+          else if(isCat(moved.kind)) moveCat(moved.kind, moved.ref, dir);
           this.scrollSideIntoView();
         };
         switch(e.key){
@@ -680,13 +742,13 @@ const app = createApp({
           e.preventDefault();
           const it=items[idx];
           if(it && it.kind==='head'){ if(this.store.navSections[it.section]) this.toggleSection(it.section); break; }  // l expands a collapsed section
-          if(it && it.kind==='project' && it.ref.collapsed && this.store.childProjects(it.ref.id).length){ it.ref.collapsed=false; break; }  // expand a collapsed parent
+          if(it && isCat(it.kind) && it.ref.collapsed && this.store.catChildren(it.kind, it.ref.id).length){ it.ref.collapsed=false; break; }  // expand a collapsed parent
           this.store.openSideItem(it); this.exitSidebar(); break;
         }
         case 'e': {
           e.preventDefault();
           const it=items[idx];
-          if(it.kind==='project') this.openProjectModal('edit', null, it.ref);
+          if(isCat(it.kind)) editCat(it.kind, it.ref);
           else if(it.kind==='query') this.openViewEdit(it.ref);
           else if(it.kind==='label') this.openLabelEdit(it.ref);
           break;
@@ -696,7 +758,7 @@ const app = createApp({
           const it=items[idx];
           if(it.kind==='query') this.deleteView(it.ref);
           else if(it.kind==='label') this.deleteLabel(it.ref);
-          else if(it.kind==='project') this.deleteProject(it.ref);
+          else if(isCat(it.kind)) deleteCat(it.kind, it.ref);
           break;
         }
         case 'u': {   // dUplicate the focused project
@@ -720,8 +782,9 @@ const app = createApp({
           const sect=sectionOf(it);
           if(sect==='query') this.openSave('');
           else if(sect==='label') addLabelPrompt();
-          else if(it && it.kind==='project') this.openProjectModal('new', it.ref.id);  // subproject under the focused project
-          else this.openProjectModal('new', null);                                     // projects header → top-level
+          // a nestable category row → add a child under it; else top-level of the section kind
+          else if(it && (it.kind==='project'||it.kind==='folder')) newCat(it.kind, it.ref.id);
+          else newCat(sect, null);
           break;
         }
         case 'A': {   // add a top-level item in the focused section
@@ -729,13 +792,13 @@ const app = createApp({
           const sect=sectionOf(items[idx]);
           if(sect==='query') this.openSave('');
           else if(sect==='label') addLabelPrompt();
-          else this.openProjectModal('new', null);
+          else newCat(sect, null);
           break;
         }
         case 'm': {   // enter move mode on the focused view / project
           e.preventDefault();
           const it=items[idx];
-          if(it && (it.kind==='query' || it.kind==='project')){
+          if(it && (it.kind==='query' || isCat(it.kind))){
             this.store.sideFocusId=it.id; this.store.moveId=it.id;
             this.store.toast('↕ move mode · j/k reorder · esc to drop');
           }
@@ -753,9 +816,9 @@ const app = createApp({
           const it=items[idx];
           if(!it) break;
           if(it.kind==='head'){ this.toggleSection(it.section); break; }   // toggle the section (like Tab)
-          if(it.kind==='project'){
-            if(!it.ref.collapsed && this.store.childProjects(it.ref.id).length){ it.ref.collapsed=true; this.scrollSideIntoView(); break; }  // collapse expanded parent (stay on it)
-            this.store.sideFocusId = it.ref.parentId || 'head_project';   // up: parent project, else the projects header
+          if(isCat(it.kind)){
+            if(!it.ref.collapsed && this.store.catChildren(it.kind, it.ref.id).length){ it.ref.collapsed=true; this.scrollSideIntoView(); break; }  // collapse expanded parent (stay on it)
+            this.store.sideFocusId = it.ref.parentId || ('head_'+it.kind);   // up: parent, else the section header
             this.scrollSideIntoView(); break;
           }
           this.store.sideFocusId = (it.kind==='label') ? 'head_label' : 'head_query';   // view/label → its section header
@@ -782,6 +845,8 @@ const app = createApp({
     applyState(s){
       this._suppress = true;
       if(s.projects){ this.store.projects.splice(0, this.store.projects.length, ...s.projects); }
+      if(s.calendars){ this.store.calendars.splice(0, this.store.calendars.length, ...s.calendars); }
+      if(s.folders){ this.store.folders.splice(0, this.store.folders.length, ...s.folders); }
       if(s.tasks){ this.store.tasks.splice(0, this.store.tasks.length, ...s.tasks); }
       if(s.labels){ this.store.labels.splice(0, this.store.labels.length, ...s.labels); }
       if(s.savedQueries){ this.store.savedQueries.splice(0, this.store.savedQueries.length, ...s.savedQueries); }
@@ -800,9 +865,9 @@ const app = createApp({
       // order so a task's parent precedes it), then updates, then deletes (children
       // before parents). Tasks are only removed via the archive path, not here.
       const ops = [];
-      for(const t of ['projects','labels','savedQueries','tasks']) for(const id of d[t].creates) ops.push({ type:t, action:'create', id });
-      for(const t of ['projects','labels','savedQueries','tasks']) for(const id of d[t].updates) ops.push({ type:t, action:'update', id });
-      for(const t of ['tasks','savedQueries','labels','projects']) for(const id of d[t].deletes) ops.push({ type:t, action:'delete', id });
+      for(const t of ['projects','calendars','folders','labels','savedQueries','tasks']) for(const id of d[t].creates) ops.push({ type:t, action:'create', id });
+      for(const t of ['projects','calendars','folders','labels','savedQueries','tasks']) for(const id of d[t].updates) ops.push({ type:t, action:'update', id });
+      for(const t of ['tasks','savedQueries','labels','folders','calendars','projects']) for(const id of d[t].deletes) ops.push({ type:t, action:'delete', id });
       if(!ops.length) return;
       for(const op of ops){
         const ok = await this.syncOp(op, curr);
@@ -877,7 +942,7 @@ const app = createApp({
     async startSession(){
       if(!this._keysAttached){ document.addEventListener('keydown', this.onKey); this._keysAttached = true; }
       if(!this._watchAttached){
-        this.$watch(()=>JSON.stringify([this.store.tasks,this.store.projects,this.store.labels,this.store.savedQueries]),
+        this.$watch(()=>JSON.stringify([this.store.tasks,this.store.projects,this.store.calendars,this.store.folders,this.store.labels,this.store.savedQueries]),
           ()=>{ if(this._suppress) return; clearTimeout(this._save); this._save=setTimeout(this.persist,300); });
         this._watchAttached = true;
       }
@@ -885,6 +950,7 @@ const app = createApp({
     },
     clearLocalState(){
       this.store.tasks.splice(0); this.store.projects.splice(0);
+      this.store.calendars.splice(0); this.store.folders.splice(0);
       this.store.labels.splice(0); this.store.savedQueries.splice(0);
     },
     onAccountSaved(user){ this.store.currentUser = user; window.applyTheme(user.theme); this.store.applySortPrefs(user.sort_prefs); },
@@ -920,6 +986,10 @@ const app = createApp({
     // soft-delete hooks (callable from child components, like saveNow)
     this.store.softDeleteProject = (id) => this.mutateDelete('/api/projects/'+id);
     this.store.softDeleteTask    = (id) => this.mutateDelete('/api/tasks/'+id);
+    // calendars archive (cascade events); folders delete only when empty (server
+    // returns 4xx → mutateDelete toasts + skips the resync, store stays consistent).
+    this.store.softDeleteCalendar = (id) => this.mutateDelete('/api/calendars/'+id);
+    this.store.softDeleteFolder   = (id) => this.mutateDelete('/api/folders/'+id);
     // ---- events (D2): the calendar talks to the granular API directly (events
     // aren't in the snapshot diff-sync). Refetch the visible range after a mutate.
     this.store.fetchEvents = async (from, to) => {
@@ -989,7 +1059,7 @@ const app = createApp({
       const url = n.id ? '/api/notes/'+n.id : '/api/notes';
       try{
         const r = await fetch(url, { method, credentials:'include',
-          headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ title:n.title, body:n.body }) });
+          headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ title:n.title, body:n.body, folderId:n.folderId, reviewAt:n.reviewAt }) });
         if(r.status===401){ this.handleAuthExpired(); return null; }
         if(r.ok) return await r.json();
         this.store.toast('save failed ('+r.status+')');
@@ -1038,7 +1108,7 @@ const app = createApp({
         if(res.ok){
           const seen = new Set(); const out = [];
           for(const o of (await res.json()).occurrences){
-            if(!seen.has(o.id)){ seen.add(o.id); out.push({ id:o.id, title:o.title, startAt:o.startAt }); }
+            if(!seen.has(o.id)){ seen.add(o.id); out.push({ id:o.id, title:o.title, startAt:o.startAt, readableId:o.readableId }); }
           }
           return out;
         }
@@ -1143,6 +1213,8 @@ app.component('event-detail', window.EventDetail);
 app.component('query-bar', window.QueryBar);
 app.component('command-palette', window.CommandPalette);
 app.component('project-modal', window.ProjectModal);
+app.component('calendar-modal', window.CalendarModal);
+app.component('folder-modal', window.FolderModal);
 app.component('save-query-modal', window.SaveQueryModal);
 app.component('label-modal', window.LabelModal);
 app.component('help-modal', window.HelpModal);

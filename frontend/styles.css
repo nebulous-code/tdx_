@@ -403,6 +403,10 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .checkbox.on { background: var(--amber); color: var(--on-accent); border-color: var(--amber); }
 
 .tmain { flex: 1; min-width: 0; }
+/* right-edge category icon (always shown on root rows), tinted the category color */
+.tcat-icon { flex: 0 0 auto; align-self: center; font-size: 13px; opacity: .8; padding-left: 6px; text-shadow: none; }
+/* readable-id chip in the meta row */
+.tmeta .m.rid { font-family: var(--mono, monospace); opacity: .6; font-size: 10px; }
 .ttitle { color: var(--amber-hi); word-break: break-word; }
 .tmeta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 2px; font-size: 11px; text-shadow: none; }
 .tmeta .m { display: inline-flex; align-items: center; gap: 4px; color: var(--amber-mut); white-space: nowrap; }
@@ -977,3 +981,11 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .link-add .ti { width: 100%; background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--radius); color: var(--amber-hi); font-family: var(--mono); font-size: 12px; padding: 4px 7px; outline: none; }
 .link-add .ti:focus { border-color: var(--amber-mut); }
 .link-add .ev-link-opt .lc-type { font-size: 9px; text-transform: uppercase; margin-right: 4px; }
+
+/* ---- D2 2E: per-app category filters + readable ids ---- */
+.cal-filter, .notes-folder { font-size: 12px; display: inline-flex; align-items: center; gap: 5px; padding: 1px 6px; border: 1px solid var(--line-2); border-radius: var(--radius); }
+.cal-filter-x, .notes-folder-x { cursor: pointer; opacity: .6; margin-left: 2px; }
+.cal-filter-x:hover, .notes-folder-x:hover { opacity: 1; }
+.notes-row-rid { font-family: var(--mono); font-size: 10px; opacity: .5; margin-right: 6px; }
+.note-folder-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.note-folder-row .ti { flex: 1; }

@@ -15,7 +15,8 @@ window.QueryBar = {
              placeholder="query… e.g.  label:urgent due:<7d status:open"
              @keydown.enter="run" @keydown.esc="blur" />
       <span class="qbtn" :class="{on: store.builderOpen}" @click="store.builderOpen=!store.builderOpen" title="Query builder (f · F to collapse)">⊞<span>query</span></span>
-      <span v-if="store.focusPane==='query'" class="qbtn" @click="save" title="Save as smart view (s)">★<span><u>s</u>ave</span></span>
+      <span v-if="store.focusPane==='query' && updatable" class="qbtn" @click="update" title="Update this saved view in place (u)">⟳<span><u>u</u>pdate</span></span>
+      <span v-if="store.focusPane==='query'" class="qbtn" @click="save" title="Save as a new smart view (s)">★<span><u>s</u>ave</span></span>
       <span v-if="store.focusPane==='query'" class="qbtn" @click="clearQuery" title="Clear (x)"><u>x</u></span>
     </div>
 
@@ -51,6 +52,12 @@ window.QueryBar = {
   },
   computed: {
     isCustom(){ return this.store.view.kind==='query' && this.store.view.id==='custom'; },
+    // the per-app category dimension (Tasks→projects, Events→calendars, Notes→folders)
+    catKind(){ return this.store.categoryKind(); },
+    catLabel(){ return { project:'projects', calendar:'calendars', folder:'folders' }[this.catKind]; },
+    catItems(){ return this.catKind==='calendar' ? this.store.calendars : this.catKind==='folder' ? this.store.folders : this.store.projects; },
+    // the editable saved view this query belongs to (null on system/seed views or a fresh query)
+    updatable(){ return !!this.store.activeSavedQuery(); },
     // canonical group/chip structure — single source for both the template and
     // KbForm's kbRows(); each chip carries display + toggle metadata.
     navGroups(){
@@ -68,7 +75,9 @@ window.QueryBar = {
             ...this.store.sortedLabels().map(l=>({field:'label',value:l.name,text:'#'+l.name,exclusive:false})),
             {field:'has',value:'no-labels',text:'no tag',untag:true,sepBefore:true},
           ] },
-        { key:'project', label:'project', chips:this.store.projects.map(p=>({field:'project',value:p.name,text:p.name,glyph:p.glyph,color:this.store.resolveColor(p.color),exclusive:true})) },
+        // the category group swaps by app (projects / calendars / folders) but writes the
+        // GENERIC cross-app `category:` field, so one chip (e.g. "gym") spans all three apps.
+        { key:'category', label:this.catLabel, chips:this.catItems.map(c=>({field:'category',value:c.name,text:c.name,glyph:c.glyph,color:this.store.resolveColor(c.color),exclusive:true})) },
         { key:'flags', label:'flags', chips:[
             { compl:'open', text:'open' }, { compl:'done', text:'completed' },
             {field:'recurring',value:'true',text:'↻ recurring',exclusive:true,sepBefore:true},
@@ -85,7 +94,17 @@ window.QueryBar = {
         return v.query || '';
       },
       set(val){
-        this.store.setView({ kind:'query', id:'custom', title:'custom query', query:val });
+        // editing the query must keep the current APP: in Events/Notes we update the
+        // calendar/notes view in place (preserving its category filter); only Tasks
+        // spins up a 'custom' query view.
+        const v=this.store.view, app=this.store.currentApp();
+        if(app==='events') this.store.setView({ kind:'calendar', id:v.id, title:v.title, query:val, calendarId:v.calendarId??null, originId:v.originId });
+        else if(app==='notes') this.store.setView({ kind:'notes', id:v.id, title:v.title, query:val, folderId:v.folderId??null, originId:v.originId });
+        else {
+          // remember which saved view this custom draft derived from, so Update can save in place
+          const origin = this.store.savedQueries.some(s=>s.id===v.id) ? v.id : (v.originId||null);
+          this.store.setView({ kind:'query', id:'custom', title:'custom query', query:val, originId:origin });
+        }
       }
     },
     terms(){ return Q.parse(this.queryString).terms; }
@@ -130,14 +149,14 @@ window.QueryBar = {
       // project/label terms are stored as slugs (alphanumeric-only), so compare by
       // slug — otherwise multi-word names ("Move Apartments") never match the chip.
       return this.terms.some(t => t.field===field && !t.neg &&
-        ((field==='project'||field==='label') ? Q.slug(t.value)===Q.slug(v) : t.value===v));
+        ((field==='project'||field==='label'||field==='category') ? Q.slug(t.value)===Q.slug(v) : t.value===v));
     },
     setTerms(terms){ this.queryString = Q.build(terms); },
     // project/label values are slugged (alphanumeric-only) so multi-word names
     // ("Move Apartments") stay a single token; other fields keep their literal
     // value (slug would break comparisons like due:<3d).
     normValue(field,value){
-      return (field==='project'||field==='label') ? Q.slug(value) : String(value).toLowerCase();
+      return (field==='project'||field==='label'||field==='category') ? Q.slug(value) : String(value).toLowerCase();
     },
     toggle(field,value){
       value=this.normValue(field,value);
@@ -183,7 +202,16 @@ window.QueryBar = {
       this.setTerms(terms);
     },
     clearQuery(){ this.queryString=''; },
-    save(){ this.$emit('save-query', this.queryString); },
+    save(){ this.$emit('save-query', this.queryString); },   // save AS NEW (opens the modal)
+    // overwrite the active saved view's query in place (keeps its name/glyph/color), then
+    // re-open it so the view stops being a 'custom' draft. No-op on system/seed views.
+    update(){
+      const sv=this.store.activeSavedQuery();
+      if(!sv) return;
+      sv.query=(this.queryString||'').trim();
+      this.store.openQueryView(sv);
+      this.store.toast('✓ updated "'+sv.name+'"');
+    },
     run(){ this.$refs.q && this.$refs.q.blur(); },
     blur(){ this.$refs.q && this.$refs.q.blur(); },
     focus(){ this.$refs.q && (this.$refs.q.focus(), this.$refs.q.select()); },

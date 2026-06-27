@@ -7,13 +7,24 @@
 window.NotesView = {
   props: ['store'],
   data() {
-    return { list: [], q: '', hits: null, sel: null, creating: false, mode: 'normal', draft: { title: '', body: '' }, saved: { title: '', body: '' }, listSel: 0, eventList: [], linkMenu: null };
+    return { list: [], q: '', hits: null, sel: null, creating: false, mode: 'normal', draft: { title: '', body: '' }, saved: { title: '', body: '' }, listSel: 0, eventList: [], linkMenu: null, matchIds: null, _fseq: 0 };
   },
   computed: {
-    rows() { return this.hits ?? this.list; },
+    // when a folder is selected in the nav, narrow the (non-search) list to it
+    folderFilter() { return this.store.view.folderId || null; },
+    activeFolder() { return this.folderFilter ? this.store.folderById(this.folderFilter) : null; },
+    // the active query (type:note by default); a real predicate beyond type: narrows the list
+    activeQuery() { return this.store.currentQuery(); },
+    hasPredicate() { return Q.parse(this.activeQuery()).terms.some((t) => t.field !== 'type'); },
+    rows() {
+      if (this.hits) return this.hits;   // search results ignore the folder + query filter
+      let r = this.folderFilter ? this.list.filter((n) => n.folderId === this.folderFilter) : this.list;
+      if (this.matchIds) r = r.filter((n) => this.matchIds.has(n.id));
+      return r;
+    },
     editing() { return !!this.sel || this.creating; },
     rendered() { return window.MdRender ? window.MdRender.html(this.draft.body) : this.draft.body; },
-    dirty() { return this.editing && (this.draft.title !== this.saved.title || this.draft.body !== this.saved.body); },
+    dirty() { return this.editing && (this.draft.title !== this.saved.title || this.draft.body !== this.saved.body || this.draft.folderId !== this.saved.folderId); },
   },
   watch: {
     // markdown renders synchronously; tdx-query blocks fetch async, so hydrate after paint
@@ -21,9 +32,12 @@ window.NotesView = {
     mode(v) { if (v === 'normal') this.$nextTick(this.hydrateQueries); },
     // opened from a link chip on a task/event (store.openNote sets this)
     'store.pendingNoteId'(id) { if (id) { this.store.pendingNoteId = null; this.open(id); } },
+    // re-run the query-bar filter when the active query changes
+    activeQuery() { this.refilter(); },
   },
   mounted() {
     this.load();
+    this.refilter();
     this.store.fetchEventList().then((e) => { this.eventList = e; }); // for the [[ picker
     this.store.dirtyCheck = () => this.dirty; // app-switch guard (store.setView) reads this
     if (this.store.pendingNoteId) { const id = this.store.pendingNoteId; this.store.pendingNoteId = null; this.open(id); }
@@ -31,6 +45,15 @@ window.NotesView = {
   beforeUnmount() { this.store.dirtyCheck = null; },
   methods: {
     async load() { this.list = await this.store.fetchNotes(); this.listSel = 0; },
+    // run the query through the unified engine and keep the set of matching note ids;
+    // a query with only type: (no real predicate) clears the filter (show every note)
+    async refilter() {
+      if (!this.hasPredicate) { this.matchIds = null; return; }
+      const seq = ++this._fseq;
+      const items = await this.store.runQuery(this.activeQuery());
+      if (seq !== this._fseq) return;
+      this.matchIds = new Set((items || []).filter((i) => i.type === 'note').map((i) => i.id));
+    },
     async runSearch() {
       const q = this.q.trim();
       this.hits = q ? await this.store.searchNotes(q) : null;
@@ -42,15 +65,16 @@ window.NotesView = {
       this.sel = n;
       this.creating = false;
       this.mode = 'normal';        // open into the rendered view
-      this.draft = { title: n.title, body: n.body };
-      this.saved = { title: n.title, body: n.body };
+      this.draft = { title: n.title, body: n.body, folderId: n.folderId ?? null };
+      this.saved = { title: n.title, body: n.body, folderId: n.folderId ?? null };
     },
     // open a blank editor — NOTHING is written to the vault until the first save
     newNote() {
       this.sel = null;
       this.creating = true;
-      this.draft = { title: '', body: '' };
-      this.saved = { title: '', body: '' };
+      // a note created while viewing a folder is filed there
+      this.draft = { title: '', body: '', folderId: this.folderFilter || null };
+      this.saved = { title: '', body: '', folderId: this.folderFilter || null };
       this.mode = 'insert';        // a fresh note starts in edit mode
       this.$nextTick(() => { const el = this.$refs.titleInput; if (el) el.focus(); });
     },
@@ -97,10 +121,10 @@ window.NotesView = {
     linkCandidates(query) {
       const q = query.trim().toLowerCase();
       const out = [];
-      const add = (type, id, title) => { if (out.length < 8 && (title || '').toLowerCase().includes(q)) out.push({ type, id, title }); };
-      for (const t of this.store.tasks) { if (!t.archived) add('task', t.id, t.title); }
-      for (const e of this.eventList) add('event', e.id, e.title);
-      for (const n of this.list) { if (!this.sel || n.id !== this.sel.id) add('note', n.id, n.title); }
+      const add = (type, id, title, readableId) => { if (out.length < 8 && (title || '').toLowerCase().includes(q)) out.push({ type, id, title, readableId }); };
+      for (const t of this.store.tasks) { if (!t.archived) add('task', t.id, t.title, t.readableId); }
+      for (const e of this.eventList) add('event', e.id, e.title, e.readableId);
+      for (const n of this.list) { if (!this.sel || n.id !== this.sel.id) add('note', n.id, n.title, n.readableId); }
       return out;
     },
     pickLink(item) {
@@ -108,7 +132,11 @@ window.NotesView = {
       if (!m) return;
       const ta = this.$refs.bodyArea;
       const pos = ta ? ta.selectionStart : m.start + 2 + m.query.length;
-      const insert = item.type === 'note' ? `[[${item.title}]]` : `[[${item.type}:${item.id}|${item.title}]]`;
+      // prefer the readable id ([[t_0001]]) — the scanner resolves it back to the
+      // target; fall back to a note's name, or the legacy type:uuid form.
+      const insert = item.readableId ? `[[${item.readableId}]]`
+        : item.type === 'note' ? `[[${item.title}]]`
+        : `[[${item.type}:${item.id}|${item.title}]]`;
       this.draft.body = this.draft.body.slice(0, m.start) + insert + this.draft.body.slice(pos);
       this.closeLinkMenu();
       this.$nextTick(() => { if (ta) { ta.focus(); const c = m.start + insert.length; ta.setSelectionRange(c, c); } });
@@ -177,18 +205,18 @@ window.NotesView = {
     // ---- save / delete ----
     async persist() {           // quiet save (checkbox toggles); needs an existing note
       if (!this.sel) return;
-      const n = await this.store.saveNote({ id: this.sel.id, title: this.draft.title.trim() || this.sel.title, body: this.draft.body });
-      if (n) { this.sel = n; this.draft = { title: n.title, body: n.body }; this.saved = { title: n.title, body: n.body }; }
+      const n = await this.store.saveNote({ id: this.sel.id, title: this.draft.title.trim() || this.sel.title, body: this.draft.body, folderId: this.draft.folderId });
+      if (n) { this.sel = n; this.draft = { title: n.title, body: n.body, folderId: n.folderId ?? null }; this.saved = { title: n.title, body: n.body, folderId: n.folderId ?? null }; }
     },
     async save() {
       const title = this.draft.title.trim();
       if (!title) { this.store.toast('name the note first'); return; }
-      const n = await this.store.saveNote({ id: this.sel?.id, title, body: this.draft.body });
+      const n = await this.store.saveNote({ id: this.sel?.id, title, body: this.draft.body, folderId: this.draft.folderId });
       if (n) {
         this.sel = n;
         this.creating = false;
-        this.draft = { title: n.title, body: n.body };
-        this.saved = { title: n.title, body: n.body };
+        this.draft = { title: n.title, body: n.body, folderId: n.folderId ?? null };
+        this.saved = { title: n.title, body: n.body, folderId: n.folderId ?? null };
         await this.load();
         this.$nextTick(() => { if (this.$refs.links) this.$refs.links.load(); }); // saving can change content links
         this.store.toast('✓ saved');
@@ -216,6 +244,7 @@ window.NotesView = {
   <div class="notes">
     <div class="notes-head">
       <span class="hi notes-title">notes</span>
+      <span v-if="!editing && activeFolder" class="notes-folder" :style="{ color: store.resolveColor(activeFolder.color) }" title="filtered to this folder">{{ activeFolder.glyph }} {{ activeFolder.name }} <span class="notes-folder-x" @click="store.openNotes()" title="show all notes">✕</span></span>
       <input v-if="!editing" class="ti notes-search" v-model="q" @input="runSearch" placeholder="search…">
       <span class="grow"></span>
       <span v-if="!editing" class="qbtn" @click="newNote">＋ new</span>
@@ -227,6 +256,7 @@ window.NotesView = {
     <div v-if="!editing" class="notes-list">
       <div v-if="!rows.length" class="mut notes-empty">no notes yet — ＋ new, or drop .md files in the vault and hit sync</div>
       <div v-for="(n, i) in rows" :key="n.id" class="notes-row" :class="{ on: i===listSel }" @click="listSel=i; open(n.id)">
+        <span v-if="n.readableId" class="mut notes-row-rid">{{ n.readableId }}</span>
         <span class="notes-row-title">{{ n.title }}</span>
         <span v-if="n.snippet" class="mut notes-row-snip">{{ n.snippet }}</span>
       </div>
@@ -234,6 +264,13 @@ window.NotesView = {
 
     <div v-else class="note-editor">
       <input ref="titleInput" class="ti note-title" v-model="draft.title" placeholder="note name (this is the filename)" @keydown.enter="save">
+      <div v-if="store.folders.length" class="note-folder-row">
+        <span class="ev-rl">folder</span>
+        <select class="ti" v-model="draft.folderId">
+          <option :value="null">— none (root) —</option>
+          <option v-for="f in store.folders" :key="f.id" :value="f.id">{{ f.glyph }} {{ f.name }}</option>
+        </select>
+      </div>
       <div class="note-body-wrap">
         <template v-if="mode==='insert'">
           <textarea ref="bodyArea" class="ti note-body" v-model="draft.body"

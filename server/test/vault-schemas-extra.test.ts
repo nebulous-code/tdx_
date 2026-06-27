@@ -84,6 +84,7 @@ const baseTask: TasksTable = {
   created_at: 'c',
   completed_at: null,
   updated_at: 'u',
+  readable_id: null,
 };
 
 test('rowToTask: null/falsy arms', () => {
@@ -141,6 +142,7 @@ const baseProject: ProjectsTable = {
   health: '',
   created_at: 'c',
   updated_at: 'u',
+  readable_id: null,
 };
 
 test('rowToProject: collapsed false + empty health', () => {
@@ -205,6 +207,7 @@ const baseEvent: EventsTable = {
   owner_id: 'o',
   creator_id: 'o',
   assignee_id: null,
+  calendar_id: null,
   title: 'E',
   notes: '',
   location: null,
@@ -217,6 +220,7 @@ const baseEvent: EventsTable = {
   archived: 0,
   created_at: 'c',
   updated_at: 'u',
+  readable_id: null,
 };
 
 test('rowToEvent: falsy/null arms', () => {
@@ -254,19 +258,26 @@ test('rowToNote: maps row + injected body', () => {
     id: 'n',
     owner_id: 'o',
     path: 'A.md',
+    folder_id: null,
     title: 'A',
     mtime: 'm',
     frontmatter: null,
+    review_at: null,
     tombstoned: 0,
     created_at: 'c',
     updated_at: 'u',
+    readable_id: null,
   };
   assert.deepEqual(rowToNote(row, 'hello body'), {
     id: 'n',
     ownerId: 'o',
     path: 'A.md',
+    folderId: null,
     title: 'A',
     body: 'hello body',
+    reviewAt: null,
+    labels: [],
+    readableId: null,
     createdAt: 'c',
     updatedAt: 'u',
   });

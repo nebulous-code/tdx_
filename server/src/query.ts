@@ -18,6 +18,13 @@ export interface Task {
   recurrence?: string | null;
   priority?: number;
   size?: number;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  // cross-app categorizer carriers (set by the unified query for events/notes): `kind`
+  // is the entity type and `category` is its categorizer's NAME (project/calendar/folder).
+  // Plain tasks leave both unset → `category:` falls back to resolving the project name.
+  kind?: string;
+  category?: string | null;
   [k: string]: unknown;
 }
 export interface Project {
@@ -92,6 +99,13 @@ function slug(s: string | null | undefined): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '');
 }
+// match a categorizer NAME against a query value (exact slug, or substring) — the
+// cross-app `category:`/`calendar:`/`folder:` join key (mirrors resolveProjects' name arm)
+function catNameMatch(name: string | null | undefined, value: string): boolean {
+  const have = slug(name);
+  const want = slug(value);
+  return have === want || (want.length > 0 && have.includes(want));
+}
 
 function dueDelta(task: Task): number | null {
   // days from today to due (negative = overdue). null if no due.
@@ -102,6 +116,47 @@ function remDelta(task: Task): number | null {
   if (!task.reminder) return null;
   // reminder may be a 'YYYY-MM-DDTHH:MM' timestamp; query filters are day-grained.
   return Rec.daysBetween(today(), Rec.parseYMD(task.reminder.slice(0, 10)) as Date);
+}
+// created/edited are full timestamps (often UTC), so resolve their LOCAL calendar day
+// (startOfDay of the instant) — comparing the raw UTC date-string to a local today() would
+// be off by one near midnight in non-UTC zones. (due/reminder are date-only, handled above.)
+function createdDelta(task: Task): number | null {
+  if (!task.createdAt) return null;
+  return Rec.daysBetween(today(), Rec.startOfDay(new Date(task.createdAt)));
+}
+function editedDelta(task: Task): number | null {
+  if (!task.updatedAt) return null;
+  return Rec.daysBetween(today(), Rec.startOfDay(new Date(task.updatedAt)));
+}
+
+// true calendar-aligned ranges (this/last/next week|month) — distinct from the
+// day-window due:week/due:month. Returns true|false when `value` is a calendar
+// keyword (matched against `dateStr`), or null when it isn't one.
+function calMatch(
+  dateStr: string | null | undefined,
+  value: string,
+  weekStart?: number,
+): boolean | null {
+  const t = today();
+  const y = t.getFullYear();
+  const m = t.getMonth();
+  let range: [Date, Date] | null = null;
+  if (value === 'this-month') range = [new Date(y, m, 1), new Date(y, m + 1, 0)];
+  else if (value === 'next-month') range = [new Date(y, m + 1, 1), new Date(y, m + 2, 0)];
+  else if (value === 'last-month') range = [new Date(y, m - 1, 1), new Date(y, m, 0)];
+  else if (value === 'this-week' || value === 'last-week' || value === 'next-week') {
+    const ws = weekStart == null ? 1 : weekStart;
+    const back = (t.getDay() - ws + 7) % 7;
+    const start = Rec.addDays(t, -back);
+    const off = value === 'last-week' ? -7 : value === 'next-week' ? 7 : 0;
+    const s = Rec.addDays(start, off);
+    range = [s, Rec.addDays(s, 6)];
+  }
+  if (!range) return null;
+  if (!dateStr) return false;
+  // timestamps (created/edited) → their LOCAL day; date-only strings (due/review) → as-is
+  const ymd = dateStr.length > 10 ? Rec.ymd(new Date(dateStr)) : dateStr.slice(0, 10);
+  return ymd >= Rec.ymd(range[0]) && ymd <= Rec.ymd(range[1]);
 }
 
 function cmpDate(delta: number | null, op: string): boolean {
@@ -163,6 +218,25 @@ function evalTerm(task: Task, t: Term, ctx: Ctx): boolean {
       res = ids.has(task.projectId as string);
       break;
     }
+    case 'category': {
+      // generic cross-app categorizer: project (task) / calendar (event) / folder (note),
+      // matched by NAME so one token (`category:gym`) spans all three apps. Events/notes
+      // carry their category name; a plain task falls back to resolving its project.
+      if (task.category != null) res = catNameMatch(task.category, t.value);
+      else {
+        const ids = resolveProjects(t.value, ctx);
+        res = ids.has(task.projectId as string);
+      }
+      break;
+    }
+    case 'calendar':
+      // type-specific: only events have a calendar (a plain task / note never matches)
+      res = task.kind === 'event' && catNameMatch(task.category, t.value);
+      break;
+    case 'folder':
+      // type-specific: only notes have a folder
+      res = task.kind === 'note' && catNameMatch(task.category, t.value);
+      break;
     case 'label': {
       const wants = t.value.split(',').map(slug);
       res = labelsOf.some((lid) => {
@@ -192,7 +266,32 @@ function evalTerm(task: Task, t: Term, ctx: Ctx): boolean {
         res =
           !!task.due &&
           dueWindow(weekdaySet(t.value), ctx.weekStart).includes(task.due.slice(0, 10));
-      else res = cmpDate(d, t.value);
+      else {
+        const cm = calMatch(task.due, t.value, ctx.weekStart);
+        res = cm !== null ? cm : cmpDate(d, t.value);
+      }
+      break;
+    }
+    case 'created': {
+      const d = createdDelta(task);
+      if (t.value === 'none') res = d === null;
+      else if (t.value === 'set') res = d !== null;
+      else if (t.value === 'today') res = d === 0;
+      else {
+        const cm = calMatch(task.createdAt, t.value, ctx.weekStart);
+        res = cm !== null ? cm : cmpDate(d, t.value);
+      }
+      break;
+    }
+    case 'edited': {
+      const d = editedDelta(task);
+      if (t.value === 'none') res = d === null;
+      else if (t.value === 'set') res = d !== null;
+      else if (t.value === 'today') res = d === 0;
+      else {
+        const cm = calMatch(task.updatedAt, t.value, ctx.weekStart);
+        res = cm !== null ? cm : cmpDate(d, t.value);
+      }
       break;
     }
     case 'reminder': {

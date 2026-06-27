@@ -61,12 +61,21 @@ after(async () => {
   await app.close();
 });
 
-test('bootstrap returns the seeded inbox + 6 system views, no tasks yet', async () => {
+test('bootstrap returns the seeded inbox + system views (task + per-app), no tasks yet', async () => {
   const res = await app.inject({ method: 'GET', url: '/api/bootstrap', headers: { cookie } });
   assert.equal(res.statusCode, 200);
   const body = res.json();
   assert.ok(body.projects.some((p: { name: string }) => p.name === 'inbox'));
-  assert.equal(body.savedQueries.length, 6);
+  // 6 task views + 3 events views + 4 notes views (§2.4 per-app seed views)
+  assert.equal(body.savedQueries.length, 13);
+  assert.equal(
+    body.savedQueries.filter((s: { query: string }) => s.query.includes('type:event')).length,
+    3,
+  );
+  assert.equal(
+    body.savedQueries.filter((s: { query: string }) => s.query.includes('type:note')).length,
+    4,
+  );
   assert.equal(body.tasks.length, 0);
 });
 

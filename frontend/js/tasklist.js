@@ -16,7 +16,7 @@ window.TaskRow = {
   template: `
   <div>
     <div class="task" :class="{ done: task.done, sel: store.selectedTaskId===task.id, moving: store.taskMoveId===task.id }"
-         :style="{ paddingLeft: (12 + depth*22) + 'px' }"
+         :style="rowStyle"
          @click="select">
       <span v-if="subs.length" class="twist-sub" @click.stop="task.collapsed=!task.collapsed">{{ task.collapsed ? '▸' : '▾' }}</span>
       <span v-else-if="depth>0" class="twist-sub mut">└</span>
@@ -24,6 +24,7 @@ window.TaskRow = {
       <div class="tmain">
         <div class="ttitle">{{ task.title }}</div>
         <div class="tmeta">
+          <span v-if="task.readableId" class="m rid mut" title="readable id">{{ task.readableId }}</span>
           <span v-if="depth===0 && proj" class="m tproj">
             <span :style="{color: store.resolveColor(proj.color)}">{{ proj.glyph }}</span>{{ proj.name }}
           </span>
@@ -36,6 +37,7 @@ window.TaskRow = {
           <span v-for="lid in task.labels" :key="lid" class="tag">#{{ labelName(lid) }}</span>
         </div>
       </div>
+      <span v-if="depth===0 && proj" class="tcat-icon" :style="{ color: store.resolveColor(proj.color) }" :title="proj.name">{{ proj.glyph }}</span>
     </div>
     <template v-if="!task.collapsed">
       <task-row v-for="s in subs" :key="s.id" :store="store" :task="s" :depth="depth+1"></task-row>
@@ -46,6 +48,15 @@ window.TaskRow = {
     subs(){ return this.store.subtasks(this.task.id); },
     doneSubs(){ return this.subs.filter(s=>s.done).length; },
     proj(){ return this.store.projectById(this.task.projectId); },
+    // indent + a faint wash in the project color (root rows only) per §2.1
+    rowStyle(){
+      const s = { paddingLeft: (12 + this.depth*22) + 'px' };
+      if(this.depth===0 && this.proj){
+        const c = this.store.resolveColor(this.proj.color);
+        s.background = 'color-mix(in srgb, '+c+' 7%, transparent)';
+      }
+      return s;
+    },
     prioName(){ return this.store.priorityLabel(this.task.priority); },
     recShort(){ return Rec.compact(this.task.recurrence); },
     recFull(){ return Rec.summary(this.task.recurrence); },

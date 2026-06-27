@@ -128,6 +128,8 @@
 
   const store = reactive({
     labels, projects, tasks, savedQueries,
+    calendars: [],           // event categories (flat; mirror projects, no health/nesting)
+    folders: [],             // note categories (nested; each maps to a vault subdir)
     COLORS, GLYPHS,
     // ui state
     view: { kind:'query', id:'sv_today', title:'Today', query:'status:open due:today' },
@@ -148,7 +150,7 @@
     navCollapsed: false,     // desktop: hide the sidebar column (toggled with n)
     deepNavCollapsed: false, // desktop: hide the app-switcher rail (toggled with N)
     deepNavOpen: false,      // mobile: the rail's own slide-in (the > button), independent of the app nav
-    navSections: { query:false, project:false, label:false },  // collapsed sidebar sections (Tab)
+    navSections: { query:false, project:false, calendar:false, folder:false, label:false },  // collapsed sidebar sections (Tab)
     focusPane: 'list',       // 'list' | 'side' | 'query' — which window the keyboard drives
     sideFocusId: null,       // id of the keyboard-focused sidebar item
     moveId: null,            // id of the sidebar item being reordered (m = move mode)
@@ -186,6 +188,71 @@
     return out;
   };
   store.reparentProject = (p, parentId) => { p.parentId = parentId || null; };
+
+  // ---- per-app categories (D2 2E): calendars (events) + folders (notes) ----
+  // Which app the active view belongs to (calendar→events, notes→notes, else tasks).
+  store.currentApp = () => {
+    const k = store.view.kind;
+    return k==='calendar' ? 'events' : k==='notes' ? 'notes' : 'tasks';
+  };
+  // The nav "category" kind for the current app (project / calendar / folder).
+  store.categoryKind = () => {
+    const a = store.currentApp();
+    return a==='events' ? 'calendar' : a==='notes' ? 'folder' : 'project';
+  };
+  store.calendarById = (id) => store.calendars.find(c=>c.id===id);
+  store.folderById = (id) => store.folders.find(f=>f.id===id);
+  store.childFolders = (fid) => store.folders.filter(f=>f.parentId===fid);
+  store.folderTree = () => {
+    const out = [];
+    const walk = (f, depth) => { out.push({ f, depth }); store.childFolders(f.id).forEach(c=>walk(c, depth+1)); };
+    store.folders.filter(f=>!f.parentId).forEach(r=>walk(r, 0));
+    return out;
+  };
+  store.reparentFolder = (f, parentId) => { f.parentId = parentId || null; };
+  // generic category accessors so the sidebar + keyboard nav can treat
+  // project/calendar/folder uniformly (calendars are flat → no children).
+  store.catChildren = (kind, id) =>
+    kind==='project' ? store.childProjects(id) :
+    kind==='folder'  ? store.childFolders(id) : [];
+  store.catById = (kind, id) =>
+    kind==='project' ? store.projectById(id) :
+    kind==='calendar'? store.calendarById(id) : store.folderById(id);
+  store.catRoots = (kind) =>
+    kind==='project' ? store.projects.filter(p=>!p.parentId) :
+    kind==='calendar'? store.calendars :
+    store.folders.filter(f=>!f.parentId);
+  // count badge: open root tasks for a project; (events/notes load lazily, so
+  // calendars/folders return null → the nav omits the badge for them)
+  store.catCount = (kind, id) => kind==='project' ? store.projectCount(id) : null;
+  store.catActive = (kind, node) => {
+    const v = store.view;
+    if(kind==='project') return v.kind==='project' && v.id===node.id;
+    if(kind==='calendar') return v.kind==='calendar' && v.calendarId===node.id;
+    return v.kind==='notes' && v.folderId===node.id;
+  };
+  store.openCatView = (kind, node) =>
+    kind==='project' ? store.openProjectView(node) :
+    kind==='calendar'? store.openCalendarView(node) : store.openFolderView(node);
+  // a saved view belongs to an app when its query targets that app's type (or carries no
+  // type: at all → it's app-agnostic and shows everywhere). Drives the per-app views list.
+  store.viewMatchesApp = (sv, app) => {
+    const types = new Set();
+    for(const t of Q.parse(sv.query||'').terms)
+      if(t.field==='type' && !t.neg) for(const tok of String(t.value).split(',').map(s=>s.trim())) if(tok) types.add(tok);
+    if(!types.size) return true;
+    return types.has(({ tasks:'task', events:'event', notes:'note' })[app]);
+  };
+  store.appQueries = () => store.savedQueries.filter(sv => store.viewMatchesApp(sv, store.currentApp()));
+  // the editable saved view backing the current query (the view itself, or — for a 'custom'
+  // draft edited off a saved view — its origin). null for system/seed views or a fresh query;
+  // drives the query bar's in-place Update action (§1).
+  store.activeSavedQuery = () => {
+    const v = store.view;
+    const id = store.savedQueries.some(s=>s.id===v.id) ? v.id : v.originId;
+    const sv = id ? store.savedQueries.find(s=>s.id===id) : null;
+    return (sv && !sv.system) ? sv : null;
+  };
   // ---- sort configuration (Shift+S popup; persisted as users.sort_prefs) ----
   const SORT_KEYS = ['due','created','title','project','priority','size','tag'];
   const DEFAULT_SORT_DIRS = { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', size:'desc', tag:'asc' };
@@ -274,12 +341,16 @@
     }
     return [...set];
   };
-  // mixed view = the results span beyond tasks (a non-task type selected, or task excluded).
-  // Projects + no-type + task-only stay on the fast client-side Q.run path (no regression).
+  // the current app's own entity type (Tasks→task, Events→event, Notes→note)
+  store.nativeType = () => ({ tasks:'task', events:'event', notes:'note' })[store.currentApp()];
+  // mixed view = the query selects a type beyond the current app's own. Each app keeps its
+  // native screen (task tree / calendar grid / notes list) for its own type or no type:;
+  // broadening (e.g. type:event,task in the Events app) falls back to the shared mixed list.
   store.isMixedView = () => {
     if(store.view.kind==='project') return false;
     const ts = store.queryTypes();
-    return ts.length>0 && !(ts.length===1 && ts[0]==='task');
+    if(ts.length===0) return false;                          // no type: → native screen
+    return !(ts.length===1 && ts[0]===store.nativeType());   // exactly the app's own type → native
   };
   // the current query with type:/-type: stripped — fed to the client Q engine, which has no
   // 'type' field (a type: term would hit the text-match fallback and wrongly empty the list).
@@ -457,11 +528,26 @@
     applyView(v);
   };
   store.openQueryView = (sv) => {
-    store.setView({ kind:'query', id:sv.id, title:sv.name, query:sv.query });
+    // a saved view that targets exactly one non-task app opens in that app's native screen
+    // (so an events/notes seed view lands on the calendar/notes list, query-filtered), else
+    // it's a regular query view (tasks tree, or the mixed list when it spans types).
+    const types = new Set();
+    for(const t of Q.parse(sv.query||'').terms)
+      if(t.field==='type' && !t.neg) String(t.value).split(',').map(s=>s.trim()).forEach(x=>{ if(x) types.add(x); });
+    if(types.size===1 && types.has('event')) store.setView({ kind:'calendar', id:sv.id, title:sv.name, query:sv.query, calendarId:null });
+    else if(types.size===1 && types.has('note')) store.setView({ kind:'notes', id:sv.id, title:sv.name, query:sv.query, folderId:null });
+    else store.setView({ kind:'query', id:sv.id, title:sv.name, query:sv.query });
   };
   // ---- calendar (D2) ----
-  store.openCalendar = () => store.setView({ kind:'calendar', id:'calendar', title:'Calendar', query:'' });
-  store.openNotes = () => store.setView({ kind:'notes', id:'notes', title:'Notes', query:'' });
+  // app home = all events / all notes (no category filter); a specific calendar/folder
+  // narrows the screen to that category (calendarId/folderId on the view).
+  // each app's query defaults to its own type: (so the builder reflects it and broadening
+  // beyond that type trips the mixed-list); the calendar/folder narrowing rides on the
+  // view's calendarId/folderId, separate from the query text.
+  store.openCalendar = () => store.setView({ kind:'calendar', id:'calendar', title:'Calendar', query:'type:event', calendarId:null });
+  store.openNotes = () => store.setView({ kind:'notes', id:'notes', title:'Notes', query:'type:note', folderId:null });
+  store.openCalendarView = (c) => store.setView({ kind:'calendar', id:c.id, title:c.name, query:'type:event', calendarId:c.id });
+  store.openFolderView = (f) => store.setView({ kind:'notes', id:f.id, title:f.name, query:'type:note', folderId:f.id });
   store.editEvent = (ev) => { store.editingEvent = ev; store.eventDetailOpen = true; };
   store.openProjectView = (p) => {
     store.setView({ kind:'project', id:p.id, title:p.name, query:'' });
@@ -475,16 +561,18 @@
   store.sideItems = () => {
     const items = [];
     const ns = store.navSections || {};
+    const kind = store.categoryKind();   // project | calendar | folder, by app
     // section headers are always navigable (so a collapsed section can be re-expanded)
     items.push({ kind:'head', section:'query', id:'head_query' });
-    if(!ns.query) store.savedQueries.forEach(sv => items.push({ kind:'query', id:sv.id, ref:sv }));
-    items.push({ kind:'head', section:'project', id:'head_project' });
-    if(!ns.project){
-      const walk = (p) => {
-        items.push({ kind:'project', id:p.id, ref:p });
-        if(!p.collapsed) store.childProjects(p.id).forEach(walk);
+    if(!ns.query) store.appQueries().forEach(sv => items.push({ kind:'query', id:sv.id, ref:sv }));
+    // the category section swaps by app; calendars are flat, projects/folders nest
+    items.push({ kind:'head', section:kind, id:'head_'+kind });
+    if(!ns[kind]){
+      const walk = (node) => {
+        items.push({ kind, id:node.id, ref:node });
+        if(!node.collapsed) store.catChildren(kind, node.id).forEach(walk);
       };
-      store.projects.filter(p=>!p.parentId).forEach(walk);
+      store.catRoots(kind).forEach(walk);
     }
     items.push({ kind:'head', section:'label', id:'head_label' });
     if(!ns.label) store.sortedLabels().forEach(l => items.push({ kind:'label', id:l.id, ref:l }));
@@ -518,7 +606,7 @@
   store.openSideItem = (it) => {
     if(!it) return;
     if(it.kind==='query') store.openQueryView(it.ref);
-    else if(it.kind==='project') store.openProjectView(it.ref);
+    else if(it.kind==='project'||it.kind==='calendar'||it.kind==='folder') store.openCatView(it.kind, it.ref);
     else if(it.kind==='label') store.openLabelView(it.ref);
   };
 
@@ -583,6 +671,35 @@
       health: Array.isArray(partial.health) ? partial.health : [],
     });
     store.projects.push(p); return p;
+  };
+  store.addCalendar = (partial) => {
+    const c = reactive({
+      id: uid('c'), name: partial.name||'new-calendar',
+      color: partial.color||COLORS[0], glyph: partial.glyph||'●',
+    });
+    store.calendars.push(c); return c;
+  };
+  store.addFolder = (partial) => {
+    const f = reactive({
+      id: uid('f'), parentId: partial.parentId||null,
+      name: partial.name||'new-folder',
+      color: partial.color||COLORS[0], glyph: partial.glyph||'●', collapsed:false,
+    });
+    store.folders.push(f); return f;
+  };
+  store.moveCalendar = (c, dir) => {            // flat list: swap with prev/next
+    const arr = store.calendars;
+    const i = arr.indexOf(c), j = i + dir;
+    if(i<0 || j<0 || j>=arr.length) return;
+    arr.splice(i,1); arr.splice(j,0,c);
+  };
+  store.moveFolder = (f, dir) => {              // swap with prev/next sibling (same parent)
+    const arr = store.folders;
+    const sibs = arr.filter(x=>x.parentId===f.parentId);
+    const target = sibs[sibs.indexOf(f) + dir];
+    if(!target) return;
+    const ia = arr.indexOf(f), ib = arr.indexOf(target);
+    const tmp = arr[ia]; arr[ia] = arr[ib]; arr[ib] = tmp;
   };
   // Deep-clone a project + every task/subtask, with fresh ids and remapped
   // parent/project refs. includeSubprojects (default true) also clones the whole

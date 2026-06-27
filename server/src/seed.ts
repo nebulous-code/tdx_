@@ -4,7 +4,7 @@
 
 import { hashPassword } from './auth.js';
 import type { DB } from './db.js';
-import { newId } from './ids.js';
+import { allocateReadableId, newId } from './ids.js';
 
 export interface NewUserInput {
   username: string;
@@ -67,9 +67,13 @@ export async function seedUserDefaults(db: DB, ownerId: string): Promise<void> {
       health: '[]',
       created_at: now,
       updated_at: now,
+      readable_id: await allocateReadableId(db, ownerId, 'project'),
     })
     .execute();
 
+  // [name, glyph, query, position, pinned]. Task views carry no `type:` (they surface in
+  // every app but really query tasks); Events/Notes views carry `type:event`/`type:note`
+  // so they surface only under their app and keep the native screen (§2.4 seed views).
   const views: [string, string, string, number, number][] = [
     ['Today', '☉', 'status:open due:today', 0, 0],
     ['Open', '○', 'status:open', 1, 1],
@@ -77,6 +81,15 @@ export async function seedUserDefaults(db: DB, ownerId: string): Promise<void> {
     ['This week', '☰', 'status:open due:week', 3, 0],
     ['Recurring', '↻', 'recurring:true status:open', 4, 0],
     ['No date', '∅', 'due:none status:open', 5, 0],
+    // Events (calendar-month/week keywords from the §3.3 date model)
+    ['This week', '☰', 'type:event due:this-week', 6, 0],
+    ['This month', '◫', 'type:event due:this-month', 7, 0],
+    ['Next month', '»', 'type:event due:next-month', 8, 0],
+    // Notes (created/edited + review date)
+    ['Edited this week', '✎', 'type:note edited:>=-7d', 9, 0],
+    ['Created this week', '✦', 'type:note created:>=-7d', 10, 0],
+    ['To review', '◉', 'type:note due:today', 11, 0],
+    ['Untagged', '∅', 'type:note has:no-labels', 12, 0],
   ];
   for (const [name, glyph, query, position, pinned] of views) {
     await db

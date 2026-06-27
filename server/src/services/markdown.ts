@@ -68,7 +68,11 @@ export interface ExtractedLinks {
   tasks: string[];
   events: string[];
   notes: string[]; // note-name targets (resolved to ids during reconcile)
+  readables: string[]; // readable-id targets — [[t_0001]] / [[alice_n_0002]] — resolved during reconcile
 }
+
+// a [[wikilink]] inner that's a readable id: optional `<username>_` then a t/e/n prefix + digits
+const READABLE_LINK = /^(?:.+_)?[ten]_\d+$/i;
 
 export function extractLinks(body: string): ExtractedLinks {
   // Construct locally so the stateful `/g` `lastIndex` can never leak between calls.
@@ -77,6 +81,7 @@ export function extractLinks(body: string): ExtractedLinks {
   const tasks = new Set<string>();
   const events = new Set<string>();
   const notes = new Set<string>();
+  const readables = new Set<string>();
   for (let m = typed.exec(body); m; m = typed.exec(body)) {
     (m[1] === 'task' ? tasks : events).add(m[2]);
   }
@@ -84,7 +89,9 @@ export function extractLinks(body: string): ExtractedLinks {
     const inner = m[1].trim();
     if (/^(task|event):/.test(inner)) continue; // handled above as a typed link
     const name = inner.split('|')[0].split('#')[0].trim(); // strip [[Name|alias]] / [[Name#heading]]
-    if (name) notes.add(name);
+    if (!name) continue;
+    if (READABLE_LINK.test(name)) readables.add(name);
+    else notes.add(name);
   }
-  return { tasks: [...tasks], events: [...events], notes: [...notes] };
+  return { tasks: [...tasks], events: [...events], notes: [...notes], readables: [...readables] };
 }

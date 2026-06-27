@@ -285,7 +285,13 @@ test('extractLinks: typed, aliased, wiki, heading, alias, dedupe', () => {
 
 test('extractLinks: no links -> empty arrays', () => {
   const r = extractLinks('plain text, no links here');
-  assert.deepEqual(r, { tasks: [], events: [], notes: [] });
+  assert.deepEqual(r, { tasks: [], events: [], notes: [], readables: [] });
+});
+
+test('extractLinks: readable-id wikilinks go to the readables bucket', () => {
+  const r = extractLinks('see [[t_0001]] and [[alice_n_0002]] but [[Plain Note]]');
+  assert.deepEqual(r.readables.sort(), ['alice_n_0002', 't_0001'].sort());
+  assert.deepEqual(r.notes, ['Plain Note']);
 });
 
 // ---------------------------------------------------------------------------

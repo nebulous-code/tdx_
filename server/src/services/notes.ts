@@ -9,9 +9,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { sql } from 'kysely';
 import type { DB } from '../db.js';
-import { newId } from '../ids.js';
+import { allocateReadableId, newId } from '../ids.js';
 import { type NoteJson, rowToNote } from '../schemas.js';
 import { abs, vaultBase, vaultRoot } from '../vault.js';
+import { reconcileFolders } from './folders.js';
 import {
   type ExtractedLinks,
   extractLinks,
@@ -19,6 +20,7 @@ import {
   parseNote,
   serializeNote,
 } from './markdown.js';
+import { resolveReadable } from './readableIds.js';
 
 // ---- FTS keyword index (derived, one row per note) -------------------------
 async function refreshFts(
@@ -47,6 +49,53 @@ function ftsQuery(q: string): string {
 // Index one vault file by its relative path. Returns the note, or null if the
 // file is missing (scanVault turns that into a tombstone). Assigns + writes back
 // a frontmatter id when the file lacks one.
+// the folder row whose dir holds this note (null for a root-level note)
+async function folderIdForPath(db: DB, owner: string, relPath: string): Promise<string | null> {
+  const dir = path.dirname(relPath);
+  if (dir === '.') return null;
+  const row = await db
+    .selectFrom('folders')
+    .select('id')
+    .where('owner_id', '=', owner)
+    .where('path', '=', dir)
+    .executeTakeFirst();
+  return row?.id ?? null;
+}
+
+async function loadNoteLabels(db: DB, id: string): Promise<string[]> {
+  return (
+    await db
+      .selectFrom('note_labels')
+      .select('label_id')
+      .where('note_id', '=', id)
+      .orderBy('label_id')
+      .execute()
+  ).map((r) => r.label_id);
+}
+
+async function setNoteLabels(
+  db: DB,
+  owner: string,
+  noteId: string,
+  labels: string[],
+): Promise<void> {
+  await db.deleteFrom('note_labels').where('note_id', '=', noteId).execute();
+  if (!labels.length) return;
+  const owned = await db
+    .selectFrom('labels')
+    .select('id')
+    .where('owner_id', '=', owner)
+    .where('id', 'in', labels)
+    .execute();
+  if (owned.length) {
+    await db
+      .insertInto('note_labels')
+      .values(owned.map((o) => ({ note_id: noteId, label_id: o.id })))
+      .onConflict((oc) => oc.doNothing())
+      .execute();
+  }
+}
+
 export async function scanFile(db: DB, owner: string, relPath: string): Promise<NoteJson | null> {
   const absPath = abs(owner, relPath);
   let raw: string;
@@ -64,7 +113,13 @@ export async function scanFile(db: DB, owner: string, relPath: string): Promise<
   const title = path.basename(relPath, '.md'); // the filename IS the title (Obsidian model)
   const mtime = fs.statSync(absPath).mtime.toISOString();
   const now = new Date().toISOString();
-  const fmJson = Object.keys(parsed.frontmatter).length ? JSON.stringify(parsed.frontmatter) : null;
+  // `review:` frontmatter is the note's "due" for queries; mirror it to a column. Keep it
+  // OUT of the generic frontmatter JSON (it has its own column), like the managed `id`.
+  const reviewAt = parsed.frontmatter.review || null;
+  const extraFm: Record<string, string> = {};
+  for (const [k, v] of Object.entries(parsed.frontmatter)) if (k !== 'review') extraFm[k] = v;
+  const fmJson = Object.keys(extraFm).length ? JSON.stringify(extraFm) : null;
+  const folderId = await folderIdForPath(db, owner, relPath);
 
   // owner-scoped lookup: a foreign note with the same frontmatter id is NOT ours to update
   const existing = await db
@@ -76,7 +131,16 @@ export async function scanFile(db: DB, owner: string, relPath: string): Promise<
   if (existing) {
     await db
       .updateTable('notes')
-      .set({ path: relPath, title, mtime, frontmatter: fmJson, tombstoned: 0, updated_at: now })
+      .set({
+        path: relPath,
+        folder_id: folderId,
+        title,
+        mtime,
+        frontmatter: fmJson,
+        review_at: reviewAt,
+        tombstoned: 0,
+        updated_at: now,
+      })
       .where('id', '=', id)
       .where('owner_id', '=', owner)
       .execute();
@@ -87,12 +151,15 @@ export async function scanFile(db: DB, owner: string, relPath: string): Promise<
         id,
         owner_id: owner,
         path: relPath,
+        folder_id: folderId,
         title,
         mtime,
         frontmatter: fmJson,
+        review_at: reviewAt,
         tombstoned: 0,
         created_at: now,
         updated_at: now,
+        readable_id: await allocateReadableId(db, owner, 'note'),
       })
       .execute();
   }
@@ -164,6 +231,16 @@ export async function reconcileFileLinks(
   for (const name of parsed.notes) {
     const id = await resolveNoteName(db, owner, name);
     if (id && id !== noteId) targets.push({ target_type: 'note', target_id: id }); // no self-links
+  }
+  // readable-id wikilinks ([[t_0001]] / [[n_0002]]) — resolve to the owner's UUID. Only
+  // same-owner targets become content edges (a username-prefixed cross-user ref won't).
+  for (const tok of parsed.readables) {
+    const r = await resolveReadable(db, owner, tok);
+    if (!r || r.ownerId !== owner) continue;
+    if (r.kind !== 'task' && r.kind !== 'event' && r.kind !== 'note') continue;
+    if (r.kind === 'note' && r.id === noteId) continue; // no self-link
+    if (!targets.some((t) => t.target_type === r.kind && t.target_id === r.id))
+      targets.push({ target_type: r.kind, target_id: r.id });
   }
 
   const now = new Date().toISOString();
@@ -256,6 +333,8 @@ export async function scanVault(
       .execute();
     tombstoned++;
   }
+  // reconcile folder entities from the on-disk dirs + set each note's folder_id
+  await reconcileFolders(db, owner);
   return { scanned: files.length, updated, tombstoned };
 }
 
@@ -281,16 +360,42 @@ function uniqueFile(owner: string, name: string, keep?: string): string {
   }
 }
 
+// resolve a folderId → its vault-relative dir ('' for root / unknown)
+async function folderBaseRel(db: DB, owner: string, folderId?: string | null): Promise<string> {
+  if (!folderId) return '';
+  const f = await db
+    .selectFrom('folders')
+    .select('path')
+    .where('id', '=', folderId)
+    .where('owner_id', '=', owner)
+    .executeTakeFirst();
+  return f?.path ?? '';
+}
+
 export async function createNote(
   db: DB,
   owner: string,
-  input: { title: string; body?: string },
+  input: {
+    title: string;
+    body?: string;
+    folderId?: string | null;
+    reviewAt?: string | null;
+    labels?: string[];
+  },
 ): Promise<NoteJson> {
   vaultRoot(owner); // ensure the owner's dir exists
   const id = newId();
-  const relPath = uniqueFile(owner, sanitizeName(input.title));
-  fs.writeFileSync(abs(owner, relPath), serializeNote({ id, body: input.body ?? '' }));
-  return (await scanFile(db, owner, relPath))!;
+  const baseRel = await folderBaseRel(db, owner, input.folderId);
+  const name = sanitizeName(input.title);
+  const relPath = uniqueFile(owner, baseRel ? path.join(baseRel, name) : name);
+  const frontmatter = input.reviewAt ? { review: input.reviewAt } : undefined;
+  fs.writeFileSync(abs(owner, relPath), serializeNote({ id, body: input.body ?? '', frontmatter }));
+  const note = (await scanFile(db, owner, relPath))!;
+  if (input.labels?.length) {
+    await setNoteLabels(db, owner, id, input.labels);
+    return (await getNote(db, owner, id))!;
+  }
+  return note;
 }
 
 // Editing the title renames the file on disk (identity is the frontmatter id, so
@@ -299,7 +404,13 @@ export async function updateNote(
   db: DB,
   owner: string,
   id: string,
-  patch: { title?: string; body?: string },
+  patch: {
+    title?: string;
+    body?: string;
+    folderId?: string | null;
+    reviewAt?: string | null;
+    labels?: string[];
+  },
 ): Promise<NoteJson | null> {
   const row = await db
     .selectFrom('notes')
@@ -313,13 +424,27 @@ export async function updateNote(
   const body = patch.body ?? parsed.body;
   const wantName =
     patch.title !== undefined ? sanitizeName(patch.title) : path.basename(oldRel, '.md');
-  const newRel = uniqueFile(owner, wantName, oldRel);
-  const content = serializeNote({ id, body, frontmatter: parsed.frontmatter });
+  // a folderId change moves the file into that folder's dir (default: keep current dir)
+  let baseRel = path.dirname(oldRel);
+  if (baseRel === '.') baseRel = '';
+  if (patch.folderId !== undefined) baseRel = await folderBaseRel(db, owner, patch.folderId);
+  const newRel = uniqueFile(owner, baseRel ? path.join(baseRel, wantName) : wantName, oldRel);
+  // preserve extra frontmatter; review: is its own key (set/kept/cleared via reviewAt)
+  const fm: Record<string, string> = {};
+  for (const [k, v] of Object.entries(parsed.frontmatter)) if (k !== 'review') fm[k] = v;
+  const review = patch.reviewAt !== undefined ? patch.reviewAt : parsed.frontmatter.review || null;
+  if (review) fm.review = review;
+  const content = serializeNote({ id, body, frontmatter: fm });
   // Write content in place, then atomically rename — so a crash never leaves two
   // files sharing one frontmatter id (the old write-new + unlink-old window).
   fs.writeFileSync(abs(owner, oldRel), content);
   if (newRel !== oldRel) fs.renameSync(abs(owner, oldRel), abs(owner, newRel));
-  return scanFile(db, owner, newRel);
+  const note = await scanFile(db, owner, newRel);
+  if (patch.labels !== undefined) {
+    await setNoteLabels(db, owner, id, patch.labels);
+    return getNote(db, owner, id);
+  }
+  return note;
 }
 
 export async function deleteNote(db: DB, owner: string, id: string): Promise<boolean> {
@@ -392,7 +517,7 @@ export async function getNote(db: DB, owner: string, id: string): Promise<NoteJs
   } catch {
     /* file vanished out from under us — return empty body */
   }
-  return rowToNote(row, body);
+  return rowToNote(row, body, await loadNoteLabels(db, id));
 }
 
 export interface NoteListItem {
@@ -401,6 +526,8 @@ export interface NoteListItem {
   title: string;
   mtime: string;
   updatedAt: string;
+  folderId: string | null;
+  readableId: string | null;
 }
 export async function listNotes(db: DB, owner: string): Promise<NoteListItem[]> {
   const rows = await db
@@ -416,6 +543,8 @@ export async function listNotes(db: DB, owner: string): Promise<NoteListItem[]> 
     title: r.title,
     mtime: r.mtime,
     updatedAt: r.updated_at,
+    folderId: r.folder_id,
+    readableId: r.readable_id,
   }));
 }
 
@@ -429,12 +558,23 @@ export interface NoteSearchHit {
 // duplicated in notes_fts), so only the notes that actually MATCH get read from disk to
 // build the full entity. (Evaluation sees the indexed body; a not-yet-synced external
 // edit reconciles on the next sync, same as the rest of the index.)
-export async function notesForQuery(
-  db: DB,
-  owner: string,
-): Promise<{ id: string; title: string; body: string }[]> {
-  const res = await sql<{ id: string; title: string; body: string }>`
-    SELECT note_id AS id, title, body FROM notes_fts WHERE owner_id = ${owner}`.execute(db);
+export interface NoteForQuery {
+  id: string;
+  title: string;
+  body: string;
+  reviewAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  folderId: string | null;
+}
+export async function notesForQuery(db: DB, owner: string): Promise<NoteForQuery[]> {
+  // title+body from the FTS index, dates from the notes row (for due:review / created: / edited:)
+  const res = await sql<NoteForQuery>`
+    SELECT f.note_id AS id, f.title, f.body,
+           n.review_at AS "reviewAt", n.created_at AS "createdAt", n.updated_at AS "updatedAt",
+           n.folder_id AS "folderId"
+    FROM notes_fts f JOIN notes n ON n.id = f.note_id
+    WHERE f.owner_id = ${owner} AND n.tombstoned = 0`.execute(db);
   return res.rows;
 }
 

@@ -122,6 +122,193 @@ window.ProjectModal = {
   }
 };
 
+window.CalendarModal = {
+  props: ['store','model'],   // model: {mode:'new'|'edit', calendar}
+  emits: ['close'],
+  mixins: [window.KbForm],
+  template: `
+  <div class="overlay" @click.self="kbAttemptClose">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-head" style="display:flex;align-items:center;">
+        <span style="flex:1;">{{ model.mode==='new' ? 'new calendar' : 'edit calendar' }}</span>
+        <span class="acct-x" @click="kbAttemptClose" title="close (esc)">✕</span>
+      </div>
+      <div class="modal-body">
+        <div class="field" :class="kbCls('name')">
+          <label>name</label>
+          <input ref="name" class="input" v-model="name" placeholder="calendar-name" @focus="kbFocusRow('name')" />
+        </div>
+        <div class="field">
+          <label>color</label>
+          <div class="swatches">
+            <span v-for="(c,i) in colorOptions" :key="c" class="swatch" :class="[{on: color===c, 'swatch-system': c==='system'}, kbCls('color', i)]"
+                  :style="{ background:store.resolveColor(c), color:store.resolveColor(c) }" :title="c==='system' ? 'system — follows theme' : ''" @click="kbPick('color', i)"></span>
+          </div>
+        </div>
+        <div class="field">
+          <label>icon <span class="mut">— preview <span :style="{color:store.resolveColor(color)}">{{ glyph }}</span></span></label>
+          <div class="glyphgrid">
+            <span v-for="(g,i) in store.GLYPHS" :key="g" class="glyphpick" :class="[{on: glyph===g}, kbCls('glyph', i)]"
+                  :style="glyph===g?{color:store.resolveColor(color)}:{}" @click="kbPick('glyph', i)">{{ g }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button v-if="model.mode==='edit'" class="btn danger" :class="kbCls('delete')" style="margin-right:auto;" @click="remove">delete</button>
+        <button class="btn" :class="kbCls('cancel')" @click="$emit('close')">cancel</button>
+        <button class="btn primary" :class="kbCls('save')" @click="save">{{ model.mode==='new' ? 'create ↵' : 'save ↵' }}</button>
+      </div>
+    </div>
+  </div>
+  `,
+  data(){
+    const c=this.model.calendar;
+    const name = c?c.name:'';
+    const color = c?c.color:'system';
+    const glyph = c?c.glyph:this.store.GLYPHS[1];
+    return { name, color, glyph, _orig:{ name, color, glyph } };
+  },
+  computed: { colorOptions(){ return ['system', ...this.store.COLORS]; } },
+  methods: {
+    kbRows(){ return [
+      { id:'name',   type:'input',  ref:'name' },
+      { id:'color',  type:'grid',   items:this.colorOptions, cols:11, isOn:c=>c===this.color, select:c=>{ this.color=c; } },
+      { id:'glyph',  type:'grid',   items:this.store.GLYPHS, cols:10, isOn:g=>g===this.glyph, select:g=>{ this.glyph=g; } },
+      { id:'delete', type:'button', activate:()=>this.remove(), when:()=>this.model.mode==='edit' },
+      { id:'cancel', type:'button', activate:()=>this.$emit('close') },
+      { id:'save',   type:'button', activate:()=>this.save() },
+    ]; },
+    kbSubmit(){ this.save(); },
+    kbDirty(){ const o=this._orig; return this.name!==o.name || this.color!==o.color || this.glyph!==o.glyph; },
+    save(){
+      const nm=this.name.trim()||'untitled';
+      if(this.model.mode==='new'){
+        const c=this.store.addCalendar({ name:nm, color:this.color, glyph:this.glyph });
+        this.store.openCalendarView(c);
+        this.store.toast('▣ calendar created');
+      } else {
+        const c=this.model.calendar; c.name=nm; c.color=this.color; c.glyph=this.glyph;
+        this.store.toast('✓ calendar saved');
+      }
+      this.$emit('close');
+    },
+    async remove(){
+      if(this.model.mode!=='edit') return;
+      if(await this.store.askConfirm('Delete calendar "'+this.model.calendar.name+'"? Its events will be archived.')){
+        const ok = await this.store.softDeleteCalendar(this.model.calendar.id);
+        if(ok){
+          if(this.store.view.kind==='calendar' && this.store.view.calendarId===this.model.calendar.id) this.store.openCalendar();
+          this.store.toast('✓ deleted');
+        }
+        this.$emit('close');
+      }
+    }
+  }
+};
+
+window.FolderModal = {
+  props: ['store','model'],   // model: {mode:'new'|'edit', parentId, folder}
+  emits: ['close'],
+  mixins: [window.KbForm],
+  template: `
+  <div class="overlay" @click.self="kbAttemptClose">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-head" style="display:flex;align-items:center;">
+        <span style="flex:1;">{{ model.mode==='new' ? (model.parentId ? 'new subfolder' : 'new folder') : 'edit folder' }}</span>
+        <span class="acct-x" @click="kbAttemptClose" title="close (esc)">✕</span>
+      </div>
+      <div class="modal-body">
+        <div class="field" :class="kbCls('name')">
+          <label>name</label>
+          <input ref="name" class="input" v-model="name" placeholder="folder-name" @focus="kbFocusRow('name')" />
+        </div>
+        <div class="field" :class="kbCls('parent')">
+          <label>parent</label>
+          <select ref="parent" class="input" v-model="parentId" @focus="kbFocusRow('parent')">
+            <option value="">— none (top level) —</option>
+            <option v-for="({f,depth}) in parentOptions" :key="f.id" :value="f.id">{{ depth ? '↳ ' : '' }}{{ f.name }}</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>color</label>
+          <div class="swatches">
+            <span v-for="(c,i) in colorOptions" :key="c" class="swatch" :class="[{on: color===c, 'swatch-system': c==='system'}, kbCls('color', i)]"
+                  :style="{ background:store.resolveColor(c), color:store.resolveColor(c) }" :title="c==='system' ? 'system — follows theme' : ''" @click="kbPick('color', i)"></span>
+          </div>
+        </div>
+        <div class="field">
+          <label>icon <span class="mut">— preview <span :style="{color:store.resolveColor(color)}">{{ glyph }}</span></span></label>
+          <div class="glyphgrid">
+            <span v-for="(g,i) in store.GLYPHS" :key="g" class="glyphpick" :class="[{on: glyph===g}, kbCls('glyph', i)]"
+                  :style="glyph===g?{color:store.resolveColor(color)}:{}" @click="kbPick('glyph', i)">{{ g }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button v-if="model.mode==='edit'" class="btn danger" :class="kbCls('delete')" style="margin-right:auto;" @click="remove">delete</button>
+        <button class="btn" :class="kbCls('cancel')" @click="$emit('close')">cancel</button>
+        <button class="btn primary" :class="kbCls('save')" @click="save">{{ model.mode==='new' ? 'create ↵' : 'save ↵' }}</button>
+      </div>
+    </div>
+  </div>
+  `,
+  data(){
+    const f=this.model.folder;
+    const name = f?f.name:'';
+    const color = f?f.color:'system';
+    const glyph = f?f.glyph:this.store.GLYPHS[1];
+    const parentId = f ? (f.parentId||'') : (this.model.parentId||'');
+    return { name, color, glyph, parentId, _orig:{ name, color, glyph, parentId } };
+  },
+  computed: {
+    colorOptions(){ return ['system', ...this.store.COLORS]; },
+    // tree-ordered folders, excluding self + descendants (no cycles)
+    parentOptions(){
+      const self=this.model.folder;
+      const excluded=new Set();
+      if(self){ const walk=(id)=>{ excluded.add(id); this.store.childFolders(id).forEach(c=>walk(c.id)); }; walk(self.id); }
+      return this.store.folderTree().filter(({f})=>!excluded.has(f.id));
+    }
+  },
+  methods: {
+    kbRows(){ return [
+      { id:'name',   type:'input',  ref:'name' },
+      { id:'parent', type:'input',  ref:'parent' },
+      { id:'color',  type:'grid',   items:this.colorOptions, cols:11, isOn:c=>c===this.color, select:c=>{ this.color=c; } },
+      { id:'glyph',  type:'grid',   items:this.store.GLYPHS, cols:10, isOn:g=>g===this.glyph, select:g=>{ this.glyph=g; } },
+      { id:'delete', type:'button', activate:()=>this.remove(), when:()=>this.model.mode==='edit' },
+      { id:'cancel', type:'button', activate:()=>this.$emit('close') },
+      { id:'save',   type:'button', activate:()=>this.save() },
+    ]; },
+    kbSubmit(){ this.save(); },
+    kbDirty(){ const o=this._orig; return this.name!==o.name || this.color!==o.color || this.glyph!==o.glyph || this.parentId!==o.parentId; },
+    save(){
+      const nm=this.name.trim()||'untitled';
+      if(this.model.mode==='new'){
+        const f=this.store.addFolder({ name:nm, color:this.color, glyph:this.glyph, parentId:this.parentId||null });
+        this.store.openFolderView(f);
+        this.store.toast('▣ folder created');
+      } else {
+        const f=this.model.folder; f.name=nm; f.color=this.color; f.glyph=this.glyph;
+        this.store.reparentFolder(f, this.parentId);
+        this.store.toast('✓ folder saved');
+      }
+      this.$emit('close');
+    },
+    async remove(){
+      if(this.model.mode!=='edit') return;
+      if(await this.store.askConfirm('Delete folder "'+this.model.folder.name+'"? (only works when it\'s empty)')){
+        const ok = await this.store.softDeleteFolder(this.model.folder.id);
+        if(ok){
+          if(this.store.view.kind==='notes' && this.store.view.folderId===this.model.folder.id) this.store.openNotes();
+          this.store.toast('✓ deleted');
+        }
+        this.$emit('close');
+      }
+    }
+  }
+};
+
 window.LabelModal = {
   props: ['store','model'],   // model: {label}
   emits: ['close'],

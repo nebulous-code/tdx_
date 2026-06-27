@@ -5,7 +5,9 @@
 
 import { Type } from '@fastify/type-provider-typebox';
 import type {
+  CalendarsTable,
   EventsTable,
+  FoldersTable,
   LabelsTable,
   NotesTable,
   ProjectsTable,
@@ -45,6 +47,7 @@ export const TaskSchema = Type.Object({
   createdAt: Type.String(),
   completedAt: NStr(),
   updatedAt: Type.String(),
+  readableId: NStr(),
 });
 export const ProjectSchema = Type.Object({
   id: Type.String(),
@@ -57,6 +60,30 @@ export const ProjectSchema = Type.Object({
   health: Type.Array(Type.String()),
   createdAt: Type.String(),
   updatedAt: Type.String(),
+  readableId: NStr(),
+});
+export const CalendarSchema = Type.Object({
+  id: Type.String(),
+  name: Type.String(),
+  color: Type.String(),
+  glyph: Type.String(),
+  position: Type.Integer(),
+  createdAt: Type.String(),
+  updatedAt: Type.String(),
+  readableId: NStr(),
+});
+export const FolderSchema = Type.Object({
+  id: Type.String(),
+  parentId: NStr(),
+  name: Type.String(),
+  path: Type.String(),
+  color: Type.String(),
+  glyph: Type.String(),
+  collapsed: Type.Boolean(),
+  position: Type.Integer(),
+  createdAt: Type.String(),
+  updatedAt: Type.String(),
+  readableId: NStr(),
 });
 export const LabelSchema = Type.Object({
   id: Type.String(),
@@ -131,6 +158,40 @@ export const ProjectUpdateSchema = Type.Partial(
     health: Type.Array(Type.String()),
   }),
 );
+export const CalendarCreateSchema = Type.Object({
+  id: Type.Optional(Type.String()),
+  name: Type.String(),
+  color: Type.Optional(Type.String()),
+  glyph: Type.Optional(Type.String()),
+  position: Type.Optional(Type.Integer()),
+});
+export const CalendarUpdateSchema = Type.Partial(
+  Type.Object({
+    name: Type.String(),
+    color: Type.String(),
+    glyph: Type.String(),
+    position: Type.Integer(),
+  }),
+);
+export const FolderCreateSchema = Type.Object({
+  id: Type.Optional(Type.String()),
+  name: Type.String(),
+  parentId: Type.Optional(NStr()),
+  color: Type.Optional(Type.String()),
+  glyph: Type.Optional(Type.String()),
+  collapsed: Type.Optional(Type.Boolean()),
+  position: Type.Optional(Type.Integer()),
+});
+export const FolderUpdateSchema = Type.Partial(
+  Type.Object({
+    name: Type.String(),
+    parentId: NStr(),
+    color: Type.String(),
+    glyph: Type.String(),
+    collapsed: Type.Boolean(),
+    position: Type.Integer(),
+  }),
+);
 export const LabelCreateSchema = Type.Object({
   id: Type.Optional(Type.String()),
   name: Type.String(),
@@ -163,6 +224,8 @@ export const AssignSchema = Type.Object({ assigneeId: NStr() });
 
 export const BootstrapSchema = Type.Object({
   projects: Type.Array(ProjectSchema),
+  calendars: Type.Array(CalendarSchema),
+  folders: Type.Array(FolderSchema),
   tasks: Type.Array(TaskSchema),
   labels: Type.Array(LabelSchema),
   savedQueries: Type.Array(SavedQuerySchema),
@@ -202,6 +265,7 @@ export interface TaskJson {
   createdAt: string;
   completedAt: string | null;
   updatedAt: string;
+  readableId: string | null;
 }
 export function rowToTask(row: TasksTable, labels: string[]): TaskJson {
   return {
@@ -221,6 +285,7 @@ export function rowToTask(row: TasksTable, labels: string[]): TaskJson {
     createdAt: row.created_at,
     completedAt: row.completed_at,
     updatedAt: row.updated_at,
+    readableId: row.readable_id,
   };
 }
 export function rowToProject(row: ProjectsTable) {
@@ -235,6 +300,34 @@ export function rowToProject(row: ProjectsTable) {
     health: parseHealth(row.health),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    readableId: row.readable_id,
+  };
+}
+export function rowToCalendar(row: CalendarsTable) {
+  return {
+    id: row.id,
+    name: row.name,
+    color: row.color,
+    glyph: row.glyph,
+    position: row.position,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    readableId: row.readable_id,
+  };
+}
+export function rowToFolder(row: FoldersTable) {
+  return {
+    id: row.id,
+    parentId: row.parent_id,
+    name: row.name,
+    path: row.path,
+    color: row.color,
+    glyph: row.glyph,
+    collapsed: !!row.collapsed,
+    position: row.position,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    readableId: row.readable_id,
   };
 }
 export function rowToLabel(row: LabelsTable) {
@@ -259,6 +352,7 @@ export const EventSchema = Type.Object({
   ownerId: Type.String(),
   creatorId: Type.String(),
   assigneeId: NStr(),
+  calendarId: NStr(),
   title: Type.String(),
   notes: Type.String(),
   location: NStr(),
@@ -267,9 +361,11 @@ export const EventSchema = Type.Object({
   endAt: NStr(),
   recurrence: NStr(),
   reminder: NStr(),
+  labels: Type.Array(Type.String()),
   position: Type.Integer(),
   createdAt: Type.String(),
   updatedAt: Type.String(),
+  readableId: NStr(),
 });
 export const EventCreateSchema = Type.Object({
   id: Type.Optional(Type.String()),
@@ -282,6 +378,8 @@ export const EventCreateSchema = Type.Object({
   recurrence: Type.Optional(NStr()),
   reminder: Type.Optional(NStr()),
   assigneeId: Type.Optional(NStr()),
+  calendarId: Type.Optional(NStr()),
+  labels: Type.Optional(Type.Array(Type.String())),
   position: Type.Optional(Type.Integer()),
 });
 export const EventUpdateSchema = Type.Partial(
@@ -295,6 +393,8 @@ export const EventUpdateSchema = Type.Partial(
     recurrence: NStr(),
     reminder: NStr(),
     assigneeId: NStr(),
+    calendarId: NStr(),
+    labels: Type.Array(Type.String()),
     position: Type.Integer(),
   }),
 );
@@ -313,6 +413,7 @@ export interface EventJson {
   ownerId: string;
   creatorId: string;
   assigneeId: string | null;
+  calendarId: string | null;
   title: string;
   notes: string;
   location: string | null;
@@ -321,16 +422,19 @@ export interface EventJson {
   endAt: string | null;
   recurrence: string | null;
   reminder: string | null;
+  labels: string[];
   position: number;
   createdAt: string;
   updatedAt: string;
+  readableId: string | null;
 }
-export function rowToEvent(row: EventsTable): EventJson {
+export function rowToEvent(row: EventsTable, labels: string[] = []): EventJson {
   return {
     id: row.id,
     ownerId: row.owner_id,
     creatorId: row.creator_id,
     assigneeId: row.assignee_id,
+    calendarId: row.calendar_id,
     title: row.title,
     notes: row.notes,
     location: row.location,
@@ -339,9 +443,11 @@ export function rowToEvent(row: EventsTable): EventJson {
     endAt: row.end_at,
     recurrence: row.recurrence,
     reminder: row.reminder,
+    labels,
     position: row.position,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    readableId: row.readable_id,
   };
 }
 
@@ -380,17 +486,30 @@ export const NoteSchema = Type.Object({
   id: Type.String(),
   ownerId: Type.String(),
   path: Type.String(),
+  folderId: NStr(),
   title: Type.String(),
   body: Type.String(), // read from disk, not stored in the DB
+  reviewAt: NStr(),
+  labels: Type.Array(Type.String()),
   createdAt: Type.String(),
   updatedAt: Type.String(),
+  readableId: NStr(),
 });
 export const NoteCreateSchema = Type.Object({
   title: Type.String(),
   body: Type.Optional(Type.String()),
+  folderId: Type.Optional(NStr()),
+  reviewAt: Type.Optional(NStr()),
+  labels: Type.Optional(Type.Array(Type.String())),
 });
 export const NoteUpdateSchema = Type.Partial(
-  Type.Object({ title: Type.String(), body: Type.String() }),
+  Type.Object({
+    title: Type.String(),
+    body: Type.String(),
+    folderId: NStr(),
+    reviewAt: NStr(),
+    labels: Type.Array(Type.String()),
+  }),
 );
 export const NoteListItemSchema = Type.Object({
   id: Type.String(),
@@ -420,19 +539,27 @@ export interface NoteJson {
   id: string;
   ownerId: string;
   path: string;
+  folderId: string | null;
   title: string;
   body: string;
+  reviewAt: string | null;
+  labels: string[];
   createdAt: string;
   updatedAt: string;
+  readableId: string | null;
 }
-export function rowToNote(row: NotesTable, body: string): NoteJson {
+export function rowToNote(row: NotesTable, body: string, labels: string[] = []): NoteJson {
   return {
     id: row.id,
     ownerId: row.owner_id,
     path: row.path,
+    folderId: row.folder_id,
     title: row.title,
     body,
+    reviewAt: row.review_at,
+    labels,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    readableId: row.readable_id,
   };
 }

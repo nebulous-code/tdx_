@@ -9,6 +9,7 @@
 const evSnapshot = (f) => ({
   title: f.title, allDay: f.allDay, date: f.date, time: f.time,
   endDate: f.endDate, endTime: f.endTime, location: f.location, recurrence: f.recurrence, notes: f.notes,
+  calendarId: f.calendarId,
 });
 
 window.EventDetail = {
@@ -28,6 +29,8 @@ window.EventDetail = {
       location: e.location || '',
       recurrence: e.recurrence || '',
       notes: e.notes || '',
+      // default a new event to the first calendar (or the one being viewed)
+      calendarId: e.calendarId ?? (this.store.calendars[0] ? this.store.calendars[0].id : null),
     };
     return {
       f,
@@ -45,6 +48,7 @@ window.EventDetail = {
     kbRows() {
       return [
         { id: 'title', type: 'input', ref: 'title' },
+        { id: 'calendar', type: 'input', ref: 'calendar', when: () => this.store.calendars.length > 0 },
         { id: 'allDay', type: 'button', activate: () => { this.f.allDay = !this.f.allDay; } },
         { id: 'date', type: 'input', ref: 'date' },
         { id: 'time', type: 'input', ref: 'time', when: () => !this.f.allDay },
@@ -76,6 +80,7 @@ window.EventDetail = {
         location: this.f.location.trim() || null,
         recurrence: this.f.recurrence.trim() || null,
         notes: this.f.notes,
+        calendarId: this.f.calendarId || null,
       });
       if (ok) this.$emit('close');
     },
@@ -94,6 +99,12 @@ window.EventDetail = {
       </div>
       <div class="ev-body">
         <input ref="title" v-model="f.title" placeholder="event title" class="ti" :class="kbCls('title')" @focus="kbFocusRow('title')">
+        <div v-if="store.calendars.length" class="ev-row">
+          <span class="ev-rl">calendar</span>
+          <select ref="calendar" v-model="f.calendarId" class="ti" :class="kbCls('calendar')" @focus="kbFocusRow('calendar')">
+            <option v-for="c in store.calendars" :key="c.id" :value="c.id">{{ c.glyph }} {{ c.name }}</option>
+          </select>
+        </div>
         <label class="ev-lbl" :class="kbCls('allDay')" @click="f.allDay = !f.allDay">
           <span class="checkbox" :class="{ on: f.allDay }">{{ f.allDay ? '✓' : '' }}</span>
           all-day

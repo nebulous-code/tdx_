@@ -55,6 +55,7 @@ export interface ProjectsTable {
   health: string;
   created_at: string;
   updated_at: string;
+  readable_id: string | null;
 }
 
 export interface TasksTable {
@@ -77,6 +78,7 @@ export interface TasksTable {
   created_at: string;
   completed_at: string | null;
   updated_at: string;
+  readable_id: string | null;
 }
 
 export interface EventsTable {
@@ -84,6 +86,7 @@ export interface EventsTable {
   owner_id: string;
   creator_id: string;
   assignee_id: string | null;
+  calendar_id: string | null;
   title: string;
   notes: string;
   location: string | null;
@@ -96,18 +99,61 @@ export interface EventsTable {
   archived: number;
   created_at: string;
   updated_at: string;
+  readable_id: string | null;
 }
 
 export interface NotesTable {
   id: string;
   owner_id: string;
   path: string;
+  folder_id: string | null;
   title: string;
   mtime: string;
   frontmatter: string | null;
+  review_at: string | null;
   tombstoned: number;
   created_at: string;
   updated_at: string;
+  readable_id: string | null;
+}
+
+export interface CalendarsTable {
+  id: string;
+  owner_id: string;
+  name: string;
+  color: string;
+  glyph: string;
+  position: number;
+  archived: number;
+  created_at: string;
+  updated_at: string;
+  readable_id: string | null;
+}
+
+export interface FoldersTable {
+  id: string;
+  owner_id: string;
+  parent_id: string | null;
+  name: string;
+  path: string;
+  color: string;
+  glyph: string;
+  collapsed: number;
+  position: number;
+  archived: number;
+  created_at: string;
+  updated_at: string;
+  readable_id: string | null;
+}
+
+export interface EventLabelsTable {
+  event_id: string;
+  label_id: string;
+}
+
+export interface NoteLabelsTable {
+  note_id: string;
+  label_id: string;
 }
 
 export interface NoteLinksTable {
@@ -191,6 +237,12 @@ export interface ApiTokensTable {
   revoked_at: string | null;
 }
 
+export interface IdCountersTable {
+  owner_id: string;
+  entity_type: string;
+  next_seq: number;
+}
+
 export interface BackupConfigTable {
   id: number;
   enabled: number;
@@ -210,16 +262,21 @@ export interface Database_ {
   tasks: TasksTable;
   events: EventsTable;
   notes: NotesTable;
+  calendars: CalendarsTable;
+  folders: FoldersTable;
   note_links: NoteLinksTable;
   links: LinksTable;
   labels: LabelsTable;
   task_labels: TaskLabelsTable;
+  event_labels: EventLabelsTable;
+  note_labels: NoteLabelsTable;
   saved_queries: SavedQueriesTable;
   grants: GrantsTable;
   groups: GroupsTable;
   group_members: GroupMembersTable;
   api_tokens: ApiTokensTable;
   backup_config: BackupConfigTable;
+  id_counters: IdCountersTable;
 }
 
 export type Sqlite = Database.Database;

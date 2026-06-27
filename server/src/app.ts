@@ -18,7 +18,9 @@ import adminRoutes from './routes/admin.js';
 import authRoutes from './routes/auth.js';
 import backupRoutes from './routes/backup.js';
 import bootstrapRoutes from './routes/bootstrap.js';
+import calendarRoutes from './routes/calendars.js';
 import eventRoutes from './routes/events.js';
+import folderRoutes from './routes/folders.js';
 import labelRoutes from './routes/labels.js';
 import linkRoutes from './routes/links.js';
 import noteRoutes from './routes/notes.js';
@@ -27,7 +29,9 @@ import queryRoutes from './routes/query.js';
 import savedQueryRoutes from './routes/savedQueries.js';
 import taskRoutes from './routes/tasks.js';
 import tokenRoutes from './routes/tokens.js';
+import { ensureDefaultCalendars } from './services/calendars.js';
 import { migrateVaultLayout } from './services/notes.js';
+import { backfillReadableIds } from './services/readableIds.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -64,6 +68,8 @@ export async function buildApp(opts: AppOpts = {}): Promise<FastifyInstance> {
 
   registerDb(app, handle);
   await migrateVaultLayout(handle.db); // one-time: move legacy flat notes into per-owner subdirs
+  await ensureDefaultCalendars(handle.db); // one-time: default calendar per user + assign orphan events
+  await backfillReadableIds(handle.db); // one-time: assign readable ids to any legacy rows missing one
   await registerAuth(app);
   app.decorate('backups', createBackups(handle.sqlite));
 
@@ -74,6 +80,8 @@ export async function buildApp(opts: AppOpts = {}): Promise<FastifyInstance> {
   await app.register(queryRoutes);
   await app.register(taskRoutes);
   await app.register(eventRoutes);
+  await app.register(calendarRoutes);
+  await app.register(folderRoutes);
   await app.register(linkRoutes);
   await app.register(noteRoutes);
   await app.register(projectRoutes);

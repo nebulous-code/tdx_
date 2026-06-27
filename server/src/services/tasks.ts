@@ -4,7 +4,7 @@
 
 import type { Kysely, Updateable } from 'kysely';
 import type { DB, Database_, TasksTable } from '../db.js';
-import { newId } from '../ids.js';
+import { allocateReadableId, newId } from '../ids.js';
 import { type TaskJson, rowToTask } from '../schemas.js';
 import { checkIfMatch } from './concurrency.js';
 
@@ -120,6 +120,7 @@ export async function createTask(db: DB, owner: string, input: TaskCreateInput):
         created_at: now,
         completed_at: done ? now : null,
         updated_at: now,
+        readable_id: await allocateReadableId(trx, owner, 'task'),
       })
       .execute();
     if (input.labels?.length) await setTaskLabels(trx, owner, id, input.labels);

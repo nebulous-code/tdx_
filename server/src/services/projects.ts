@@ -2,7 +2,7 @@
 
 import type { Updateable } from 'kysely';
 import type { DB, ProjectsTable } from '../db.js';
-import { newId } from '../ids.js';
+import { allocateReadableId, newId } from '../ids.js';
 import { rowToProject } from '../schemas.js';
 import { checkIfMatch } from './concurrency.js';
 import { collectSubtree } from './tasks.js';
@@ -55,6 +55,7 @@ export async function createProject(db: DB, owner: string, input: ProjectCreateI
       health: JSON.stringify(input.health ?? []),
       created_at: now,
       updated_at: now,
+      readable_id: await allocateReadableId(db, owner, 'project'),
     })
     .execute();
   return (await getProject(db, id))!;
