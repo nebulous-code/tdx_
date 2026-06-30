@@ -12,9 +12,11 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// the shared base dir holding every owner's vault subdir
+// the shared base dir holding every owner's vault subdir. Resolved to an ABSOLUTE
+// path so a relative VAULT_DIR (e.g. `data/vault` in dev) still satisfies abs()'s
+// within-root check (which compares the resolved-absolute candidate against root).
 export function vaultBase(): string {
-  const dir = process.env.VAULT_DIR || path.join(__dirname, '..', 'data', 'vault');
+  const dir = path.resolve(process.env.VAULT_DIR || path.join(__dirname, '..', 'data', 'vault'));
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

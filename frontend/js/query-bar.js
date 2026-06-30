@@ -14,7 +14,7 @@ window.QueryBar = {
       <input class="qinput" ref="q" v-model="queryString" spellcheck="false"
              placeholder="query… e.g.  label:urgent due:<7d status:open"
              @keydown.enter="run" @keydown.esc="blur" />
-      <span class="qbtn" :class="{on: store.builderOpen}" @click="store.builderOpen=!store.builderOpen" title="Query builder (f · F to collapse)">⊞<span>query</span></span>
+      <span class="qbtn" :class="{on: store.builderOpen}" @click="store.builderOpen=!store.builderOpen" title="Query builder (q · Q to collapse)">⊞<span><u>q</u>uery</span></span>
       <span v-if="store.focusPane==='query' && updatable" class="qbtn" @click="update" title="Update this saved view in place (u)">⟳<span><u>u</u>pdate</span></span>
       <span v-if="store.focusPane==='query'" class="qbtn" @click="save" title="Save as a new smart view (s)">★<span><u>s</u>ave</span></span>
       <span v-if="store.focusPane==='query'" class="qbtn" @click="clearQuery" title="Clear (x)"><u>x</u></span>

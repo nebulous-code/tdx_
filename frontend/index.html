@@ -76,7 +76,11 @@
 
     <!-- main -->
     <main class="main">
-      <template v-if="store.view.kind==='calendar'">
+      <!-- the '/' cross-type find takes over the main area in any app (2E §3.4) -->
+      <template v-if="store.searchActive">
+        <search-list ref="searchList" :store="store"></search-list>
+      </template>
+      <template v-else-if="store.view.kind==='calendar'">
         <query-bar ref="qbar" :store="store" @save-query="openSave"></query-bar>
         <mixed-list v-if="store.isMixedView()" ref="mixed" :store="store"></mixed-list>
         <calendar-view v-else ref="cal" :store="store"></calendar-view>
@@ -107,6 +111,7 @@
       </template>
       <task-detail ref="detail" :store="store"></task-detail>
       <event-detail v-if="store.eventDetailOpen" :store="store" @close="store.eventDetailOpen=false"></event-detail>
+      <note-detail v-if="store.noteDetailOpen" :key="store.selectedNoteId" :store="store" @close="store.noteDetailOpen=false"></note-detail>
     </main>
 
     <!-- status bar -->
@@ -115,11 +120,11 @@
       <template v-if="store.searchActive">
         <span class="search-prompt">/</span>
         <input ref="search" class="searchbar" v-model="store.searchTerm" spellcheck="false"
-               placeholder="search title + notes…"
+               placeholder="find tasks · events · notes…"
                @blur="commitSearch"
                @keydown.enter.stop.prevent="commitSearch" @keydown.esc.stop.prevent="commitSearch" />
         <span class="search-x" @mousedown.prevent="clearSearch" title="clear search">✕</span>
-        <span class="mut">{{ store.visibleRoots().length }} match{{ store.visibleRoots().length===1?'':'es' }}</span>
+        <span class="mut">{{ store.searchResults.length }} match{{ store.searchResults.length===1?'':'es' }}</span>
       </template>
       <template v-else>
         <span class="s-ready" @click="refreshApp" title="tap to refresh"><span class="spark">●</span> READY</span>
@@ -208,6 +213,9 @@
 <script src="js/sidebar.js"></script>
 <script src="js/tasklist.js"></script>
 <script src="js/mixed-list.js"></script>
+<script src="js/search-list.js"></script>
+<script src="js/md-field.js"></script>
+<script src="js/note-detail.js"></script>
 <script src="js/recurrence-builder.js"></script>
 <script src="js/task-detail.js"></script>
 <script src="js/icons.js"></script>
@@ -271,7 +279,9 @@ const app = createApp({
   watch: {
     // the detail drawer is its own captured pane while open; restore the list when it closes
     'store.detailOpen'(v){
-      if(v){ this.store.focusPane='detail'; }
+      // the task drawer shares the right edge with the event/note drawers — opening it
+      // closes those (single-open invariant; the openers do the same in reverse).
+      if(v){ this.store.eventDetailOpen=false; this.store.noteDetailOpen=false; this.store.focusPane='detail'; }
       else if(this.store.focusPane==='detail'){ this.store.focusPane='list'; }
     },
     // the shell (with its bars) only exists once logged in — (re)attach the bar-height
@@ -393,16 +403,23 @@ const app = createApp({
       this.promptState=null; r(val || null);
     },
     openAccount(){ this.accountOpen = true; },
-    // ---- search ('/'): live free-text across all tasks ----
-    openSearch(){ this.store.searchActive = true; this.$nextTick(()=>{ this.$refs.search && this.$refs.search.focus(); }); },
-    commitSearch(){   // Enter: drop into the results list, cursor on the first match
-      const rows = this.store.visibleRows();
-      if(rows.length) this.store.selectedTaskId = rows[0].id;
+    // ---- search ('/'): text-only live find across tasks + events + notes (§3.4) ----
+    openSearch(){ this.store.searchActive = true; this.store.runSearch(); this.$nextTick(()=>{ this.$refs.search && this.$refs.search.focus(); }); },
+    commitSearch(){   // Enter / blur: leave the input so j/k drive the results list
+      if(this.$refs.searchList) this.$refs.searchList.sel = 0;
       if(this.$refs.search) this.$refs.search.blur();
     },
     clearSearch(){   // Esc: forget the term and restore the underlying view
-      this.store.searchActive = false; this.store.searchTerm = '';
+      this.store.searchActive = false; this.store.searchTerm = ''; this.store.searchResults = [];
       if(this.$refs.search) this.$refs.search.blur();
+    },
+    // j/k through the find results · enter opens the hit · / re-focuses the input
+    searchKey(e){
+      const s=this.$refs.searchList; if(!s) return;
+      if(e.key==='j'||e.key==='ArrowDown'){ e.preventDefault(); s.kbMove(1); }
+      else if(e.key==='k'||e.key==='ArrowUp'){ e.preventDefault(); s.kbMove(-1); }
+      else if(e.key==='Enter'){ e.preventDefault(); s.kbActivate(); }
+      else if(e.key==='i'){ e.preventDefault(); this.$refs.search && this.$refs.search.focus(); }
     },
     // ---- keyboard ----
     onKey(e){
@@ -428,7 +445,7 @@ const app = createApp({
       }
       if(this.promptState) return;   // the prompt input handles its own enter/esc
       // KbForm-driven modals are takeovers: each owns the keyboard while open
-      if(this.accountOpen || this.backupOpen || this.sortOpen || this.projectModal || this.saveModal || this.labelModal || this.helpOpen || this.store.eventDetailOpen) return;
+      if(this.accountOpen || this.backupOpen || this.sortOpen || this.projectModal || this.saveModal || this.labelModal || this.helpOpen || this.store.eventDetailOpen || this.store.noteDetailOpen) return;
       const tag=(e.target.tagName||'').toLowerCase();
       const typing = tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable;
       // ⌘K / Ctrl+K everywhere
@@ -489,12 +506,16 @@ const app = createApp({
       if(e.key==='/' && !typing){ e.preventDefault(); this.openSearch(); return; }
       if(typing || this.paletteOpen) return;
 
+      // '/' cross-type find: once the term is committed (input blurred), j/k/enter drive
+      // the results list — takes precedence over every app's own keys.
+      if(this.store.searchActive){ this.searchKey(e); return; }
+
       // The query builder + the focused panes work in EVERY app (Tasks/Events/Notes),
       // so these are handled before the per-app native keys below.
-      // query builder: F collapses the panel, f focuses into it (from any window)
-      if(e.key==='F'){ e.preventDefault(); this.toggleBuilder(); return; }
-      if(e.key==='f'){ e.preventDefault(); this.toggleQueryFocus(); return; }
-      // n toggles the sidebar nav column (parallel to f/F for the query builder)
+      // query: Q collapses the builder panel, q focuses into it (from any window)
+      if(e.key==='Q'){ e.preventDefault(); this.toggleBuilder(); return; }
+      if(e.key==='q'){ e.preventDefault(); this.toggleQueryFocus(); return; }
+      // n toggles the sidebar nav column (parallel to q/Q for the query builder)
       if(e.key==='n'){ e.preventDefault(); this.toggleNav(); return; }
 
       // each pane has its own navigation while focused (per-app nav + query bar)
@@ -1059,7 +1080,7 @@ const app = createApp({
       const url = n.id ? '/api/notes/'+n.id : '/api/notes';
       try{
         const r = await fetch(url, { method, credentials:'include',
-          headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ title:n.title, body:n.body, folderId:n.folderId, reviewAt:n.reviewAt }) });
+          headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ title:n.title, body:n.body, folderId:n.folderId, reviewAt:n.reviewAt, labels:n.labels }) });
         if(r.status===401){ this.handleAuthExpired(); return null; }
         if(r.ok) return await r.json();
         this.store.toast('save failed ('+r.status+')');
@@ -1195,6 +1216,9 @@ app.component('app-sidebar', window.AppSidebar);
 app.component('tree-row', window.TreeRow);
 app.component('task-list', window.TaskList);
 app.component('mixed-list', window.MixedList);
+app.component('search-list', window.SearchList);
+app.component('md-field', window.MdField);
+app.component('note-detail', window.NoteDetail);
 app.component('task-row', window.TaskRow);
 app.component('recurrence-builder', window.RecurrenceBuilder);
 app.component('task-detail', window.TaskDetail);

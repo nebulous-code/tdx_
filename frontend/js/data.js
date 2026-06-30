@@ -138,6 +138,8 @@
     completion: { open: true, done: false },   // which completion states the list includes (≥1 always on)
     searchActive: false,     // vim '/' free-text search is showing its results
     searchTerm: '',          // the current search string (remembered across view switches)
+    searchResults: [],       // cross-type find hits ({type,id,title,…}) for the search-list
+    _searchSeq: 0,           // guards against out-of-order async find responses
     healthFilter: null,      // a health-bar signal key while filtering a project view (transient)
     sortField: 'due',        // due | created | title | project | priority | size | tag
     // per-field direction. 'asc' = ^, 'desc' = v.
@@ -162,6 +164,8 @@
     events: [],              // event occurrences for the calendar's visible range
     eventDetailOpen: false,  // the event editor drawer
     editingEvent: null,      // the event being created/edited
+    noteDetailOpen: false,   // the note PEEK drawer (metadata + light edit; §4)
+    selectedNoteId: null,    // the note shown in the peek drawer
     calFrom: null, calTo: null,  // current calendar range (to refetch after a mutate)
   });
 
@@ -359,29 +363,22 @@
   // vim '/' search: title+notes substring across ALL tasks (ignores the active
   // view), respecting the completed toggle, including subtasks (surfacing parents),
   // relevance-ordered. Drives both the render and j/k nav via visibleRoots.
-  store.searchRoots = () => {
-    const term = (store.searchTerm||'').trim().toLowerCase();
-    if(!term) return [];
-    let matched = store.tasks.filter(t =>
-      (t.title||'').toLowerCase().includes(term) || (t.notes||'').toLowerCase().includes(term) ||
-      (t.id||'').toLowerCase().includes(term));
-    matched = matched.filter(store.completionPass);
-    const roots = []; const seen = new Set();
-    for(const t of matched){
-      let r=t; while(r.parentId){ const p=store.taskById(r.parentId); if(!p) break; r=p; }
-      if(!seen.has(r.id)){ seen.add(r.id); roots.push(r); }
-    }
-    const rank = t => {
-      if((t.id||'').toLowerCase()===term) return -1;   // exact id hit → top
-      const ti=(t.title||'').toLowerCase();
-      if(ti.startsWith(term)) return 0;
-      if(ti.includes(term))   return 1;
-      return 2;   // notes-only, id-substring, or surfaced because a subtask matched
-    };
-    return roots.sort((a,b)=> rank(a)-rank(b) || a.title.localeCompare(b.title));
+  // The '/' find (2E §3.4): a throwaway, text-only live find across ALL types
+  // (tasks + events + notes) — distinct from the categorical query system. Each
+  // word is matched as a literal text term (quoted so a stray `due:`/`label:` in the
+  // find box stays plain text, never a field), AND-ed, over title + body/notes. Backed
+  // by the same unified engine as the mixed list (store.runQuery), results land in
+  // store.searchResults for the search-list surface. No save, no categories.
+  store.runSearch = async () => {
+    const term = (store.searchTerm||'').trim();
+    if(!term){ store.searchResults = []; return; }
+    const seq = ++store._searchSeq;
+    const words = term.split(/\s+/).filter(Boolean).map(w => '"'+w.replace(/"/g,'')+'"');
+    const items = await store.runQuery('type:task,event,note '+words.join(' '));
+    if(seq !== store._searchSeq) return;   // a newer keystroke superseded this one
+    store.searchResults = items || [];
   };
   store.visibleRoots = () => {
-    if(store.searchActive) return store.searchRoots();
     const ctx = store.ctx();
     const q = store.taskQuery();   // type: stripped — client Q has no 'type' field
     let matched = Q.run(q, ctx);
@@ -548,7 +545,13 @@
   store.openNotes = () => store.setView({ kind:'notes', id:'notes', title:'Notes', query:'type:note', folderId:null });
   store.openCalendarView = (c) => store.setView({ kind:'calendar', id:c.id, title:c.name, query:'type:event', calendarId:c.id });
   store.openFolderView = (f) => store.setView({ kind:'notes', id:f.id, title:f.name, query:'type:note', folderId:f.id });
-  store.editEvent = (ev) => { store.editingEvent = ev; store.eventDetailOpen = true; };
+  // the three right-hand detail drawers (task / event / note) share the right edge —
+  // only one open at a time. Each opener closes the others first via closeDrawers().
+  store.closeDrawers = () => { store.detailOpen = false; store.eventDetailOpen = false; store.noteDetailOpen = false; };
+  store.editEvent = (ev) => { store.closeDrawers(); store.editingEvent = ev; store.eventDetailOpen = true; };
+  // open a note's PEEK drawer (metadata + light body edit) in place — does NOT navigate
+  // to the full /notes screen (that's `o`, via store.openNote → openNotes + pendingNoteId).
+  store.openNoteDrawer = (id) => { store.closeDrawers(); store.selectedNoteId = id; store.noteDetailOpen = true; };
   store.openProjectView = (p) => {
     store.setView({ kind:'project', id:p.id, title:p.name, query:'' });
   };

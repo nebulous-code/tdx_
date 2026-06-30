@@ -157,7 +157,7 @@ window.NotesView = {
       if (type) { this.openEntity(type, el.getAttribute('data-id')); return; }
       const name = (el.getAttribute('data-note') || '').toLowerCase();
       const note = this.list.find((n) => (n.title || '').toLowerCase() === name);
-      if (note) this.open(note.id);
+      if (note) this.store.openNoteDrawer(note.id);   // peek in place (§4.3)
       else this.store.toast('note not found');
     },
     // click in the rendered view — checkbox toggle · tdx-query item · wikilink
@@ -179,7 +179,7 @@ window.NotesView = {
     openEntity(type, id) {
       if (type === 'task') { this.store.selectedTaskId = id; this.store.detailOpen = true; }
       else if (type === 'event') { this.store.openEvent(id); }
-      else if (type === 'note') { this.open(id); }
+      else if (type === 'note') { this.store.openNoteDrawer(id); }   // peek in place (§4.3); `o` in the drawer opens it fully
     },
     // ---- tdx-query embeds: fill each block with live results ----
     async hydrateQueries() {

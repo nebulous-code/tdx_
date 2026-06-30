@@ -38,7 +38,7 @@ window.LinkedItems = {
       const o = l.other;
       if (o.type === 'task') { this.store.selectedTaskId = o.id; this.store.detailOpen = true; }
       else if (o.type === 'event') { this.store.openEvent(o.id); }
-      else if (o.type === 'note') { this.store.openNote(o.id); }
+      else if (o.type === 'note') { this.store.openNoteDrawer(o.id); }   // peek in place (§4.3)
     },
     async pick(c) {
       if (await this.store.createLink({ type: this.type, id: this.id }, { type: c.type, id: c.id })) {

@@ -1,9 +1,10 @@
-/* event-editor.js — the event create/edit drawer (D2 2d). Split out of calendar.js
-   because it's GLOBAL: it opens from the calendar AND from a task's "linked events".
-   Keyboard-navigable via the shared KbForm mixin (j/k move fields · i edits · space
-   toggles all-day · Enter saves · Esc closes with a discard-changes guard). Rendered
-   with v-if on store.eventDetailOpen, so it mounts (and owns the keyboard) only when
-   open, exactly like the project/label/save-query modals. */
+/* event-editor.js — the event create/edit drawer (D2 2d; right-hand drawer since 2E §4).
+   GLOBAL: opens from the calendar (create on a day + edit a series), from a task's "linked
+   events", and from mixed/search results. Renders in the shared right-hand `.detail` drawer
+   (same surface as task + note detail), NOT a centered modal. Keyboard-navigable via the
+   shared KbForm mixin (j/k move fields · i edits · space toggles all-day · Enter saves · Esc
+   closes with a discard-changes guard). Mounted with v-if on store.eventDetailOpen; the app's
+   onKey routes keys here while store.focusPane==='event'. */
 
 // the saveable subset, for the dirty-guard (excludes the transient link picker)
 const evSnapshot = (f) => ({
@@ -56,7 +57,7 @@ window.EventDetail = {
         { id: 'endTime', type: 'input', ref: 'endTime', when: () => !this.f.allDay },
         { id: 'location', type: 'input', ref: 'location' },
         { id: 'recurrence', type: 'input', ref: 'recurrence' },
-        { id: 'notes', type: 'input', ref: 'notes', multiline: true },
+        { id: 'notes', type: 'input', ref: 'notes' },   // ref → md-field.focus() (i edits)
         { id: 'cancel', type: 'button', activate: () => this.kbAttemptClose() },
         { id: 'delete', type: 'button', activate: () => this.del(), when: () => !!this.f.id },
         { id: 'save', type: 'button', activate: () => this.save() },
@@ -64,6 +65,7 @@ window.EventDetail = {
     },
     kbSubmit() { this.save(); },
     kbDirty() { return JSON.stringify(evSnapshot(this.f)) !== this._orig; },
+    blurField() { const a = document.activeElement; if (a && a.blur) a.blur(); },   // Esc in a field → nav mode (don't close the drawer)
     // ---- save / delete (close on success) ----
     async save() {
       if (!this.f.title.trim()) return;
@@ -90,45 +92,77 @@ window.EventDetail = {
     },
   },
   template: `
-  <div class="ev-overlay" @click.self="kbAttemptClose">
-    <div class="ev-card">
-      <div class="ev-head">
-        <span class="hi">{{ f.id ? 'edit event' : 'new event' }}</span>
-        <span class="grow"></span>
-        <span class="qbtn" @click="kbAttemptClose">esc</span>
-      </div>
-      <div class="ev-body">
-        <input ref="title" v-model="f.title" placeholder="event title" class="ti" :class="kbCls('title')" @focus="kbFocusRow('title')">
-        <div v-if="store.calendars.length" class="ev-row">
-          <span class="ev-rl">calendar</span>
-          <select ref="calendar" v-model="f.calendarId" class="ti" :class="kbCls('calendar')" @focus="kbFocusRow('calendar')">
+  <div class="detail">
+    <div class="detail-head">
+      <span class="mut">event</span>
+      <span class="cy">{{ f.id ? '#'+f.id : 'new' }}</span>
+      <span class="x" @click="kbAttemptClose" title="Close (esc)">✕</span>
+    </div>
+
+    <div class="detail-body">
+      <input ref="title" class="d-title" :class="kbCls('title')" v-model="f.title" placeholder="event title" @focus="kbFocusRow('title')" @keydown.enter.prevent="save" @keydown.esc.stop.prevent="blurField">
+
+      <!-- calendar + all-day -->
+      <div class="row2">
+        <div v-if="store.calendars.length" class="field">
+          <label>calendar</label>
+          <select ref="calendar" class="input" :class="kbCls('calendar')" v-model="f.calendarId" @focus="kbFocusRow('calendar')" @keydown.esc.stop.prevent="blurField">
             <option v-for="c in store.calendars" :key="c.id" :value="c.id">{{ c.glyph }} {{ c.name }}</option>
           </select>
         </div>
-        <label class="ev-lbl" :class="kbCls('allDay')" @click="f.allDay = !f.allDay">
-          <span class="checkbox" :class="{ on: f.allDay }">{{ f.allDay ? '✓' : '' }}</span>
-          all-day
-        </label>
-        <div class="ev-row">
-          <span class="ev-rl">starts</span>
-          <input ref="date" type="date" v-model="f.date" class="ti" :class="kbCls('date')" @focus="kbFocusRow('date')">
-          <input v-if="!f.allDay" ref="time" type="time" v-model="f.time" class="ti" :class="kbCls('time')" @focus="kbFocusRow('time')">
-        </div>
-        <div class="ev-row">
-          <span class="ev-rl">ends</span>
-          <input ref="endDate" type="date" v-model="f.endDate" class="ti" :class="kbCls('endDate')" @focus="kbFocusRow('endDate')">
-          <input v-if="!f.allDay" ref="endTime" type="time" v-model="f.endTime" class="ti" :class="kbCls('endTime')" @focus="kbFocusRow('endTime')">
-        </div>
-        <input ref="location" v-model="f.location" placeholder="location" class="ti" :class="kbCls('location')" @focus="kbFocusRow('location')">
-        <input ref="recurrence" v-model="f.recurrence" placeholder="recurrence (e.g. weekly on mon,wed,fri)" class="ti" :class="kbCls('recurrence')" @focus="kbFocusRow('recurrence')">
-        <textarea ref="notes" v-model="f.notes" placeholder="notes" class="ti" :class="kbCls('notes')" rows="3" @focus="kbFocusRow('notes')"></textarea>
-        <linked-items v-if="f.id" :store="store" type="event" :id="f.id"></linked-items>
-        <div class="ev-actions">
-          <button class="btn" :class="kbCls('cancel')" @click="kbAttemptClose">cancel</button>
-          <button v-if="f.id" class="btn danger" :class="kbCls('delete')" @click="del">delete</button>
-          <button class="btn primary" :class="kbCls('save')" @click="save">{{ f.id ? 'save ↵' : 'create ↵' }}</button>
+        <div class="field">
+          <label>all-day</label>
+          <button class="btn" style="width:100%;justify-content:center;" :class="[{primary: f.allDay}, kbCls('allDay')]" @click="f.allDay = !f.allDay">{{ f.allDay ? '✓ all-day' : '☐ timed' }}</button>
         </div>
       </div>
+
+      <!-- starts -->
+      <div class="row2">
+        <div class="field" :class="kbCls('date')">
+          <label>starts</label>
+          <input ref="date" class="input" type="date" v-model="f.date" @focus="kbFocusRow('date')" @keydown.enter="save" @keydown.esc.stop.prevent="blurField">
+        </div>
+        <div v-if="!f.allDay" class="field" :class="kbCls('time')">
+          <label>time</label>
+          <input ref="time" class="input" type="time" v-model="f.time" @focus="kbFocusRow('time')" @keydown.enter="save" @keydown.esc.stop.prevent="blurField">
+        </div>
+      </div>
+
+      <!-- ends -->
+      <div class="row2">
+        <div class="field" :class="kbCls('endDate')">
+          <label>ends</label>
+          <input ref="endDate" class="input" type="date" v-model="f.endDate" @focus="kbFocusRow('endDate')" @keydown.enter="save" @keydown.esc.stop.prevent="blurField">
+        </div>
+        <div v-if="!f.allDay" class="field" :class="kbCls('endTime')">
+          <label>time</label>
+          <input ref="endTime" class="input" type="time" v-model="f.endTime" @focus="kbFocusRow('endTime')" @keydown.enter="save" @keydown.esc.stop.prevent="blurField">
+        </div>
+      </div>
+
+      <div class="field" :class="kbCls('location')">
+        <label>location</label>
+        <input ref="location" class="input" v-model="f.location" placeholder="location" @focus="kbFocusRow('location')" @keydown.enter="save" @keydown.esc.stop.prevent="blurField">
+      </div>
+      <div class="field" :class="kbCls('recurrence')">
+        <label>recurrence</label>
+        <input ref="recurrence" class="input" v-model="f.recurrence" placeholder="e.g. weekly on mon,wed,fri" @focus="kbFocusRow('recurrence')" @keydown.enter="save" @keydown.esc.stop.prevent="blurField">
+      </div>
+
+      <div class="field">
+        <label>notes</label>
+        <md-field ref="notes" :class="kbCls('notes')" v-model="f.notes" placeholder="notes…" @submit="save"></md-field>
+      </div>
+
+      <div class="field" v-if="f.id">
+        <linked-items :store="store" type="event" :id="f.id"></linked-items>
+      </div>
+    </div>
+
+    <div class="d-actions">
+      <button v-if="f.id" class="btn danger" :class="kbCls('delete')" style="margin-right:auto;" @click="del">delete</button>
+      <button class="btn" :class="kbCls('cancel')" @click="kbAttemptClose">cancel</button>
+      <button class="btn primary" :class="kbCls('save')" @click="save">{{ f.id ? 'save ↵' : 'create ↵' }}</button>
     </div>
   </div>`,
 };

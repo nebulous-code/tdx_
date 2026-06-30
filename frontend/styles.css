@@ -567,6 +567,15 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 }
 .input:focus, .d-notes:focus { border-color: var(--amber-mut); box-shadow: var(--glow-soft); }
 .d-notes { resize: vertical; min-height: 60px; }
+/* shared md-field (render-when-not-editing markdown, §4): a compact bordered block in a
+   drawer — NOT the full-screen .md-body (which is flex:1 / 46vh). Click or `i` to edit. */
+.mdf .mdf-render { min-height: 60px; max-height: 40vh; overflow-y: auto; flex: none;
+  background: var(--bg-3); border: 1px solid var(--line-2); border-radius: var(--radius);
+  padding: 5px 8px; font-size: 12px; cursor: text; }
+.mdf .mdf-render:hover { border-color: var(--amber-mut); }
+.mdf.kfocus .mdf-render { border-color: var(--amber-mut); box-shadow: var(--glow-soft); }
+.mdf .mdf-render > div:first-child > :first-child { margin-top: 0; }
+.mdf .mdf-ph { font-size: 12px; }
 .row2 { display: flex; gap: 8px; }
 .row2 > * { flex: 1; }
 
@@ -864,22 +873,10 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .cal-task.done { color: var(--amber-faint); text-decoration: line-through; }
 .cal-task .cal-tk { color: var(--amber-mut); }
 
-.ev-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
-.ev-card { width: min(440px, 92vw); background: var(--bg-1); border: 1px solid var(--line-2); border-radius: var(--radius); box-shadow: 0 8px 40px rgba(0,0,0,.6); }
-.ev-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
-.ev-head .grow { flex: 1; }
-.ev-body { display: flex; flex-direction: column; gap: 8px; padding: 12px; }
-.ev-row { display: flex; gap: 6px; align-items: center; }
-/* fixed-width row label so the date inputs line up despite "starts"/"ends" differing in width */
+/* the event editor is now the shared right-hand `.detail` drawer (2E §4); the centered
+   modal chrome (.ev-overlay/.ev-card/.ev-head/.ev-body/.ev-actions/.ev-lbl) is gone.
+   .ev-rl survives — the notes folder-row reuses it for a fixed-width inline label. */
 .ev-rl { flex: 0 0 46px; font-size: 11px; color: var(--amber-mut); }
-.ev-lbl { font-size: 11px; color: var(--amber-mut); display: flex; align-items: center; gap: 6px; }
-.ev-actions { display: flex; gap: 8px; margin-top: 4px; }
-.ev-body .ti { background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--radius); color: var(--amber-hi); font-family: var(--mono); font-size: 12px; padding: 5px 7px; outline: none; width: 100%; }
-.ev-body .ti:focus { border-color: var(--amber-mut); }
-.ev-body input[type=date], .ev-body input[type=time] { width: auto; color-scheme: dark; }
-.ev-actions { justify-content: flex-end; }   /* .btn / .btn primary / .btn danger come from the shared button styles */
-/* KbForm focused-row ring (j/k cursor) inside the event editor */
-.ev-card .kfocus { box-shadow: inset 0 0 0 1px var(--amber-mut); border-radius: var(--radius); }
 
 /* event-editor linked tasks (D2 2b) */
 .ev-links { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--line); padding-top: 8px; }

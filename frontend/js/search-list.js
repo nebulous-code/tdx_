@@ -1,36 +1,29 @@
-/* mixed-list.js — results for a query whose `type:` spans beyond tasks (events/notes
-   inline). Used on the Tasks screen via store.isMixedView(); pure-task views keep the
-   instant client-side task-list. Backed by the server unified query (store.runQuery).
-   Each row shows its app's deep-nav type icon.
+/* search-list.js — the '/' cross-type find results (2E §3.4). A throwaway, text-only
+   live find across tasks + events + notes (NOT the query system). Mirrors mixed-list's
+   presentation: each hit shows its app's deep-nav type icon; acting on a hit opens that
+   type's existing surface (task detail drawer · event editor · full notes nav) until the
+   §4 per-type drawers land. Driven by store.searchTerm → store.runSearch → searchResults. */
+const SEARCH_ICON = { task: 'tasks', event: 'events', note: 'notes' };
 
-   Act-on uses EXISTING surfaces (the §4 per-type detail drawers don't exist yet):
-     task  → task detail drawer
-     event → the event editor popup (store.openEvent)
-     note  → full nav to the Notes app (store.openNote)
-   §4 will replace the event popup / note nav with per-type drawers. */
-const MX_ICON = { task: 'tasks', event: 'events', note: 'notes' };
-
-window.MixedList = {
+window.SearchList = {
   props: ['store'],
-  data() { return { items: [], loading: false, sel: 0, _seq: 0 }; },
+  data() { return { sel: 0, _t: null }; },
   computed: {
-    query() { return this.store.currentQuery(); },
+    items() { return this.store.searchResults; },
+    term() { return (this.store.searchTerm || '').trim(); },
   },
   watch: {
-    query() { this.load(); },
-  },
-  mounted() { this.load(); },
-  methods: {
-    async load() {
-      const seq = ++this._seq;
-      this.loading = true;
-      const items = await this.store.runQuery(this.store.currentQuery());
-      if (seq !== this._seq) return;           // a newer query superseded this one
-      this.items = items || [];
+    // debounce the live find as the term changes (the footer input is v-model'd to it)
+    'store.searchTerm'() {
+      clearTimeout(this._t);
       this.sel = 0;
-      this.loading = false;
+      this._t = setTimeout(() => this.store.runSearch(), 140);
     },
-    iconFor(type) { return (window.Icons && window.Icons[MX_ICON[type]]) || ''; },
+  },
+  mounted() { this.store.runSearch(); },           // honor a term carried over from a prior '/'
+  beforeUnmount() { clearTimeout(this._t); },
+  methods: {
+    iconFor(type) { return (window.Icons && window.Icons[SEARCH_ICON[type]]) || ''; },
     metaFor(it) {
       if (it.type === 'task') return it.due ? 'due ' + it.due : '';
       if (it.type === 'event') return (it.date || (it.startAt || '').slice(0, 10)) || '';
@@ -42,7 +35,7 @@ window.MixedList = {
       else if (it.type === 'event') { this.store.openEvent(it.id); }
       else if (it.type === 'note') { this.store.openNoteDrawer(it.id); }   // peek drawer (§4.3)
     },
-    // ---- keyboard (driven from index.html mixedKey when isMixedView) ----
+    // ---- keyboard (driven from index.html searchKey while searchActive) ----
     kbMove(d) {
       if (!this.items.length) return;
       this.sel = Math.max(0, Math.min(this.items.length - 1, this.sel + d));
@@ -55,8 +48,7 @@ window.MixedList = {
   },
   template: `
   <div class="list-wrap mixed-list" ref="scroll">
-    <div v-if="loading" class="mut" style="padding:8px 12px;">loading…</div>
-    <template v-else-if="items.length">
+    <template v-if="items.length">
       <div v-for="(it,i) in items" :key="it.type+':'+it.id"
            class="mixed-row" :class="{ sel: i===sel }" @click="openItem(it)">
         <span class="mx-ico" v-html="iconFor(it.type)"></span>
@@ -66,9 +58,10 @@ window.MixedList = {
     </template>
     <div v-else class="empty">
       <pre>  ┌─────────────┐
-  │  no results  │
+  │  find        │
   └─────────────┘</pre>
-      <div style="margin-top:10px;">query returned 0 rows.</div>
+      <div v-if="term" style="margin-top:10px;">no matches for "{{ term }}".</div>
+      <div v-else style="margin-top:10px;">type to find across tasks · events · notes…</div>
     </div>
   </div>
   `,
