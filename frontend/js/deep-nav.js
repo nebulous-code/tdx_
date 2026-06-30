@@ -12,6 +12,8 @@ window.DeepNav = {
       const k = this.store.view.kind;
       return k === 'calendar' ? 'events' : k === 'notes' ? 'notes' : 'tasks';
     },
+    // the keyboard cursor is shown only while the rail is the focused pane (§4.4)
+    kbFocused() { return this.store.focusPane === 'deepnav'; },
   },
   methods: {
     go(app) {
@@ -29,8 +31,8 @@ window.DeepNav = {
   },
   template: `
   <nav class="deepnav" :class="{ open: store.deepNavOpen }">
-    <button class="dn-btn" :class="{ on: app==='tasks' }" @click="go('tasks')" title="tasks" v-html="icons.tasks"></button>
-    <button class="dn-btn" :class="{ on: app==='events' }" @click="go('events')" title="events" v-html="icons.events"></button>
-    <button class="dn-btn" :class="{ on: app==='notes' }" @click="go('notes')" title="notes" v-html="icons.notes"></button>
+    <button class="dn-btn" :class="{ on: app==='tasks',  kfocus: kbFocused && store.deepNavCursor===0 }" @click="go('tasks')" title="tasks" v-html="icons.tasks"></button>
+    <button class="dn-btn" :class="{ on: app==='events', kfocus: kbFocused && store.deepNavCursor===1 }" @click="go('events')" title="events" v-html="icons.events"></button>
+    <button class="dn-btn" :class="{ on: app==='notes',  kfocus: kbFocused && store.deepNavCursor===2 }" @click="go('notes')" title="notes" v-html="icons.notes"></button>
   </nav>`,
 };

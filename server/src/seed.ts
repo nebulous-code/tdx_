@@ -71,16 +71,16 @@ export async function seedUserDefaults(db: DB, ownerId: string): Promise<void> {
     })
     .execute();
 
-  // [name, glyph, query, position, pinned]. Task views carry no `type:` (they surface in
-  // every app but really query tasks); Events/Notes views carry `type:event`/`type:note`
-  // so they surface only under their app and keep the native screen (§2.4 seed views).
+  // [name, glyph, query, position, pinned]. Every view carries an explicit `type:` so it's a
+  // reasonable, unambiguous default + surfaces only under its app (the per-app nav filters by
+  // type; a view with no type: is treated as Tasks-only). §2.4 seed views.
   const views: [string, string, string, number, number][] = [
-    ['Today', '☉', 'status:open due:today', 0, 0],
-    ['Open', '○', 'status:open', 1, 1],
-    ['Overdue', '!', 'status:overdue', 2, 1],
-    ['This week', '☰', 'status:open due:week', 3, 0],
-    ['Recurring', '↻', 'recurring:true status:open', 4, 0],
-    ['No date', '∅', 'due:none status:open', 5, 0],
+    ['Today', '☉', 'type:task status:open due:today', 0, 0],
+    ['Open', '○', 'type:task status:open', 1, 1],
+    ['Overdue', '!', 'type:task status:overdue', 2, 1],
+    ['This week', '☰', 'type:task status:open due:week', 3, 0],
+    ['Recurring', '↻', 'type:task recurring:true status:open', 4, 0],
+    ['No date', '∅', 'type:task due:none status:open', 5, 0],
     // Events (calendar-month/week keywords from the §3.3 date model)
     ['This week', '☰', 'type:event due:this-week', 6, 0],
     ['This month', '◫', 'type:event due:this-month', 7, 0],

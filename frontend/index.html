@@ -42,7 +42,7 @@
       <div class="pin-flow">
         <template v-for="pv in store.pinnedViews()" :key="pv.id">
           <span class="dim pin-view" :class="{ active: store.view.kind==='query' && store.view.id===pv.id }"
-                @click="store.openQueryView(pv)" :title="pv.query">{{ store.queryCount(pv.query) }} {{ pv.name.toLowerCase() }}</span>
+                @click="store.openQueryView(pv)" :title="pv.query"><template v-if="store.viewCountable(pv)">{{ store.queryCount(pv.query) }} </template>{{ pv.name.toLowerCase() }}</span>
           <span class="sep">│</span>
         </template>
         <template v-for="pl in store.pinnedLabels()" :key="pl.id">
@@ -112,6 +112,7 @@
       <task-detail ref="detail" :store="store"></task-detail>
       <event-detail v-if="store.eventDetailOpen" :store="store" @close="store.eventDetailOpen=false"></event-detail>
       <note-detail v-if="store.noteDetailOpen" :key="store.selectedNoteId" :store="store" @close="store.noteDetailOpen=false"></note-detail>
+      <day-detail v-if="store.dayDetailOpen" ref="dayDetail" :store="store"></day-detail>
     </main>
 
     <!-- status bar -->
@@ -216,6 +217,7 @@
 <script src="js/search-list.js"></script>
 <script src="js/md-field.js"></script>
 <script src="js/note-detail.js"></script>
+<script src="js/day-detail.js"></script>
 <script src="js/recurrence-builder.js"></script>
 <script src="js/task-detail.js"></script>
 <script src="js/icons.js"></script>
@@ -311,10 +313,50 @@ const app = createApp({
       // hash to whatever the view actually is now, so Back+cancel doesn't desync the URL.
       this.syncHash(this.currentApp);
     },
-    // N: collapse/expand the deep-nav rail (desktop) or toggle its own slide-in (mobile)
+    // N: toggle the deep-nav rail AND the keyboard cursor in it (2E §4.4). First N opens +
+    // focuses; a second N closes + unfocuses (the "closing again = N twice" the doc describes).
+    // If the rail is showing but NOT focused, N focuses it (rather than closing).
     toggleDeepNav(){
-      if(window.matchMedia('(max-width: 860px)').matches) this.store.deepNavOpen=!this.store.deepNavOpen;
-      else this.store.deepNavCollapsed=!this.store.deepNavCollapsed;
+      const mobile = window.matchMedia('(max-width: 860px)').matches;
+      const showing = mobile ? this.store.deepNavOpen : !this.store.deepNavCollapsed;
+      if(showing && this.store.focusPane==='deepnav'){
+        if(mobile) this.store.deepNavOpen=false; else this.store.deepNavCollapsed=true;
+        this.store.focusPane='list';
+      } else {
+        this.enterDeepNav();
+      }
+    },
+    // reveal the rail + drop the keyboard cursor onto the current app
+    enterDeepNav(){
+      this.store.deepNavCollapsed=false;
+      if(window.matchMedia('(max-width: 860px)').matches) this.store.deepNavOpen=true;
+      const i=['tasks','events','notes'].indexOf(this.currentApp);
+      this.store.deepNavCursor = i<0 ? 0 : i;
+      this.store.focusPane='deepnav';
+    },
+    exitDeepNav(){ this.store.focusPane='list'; },   // Esc: drop focus, leave the rail visible
+    switchApp(app){
+      if(app===this.currentApp) return;   // already here → Enter just dives into the nav (no view reset)
+      if(app==='tasks'){ const top=this.store.savedQueries[0]; if(top) this.store.openQueryView(top); }
+      else if(app==='events') this.store.openCalendar();
+      else if(app==='notes') this.store.openNotes();
+    },
+    // keyboard while the app rail is focused: j/k between apps · enter/space switch + dive
+    // into that app's nav · l dive into the active app's nav (rail stays open) · esc drops focus
+    deepNavKey(e){
+      const apps=['tasks','events','notes'];
+      switch(e.key){
+        case 'j': case 'ArrowDown': e.preventDefault(); this.store.deepNavCursor=Math.min(apps.length-1, this.store.deepNavCursor+1); break;
+        case 'k': case 'ArrowUp':   e.preventDefault(); this.store.deepNavCursor=Math.max(0, this.store.deepNavCursor-1); break;
+        case 'Enter': case ' ': {   // switch to the cursor's app, then land at the top of its nav
+          e.preventDefault();
+          this.switchApp(apps[this.store.deepNavCursor]);
+          this.$nextTick(()=>this.enterSidebar());
+          break;
+        }
+        case 'l': case 'ArrowRight': e.preventDefault(); this.enterSidebar(); break;   // into the active app's nav (no switch)
+        case 'Escape': e.preventDefault(); this.exitDeepNav(); break;
+      }
     },
     openPalette(){ this.paletteOpen=true; },
     // tap "READY" to reload — useful as a PWA where there's no refresh button. Flush
@@ -518,7 +560,8 @@ const app = createApp({
       // n toggles the sidebar nav column (parallel to q/Q for the query builder)
       if(e.key==='n'){ e.preventDefault(); this.toggleNav(); return; }
 
-      // each pane has its own navigation while focused (per-app nav + query bar)
+      // each pane has its own navigation while focused (app rail · per-app nav · query bar)
+      if(this.store.focusPane==='deepnav'){ this.deepNavKey(e); return; }
       if(this.store.focusPane==='side'){ this.sidebarKey(e); return; }
       if(this.store.focusPane==='query'){ this.queryKey(e); return; }
 
@@ -528,11 +571,15 @@ const app = createApp({
       // calendar: a focused-day cursor. Routed through here (not a private listener) so it
       // inherits the modal gate above — keys don't leak to the grid behind an open menu.
       if(this.store.view.kind==='calendar'){
+        // the day-schedule drawer (§4.2) owns the keys while it's open (an event opened FROM
+        // it makes onKey bail at the modal-takeover guard above, so the event drawer wins; on
+        // Esc the event closes and the day drawer resumes here)
+        if(this.store.dayDetailOpen){ const dd=this.$refs.dayDetail; if(dd) dd.dayKey(e); return; }
         const cal=this.$refs.cal;
         if(cal){
           const map={ h:()=>cal.moveCursor(-1), l:()=>cal.moveCursor(1), k:()=>cal.moveCursor(-7), j:()=>cal.moveCursor(7),
             H:()=>cal.moveMonth(-1), L:()=>cal.moveMonth(1), K:()=>cal.moveMonthKeepCell(-1), J:()=>cal.moveMonthKeepCell(1),
-            i:()=>cal.newEvent(cal.cursor) };
+            i:()=>cal.newEvent(cal.cursor), E:()=>cal.openDay() };
           const fn=map[e.key]; if(fn){ e.preventDefault(); fn(); }
         }
         return;
@@ -832,11 +879,12 @@ const app = createApp({
           break;
         }
         case 'h': case 'ArrowLeft': {
-          // walk up / collapse the tree — never leaves the nav (use esc for that)
+          // walk up / collapse the tree; at the top (a section header) h jumps LEFT into
+          // the deep-nav app rail (§4.4). Tab still toggles a section.
           e.preventDefault();
           const it=items[idx];
           if(!it) break;
-          if(it.kind==='head'){ this.toggleSection(it.section); break; }   // toggle the section (like Tab)
+          if(it.kind==='head'){ this.enterDeepNav(); break; }   // top of the tree → app rail
           if(isCat(it.kind)){
             if(!it.ref.collapsed && this.store.catChildren(it.kind, it.ref.id).length){ it.ref.collapsed=true; this.scrollSideIntoView(); break; }  // collapse expanded parent (stay on it)
             this.store.sideFocusId = it.ref.parentId || ('head_'+it.kind);   // up: parent, else the section header
@@ -1219,6 +1267,7 @@ app.component('mixed-list', window.MixedList);
 app.component('search-list', window.SearchList);
 app.component('md-field', window.MdField);
 app.component('note-detail', window.NoteDetail);
+app.component('day-detail', window.DayDetail);
 app.component('task-row', window.TaskRow);
 app.component('recurrence-builder', window.RecurrenceBuilder);
 app.component('task-detail', window.TaskDetail);

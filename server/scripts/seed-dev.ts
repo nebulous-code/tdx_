@@ -377,7 +377,7 @@ async function main() {
   await createSavedQuery(db, owner, {
     name: 'Urgent',
     glyph: '★',
-    query: 'label:urgent status:open',
+    query: 'type:task label:urgent status:open',
     pinned: true,
   });
   // the cross-app categorizer in action: every task, event, and note tied to the

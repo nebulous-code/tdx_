@@ -152,8 +152,9 @@
     navCollapsed: false,     // desktop: hide the sidebar column (toggled with n)
     deepNavCollapsed: false, // desktop: hide the app-switcher rail (toggled with N)
     deepNavOpen: false,      // mobile: the rail's own slide-in (the > button), independent of the app nav
+    deepNavCursor: 0,        // keyboard cursor over the app rail (0 tasks · 1 events · 2 notes) when focusPane==='deepnav'
     navSections: { query:false, project:false, calendar:false, folder:false, label:false },  // collapsed sidebar sections (Tab)
-    focusPane: 'list',       // 'list' | 'side' | 'query' — which window the keyboard drives
+    focusPane: 'list',       // 'list' | 'side' | 'query' | 'deepnav' — which window the keyboard drives
     sideFocusId: null,       // id of the keyboard-focused sidebar item
     moveId: null,            // id of the sidebar item being reordered (m = move mode)
     taskMoveId: null,        // id of the subtask being reordered in the task list (m = move mode)
@@ -166,6 +167,9 @@
     editingEvent: null,      // the event being created/edited
     noteDetailOpen: false,   // the note PEEK drawer (metadata + light edit; §4)
     selectedNoteId: null,    // the note shown in the peek drawer
+    dayDetailOpen: false,    // the calendar day-schedule drawer (§4.2; stacks left of the event drawer)
+    dayDetailYmd: null,      // the day shown in the day-schedule drawer
+    calMatchIds: null,       // event-id set when a query predicate narrows the calendar (null = no filter); shared by grid + day drawer
     calFrom: null, calTo: null,  // current calendar range (to refetch after a mutate)
   });
 
@@ -238,13 +242,14 @@
   store.openCatView = (kind, node) =>
     kind==='project' ? store.openProjectView(node) :
     kind==='calendar'? store.openCalendarView(node) : store.openFolderView(node);
-  // a saved view belongs to an app when its query targets that app's type (or carries no
-  // type: at all → it's app-agnostic and shows everywhere). Drives the per-app views list.
+  // a saved view belongs to the app(s) of its explicit type: tokens; a view with NO type:
+  // is a plain task query (status:/due:/… apply to tasks) → it belongs to the Tasks app only,
+  // so task filters don't clutter the Events/Notes nav. Drives the per-app views list.
   store.viewMatchesApp = (sv, app) => {
     const types = new Set();
     for(const t of Q.parse(sv.query||'').terms)
       if(t.field==='type' && !t.neg) for(const tok of String(t.value).split(',').map(s=>s.trim())) if(tok) types.add(tok);
-    if(!types.size) return true;
+    if(!types.size) return app==='tasks';   // no type: → Tasks app only
     return types.has(({ tasks:'task', events:'event', notes:'note' })[app]);
   };
   store.appQueries = () => store.savedQueries.filter(sv => store.viewMatchesApp(sv, store.currentApp()));
@@ -290,7 +295,18 @@
   // (matches the project view / `project:` token, which no longer cascade)
   store.projectCount = (pid) =>
     store.tasks.filter(t=>!t.done && !t.parentId && t.projectId===pid).length;
-  store.queryCount = (q) => Q.run(q, store.ctx()).filter(t=>!t.parentId).length;
+  // count matching root TASKS for a query (the client Q engine is task-only). Strip type:
+  // first — the engine has no 'type' field, so an unstripped `type:task` would match nothing.
+  store.queryCount = (q) =>
+    Q.run(Q.build(Q.parse(q).terms.filter(t=>t.field!=='type')), store.ctx()).filter(t=>!t.parentId).length;
+  // whether a saved view is client-countable: only task/no-type views (events/notes need the
+  // server) — drives whether the nav shows a count badge for it.
+  store.viewCountable = (sv) => {
+    for(const t of Q.parse(sv.query||'').terms)
+      if(t.field==='type' && !t.neg) for(const tok of String(t.value).split(',').map(s=>s.trim()))
+        if(tok==='event' || tok==='note') return false;
+    return true;
+  };
 
   // completion filter (open / completed pills + the list-head toggle). A task passes if
   // its completion state is currently included; ≥1 of {open, done} is always on.
@@ -514,6 +530,7 @@
     store.view = v; store.selectedTaskId = null; store.sidebarOpen = false;
     store.searchActive = false;   // switching views exits search (the term is kept for the next '/')
     store.healthFilter = null;    // and drops any project health-bar filter
+    store.dayDetailOpen = false;  // and closes the calendar day-schedule drawer (calendar-only)
   };
   store.setView = (v) => {
     if(store.dirtyCheck && store.dirtyCheck() && store.askConfirm){

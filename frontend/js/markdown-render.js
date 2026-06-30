@@ -74,8 +74,41 @@
     return true;
   });
 
+  // ---- block segmentation (notes editor current-block-raw cursor, §6.1) ----
+  // Split a body into ordered line-range segments that COVER every line: each top-level
+  // markdown block (paragraph/heading/list/table/blockquote/fence/hr/html) is one segment
+  // (so a whole list/table/fence goes raw as a unit), and blank-line gaps between blocks
+  // become singleton segments. Returns [{start, end}] with end EXCLUSIVE, in line order.
+  function blocks(body) {
+    const lines = (body || '').split('\n');
+    const n = lines.length;
+    let toks = [];
+    try { toks = md.parse(body || '', {}); } catch { toks = []; }
+    // collect top-level block ranges from token .map (level 0 opens + self-contained blocks)
+    const ranges = [];
+    for (const t of toks) {
+      if (t.level !== 0 || !t.map) continue;
+      const [s, e] = t.map;
+      if (e > s) ranges.push([s, e]);
+    }
+    ranges.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    // merge/skip nested or overlapping ranges (keep the outermost), then fill gaps
+    const segs = [];
+    let line = 0;
+    for (const [s, e] of ranges) {
+      if (s < line) continue;                 // already covered by an outer block
+      while (line < s) { segs.push({ start: line, end: line + 1 }); line++; }  // blank-line gap
+      segs.push({ start: s, end: e });
+      line = e;
+    }
+    while (line < n) { segs.push({ start: line, end: line + 1 }); line++; }    // trailing blanks
+    if (!segs.length) segs.push({ start: 0, end: Math.max(1, n) });
+    return segs;
+  }
+
   window.MdRender = {
     html: (body) => md.render(body || ''),
+    blocks,
     // flip the checkbox on source line `n` of `body`; returns the new body
     toggleCheckbox: (body, n) => {
       const lines = (body || '').split('\n');

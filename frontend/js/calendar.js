@@ -10,7 +10,7 @@ window.CalendarView = {
   props: ['store'],
   data() {
     const now = new Date();
-    return { year: now.getFullYear(), month: now.getMonth(), cursor: Rec.ymd(now), matchIds: null, _fseq: 0 };
+    return { year: now.getFullYear(), month: now.getMonth(), cursor: Rec.ymd(now), _fseq: 0 };
   },
   computed: {
     weekStart() { return (this.store.currentUser && this.store.currentUser.week_start) ?? 1; },
@@ -44,9 +44,9 @@ window.CalendarView = {
           inMonth: d.getMonth() === this.month,
           isToday: ymd === today,
           isCursor: ymd === this.cursor,
-          events: this.store.events.filter((e) => e.date === ymd && (!this.calFilter || e.calendarId === this.calFilter) && (!this.matchIds || this.matchIds.has(e.id))),
+          events: this.store.events.filter((e) => e.date === ymd && (!this.calFilter || e.calendarId === this.calFilter) && (!this.store.calMatchIds || this.store.calMatchIds.has(e.id))),
           // a query predicate narrows the grid to events → hide the dated-task overlay
-          tasks: this.matchIds ? [] : this.store.tasks.filter((t) => t.due === ymd),
+          tasks: this.store.calMatchIds ? [] : this.store.tasks.filter((t) => t.due === ymd),
         });
       }
       return out;
@@ -67,11 +67,11 @@ window.CalendarView = {
     // run the query through the unified engine and keep the set of matching event ids;
     // a query with only type: (no real predicate) clears the filter (show every event)
     async refilter() {
-      if (!this.hasPredicate) { this.matchIds = null; return; }
+      if (!this.hasPredicate) { this.store.calMatchIds = null; return; }
       const seq = ++this._fseq;
       const items = await this.store.runQuery(this.activeQuery());
       if (seq !== this._fseq) return;
-      this.matchIds = new Set((items || []).filter((i) => i.type === 'event').map((i) => i.id));
+      this.store.calMatchIds = new Set((items || []).filter((i) => i.type === 'event').map((i) => i.id));
     },
     // start (top-left cell) of the 6-week grid for a given month
     gridStart(y, m) {
@@ -132,6 +132,8 @@ window.CalendarView = {
       const { date, ...ev } = occ;
       this.store.editEvent({ ...ev });
     },
+    // E: open the hour-by-hour day schedule (§4.2) for the focused day
+    openDay() { this.store.dayDetailYmd = this.cursor; this.store.dayDetailOpen = true; },
     onCell(ymd) { this.cursor = ymd; this.newEvent(ymd); },
     newEvent(ymd) { this.store.editEvent({ startAt: ymd, allDay: true, title: '', calendarId: this.calFilter || null }); },
     openTask(t) { this.store.selectedTaskId = t.id; this.store.detailOpen = true; },

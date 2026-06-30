@@ -22,7 +22,7 @@ window.AppSidebar = {
         <span v-if="sv.pinned" class="pin-mark" title="pinned to header">✦</span>
         <span class="add" title="Delete view (x)" @click.stop="$emit('delete-query', sv)">✕</span>
         <span class="add" title="Edit view (e)" @click.stop="$emit('edit-query', sv)">›</span>
-        <span class="count">{{ store.queryCount(sv.query) }}</span>
+        <span v-if="store.viewCountable(sv)" class="count">{{ store.queryCount(sv.query) }}</span>
       </div>
     </div>
 
