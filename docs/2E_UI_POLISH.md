@@ -22,7 +22,7 @@ Sizable backend changes riding under "UI polish": the **calendars/folders entiti
 ## Status (as of the §6 note-editor pass)
 **§1–§5 are DONE. §6 is done except the audit.** Each section heading below carries its own status + a one-line record of what shipped.
 - **Remaining to build:** **§6.4** — the keyboard + mouse accessibility audit (always planned as the final sweep once everything else landed).
-- **Remaining to decide:** **§6.2** — note button layout / back-vs-close, deliberately deferred until the new frontend had been lived with. Now decidable.
+- ~~**Remaining to decide:** §6.2 — note button layout / back-vs-close~~ → ✅ **RESOLVED** (one `back ⎋` control; every editor control in the bottom action row, all of them ladder rungs).
 - **Remaining to feel out:** **§6.1** reflow/motion tuning, and the provisional §4.2 day-drawer key mappings — both explicitly "iterate in-product."
 - **Not a 2e item, but the real gate on shipping this:** the **prod cutover**. `docs/DEPLOY.md` is a **D1-only** runbook — neither it nor `compose.yaml` mentions the notes **vault** (no `VAULT_DIR` volume/env in prod), and there's no backfill rehearsal for the D2 migrations (`002`–`006`: events, links, notes, calendars/folders, readable ids) against real data. Refresh the runbook + dry-run the migration on a copy of the prod DB before flipping anything.
 
@@ -213,10 +213,21 @@ The note editor's presentation/navigation need work. Minimum bar: a **border aro
 - **Scope of the first cut.** Ship the high-value bit first — always-on border + current-block-raw cursor + `i`/`a`/`I`/`A` — iterate on motions.
 - **How much of vim.** Just `hjkl` + insert, or word/line motions (`w`/`b`/`0`/`$`), visual mode? Define floor + someday-ceiling.
 
-### 6.2 Note button consistency — *intentionally open (revisit once the new frontend is built out)*
-The note editor has back + edit/render buttons top-right and others bottom-right; the rough intent is to consolidate **all** controls at the bottom (left: back, close · right: edit/render, delete, save). **Not deciding the layout, or back-vs-close, yet** — want to see the new frontend built out before any sweeping call.
-- **Captured to fix:** the yes/no "navigate away?" confirmation buttons show **"esc" as text** instead of the **escape symbol** we use elsewhere — make it consistent.
-- **Back vs close** (two buttons — back = prior context, close = notes list — or collapse to one `Esc`) and the final button order/glyphs: **deferred.**
+### 6.2 Note button consistency — ✅ RESOLVED
+*Deferred until the new frontend had been lived with. It was, and the §6.4 keyboard audit forced the call: `close` was rendered but unreachable from the ladder — a keyboard dead zone — which exposed that `close` and `‹ back` **were never actually different** (both just called `closeEditor()`).*
+
+**Decided + shipped.** One action row owns every editor control, and the ladder walks them in the order they render:
+
+```
+[ back ⎋ ]  [ edit i ]                    [ delete ]  [ save ↵ ]
+        ladder:  … → links → back → edit/render → delete → save
+```
+- **Back vs close: collapsed to one.** `back` (glyph `⎋`, because Escape is the same action) replaces both the header's `‹ back` and the bottom-right `close`. The redundancy is gone rather than papered over.
+- **All controls at the bottom** — the header's back + edit/render moved down; the header now carries only note context. The original intent, made literal.
+- **The edit/render toggle stays** (it is NOT redundant with `i`/`Esc`): clicking the rendered body only moves the cursor, so that button is a mouse-only user's sole way into insert mode.
+- **Escape-count hint.** `back` shows `⎋⎋` in insert (first Esc commits + returns the ladder, second leaves the note) and `⎋` in normal — the glyphs literally count the keystrokes.
+- **No dead zones:** every visible control is a rung. The ladder's `kfocus` highlight is suppressed while insert mode owns the keyboard, so no stale outline is left behind.
+- **Captured item — fixed earlier:** the confirm buttons now use the `⎋` symbol, not the text "esc".
 
 ### 6.3 Enter-to-save + `↵` sweep — ✅ DONE
 Adopted globally in 2d; this sweep catches stragglers across every save UI. Largely mechanical.

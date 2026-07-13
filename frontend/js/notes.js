@@ -4,17 +4,39 @@
    No side-by-side. Rendered checkboxes are clickable — toggling rewrites the source
    line and saves. Notes are file-backed; [[…]] links materialize server-side on save. */
 
+// a note's editable state — labels/reviewAt included, so the full editor can set them too (n.3)
+function newDraft(over) {
+  return Object.assign({ title: '', body: '', folderId: null, reviewAt: '', labels: [] }, over || {});
+}
+const labelKey = (ls) => [...(ls || [])].sort().join(',');   // order-insensitive dirty compare
+
 window.NotesView = {
   props: ['store'],
+  mixins: [window.KbForm],
+  emits: ['enter-nav'],
   data() {
-    return { list: [], q: '', hits: null, sel: null, creating: false, mode: 'normal', draft: { title: '', body: '' }, saved: { title: '', body: '' }, listSel: 0, eventList: [], linkMenu: null, matchIds: null, _fseq: 0,
-      // §6.1 normal-mode block cursor: position in the body source + a remembered goal column
-      curLine: 0, curCol: 0, goalCol: 0, pendingG: false };
+    return { list: [], q: '', hits: null, sel: null, creating: false, mode: 'normal',
+      draft: newDraft(), saved: newDraft(), listSel: 0, eventList: [], linkMenu: null, matchIds: null, _fseq: 0,
+      // §6.1 block cursor: the LINE lives in KbForm's kbRow (the body's lines are ladder rows —
+      // see kbRows/curLine); we own only the character column + a remembered goal column.
+      curCol: 0, goalCol: 0,
+      pending: null,          // multi-key operator prefix: 'g' (gg) · 'd' (dd/dw) · 'r' (replace)
+      kbAutoListen: false,    // the app routes keys here (index.html) → onKey drives kbKey
+      kbAutofocus: false };   // opening a note lands on the body, not in the title
   },
   computed: {
     // the body as source lines + the top-level block segments (current-block-raw model, §6.1)
     bodyLines() { return this.draft.body.split('\n'); },
     segs() { return window.MdRender ? window.MdRender.blocks(this.draft.body) : [{ start: 0, end: this.bodyLines.length }]; },
+    // ---- the unified ladder (audit n.3) ------------------------------------------------
+    // Every body line is a KbForm row, so j/k walk fields AND text as one list: the cursor's
+    // LINE is just kbRow offset by however many field rows precede the body.
+    bodyStart() { return Math.max(0, this.kbNav.findIndex((r) => r.id.startsWith('body_'))); },
+    onBody() { const r = this.kbCur(); return !!r && r.id.startsWith('body_'); },
+    curLine: {
+      get() { return Math.max(0, Math.min(this.bodyLines.length - 1, this.kbRow - this.bodyStart)); },
+      set(v) { this.kbRow = this.bodyStart + Math.max(0, Math.min(this.bodyLines.length - 1, v)); },
+    },
     // when a folder is selected in the nav, narrow the (non-search) list to it
     folderFilter() { return this.store.view.folderId || null; },
     activeFolder() { return this.folderFilter ? this.store.folderById(this.folderFilter) : null; },
@@ -28,7 +50,12 @@ window.NotesView = {
       return r;
     },
     editing() { return !!this.sel || this.creating; },
-    dirty() { return this.editing && (this.draft.title !== this.saved.title || this.draft.body !== this.saved.body || this.draft.folderId !== this.saved.folderId); },
+    dirty() {
+      if (!this.editing) return false;
+      const d = this.draft, s = this.saved;
+      return d.title !== s.title || d.body !== s.body || d.folderId !== s.folderId
+        || d.reviewAt !== s.reviewAt || labelKey(d.labels) !== labelKey(s.labels);
+    },
   },
   watch: {
     // markdown renders synchronously; tdx-query blocks fetch async, so hydrate after paint
@@ -63,26 +90,48 @@ window.NotesView = {
       this.hits = q ? await this.store.searchNotes(q) : null;
       this.listSel = 0;
     },
+    // the note's editable fields, straight off the API shape
+    seed(n) {
+      return newDraft({ title: n.title, body: n.body, folderId: n.folderId ?? null,
+        reviewAt: n.reviewAt || '', labels: [...(n.labels || [])] });
+    },
     async open(id) {
       const n = await this.store.getNote(id);
       if (!n) return;
       this.sel = n;
       this.creating = false;
       this.mode = 'normal';        // open into the rendered view
-      this.draft = { title: n.title, body: n.body, folderId: n.folderId ?? null };
-      this.saved = { title: n.title, body: n.body, folderId: n.folderId ?? null };
-      this.curLine = 0; this.curCol = 0; this.goalCol = 0; this.pendingG = false;
+      this.draft = this.seed(n);
+      this.saved = this.seed(n);
+      this.resetCursor();
+      // Enter from the list lands on body line 1 — the common case is reading/editing the
+      // text; k walks up into review date / labels / folder / title (n.3).
+      this.$nextTick(() => { this.kbRow = this.bodyStart; this.kbCell = 0; this.kbGoalCol = 0; });
     },
     // open a blank editor — NOTHING is written to the vault until the first save
     newNote() {
       this.sel = null;
       this.creating = true;
       // a note created while viewing a folder is filed there
-      this.draft = { title: '', body: '', folderId: this.folderFilter || null };
-      this.saved = { title: '', body: '', folderId: this.folderFilter || null };
-      this.curLine = 0; this.curCol = 0; this.goalCol = 0; this.pendingG = false;
+      this.draft = newDraft({ folderId: this.folderFilter || null });
+      this.saved = newDraft({ folderId: this.folderFilter || null });
+      this.resetCursor();
+      this.kbRow = 0;              // a new note starts at the title (it needs a name)
       this.mode = 'insert';        // a fresh note starts in edit mode
       this.$nextTick(() => { const el = this.$refs.titleInput; if (el) el.focus(); });
+    },
+    resetCursor() { this.curCol = 0; this.goalCol = 0; this.pending = null; this.kbCell = 0; this.kbGoalCol = 0; },
+    // Esc out of a focused field → back to the ladder. This MUST be wired on the field itself:
+    // the app's global onKey returns at its typing gate (index.html) before it routes here, so a
+    // focused input never reaches KbForm's Escape-to-blur. Same hatch note-detail/task-detail use.
+    blurField() { const a = document.activeElement; if (a && a.blur) a.blur(); },
+    // The ladder's kfocus highlight is only meaningful while the ladder is driving. In insert
+    // mode the keyboard belongs to the textarea, so a highlight left on whatever row you came
+    // from (the edit button, a field) is stale paint — hide it until Esc hands the ladder back.
+    navCls(id, cell) { return this.mode === 'insert' ? null : this.kbCls(id, cell); },
+    toggleLabel(id) {
+      const i = this.draft.labels.indexOf(id);
+      if (i >= 0) this.draft.labels.splice(i, 1); else this.draft.labels.push(id);
     },
     // ---- vim modes ----
     toInsert() {
@@ -100,35 +149,124 @@ window.NotesView = {
       this.mode = 'normal';
     },
     toggleMode() { this.mode === 'insert' ? this.commitAndNormal() : this.toInsert(); },
-    // keys routed from the app's global handler (so they inherit its modal/typing gate)
-    // ---- §6.1 normal-mode block cursor: vim motions + insert entry ----
-    normalKey(e) {
-      const lines = this.bodyLines, maxLine = lines.length - 1;
+    // ---- KbForm: the unified ladder (n.3) ----------------------------------------------
+    // title · folder · labels · review · EVERY BODY LINE · links · save · delete.
+    // j/k walk the whole thing, so stepping off the review field lands on body line 1 and
+    // stepping off the last body line lands on links — no boundary special-casing.
+    kbRows() {
+      if (!this.editing) return [];
+      const labels = this.store.sortedLabels();
+      return [
+        { id: 'title',  type: 'input', ref: 'titleInput' },
+        { id: 'folder', type: 'input', ref: 'folderSel', when: () => this.store.folders.length > 0 },
+        { id: 'labels', type: 'grid', items: labels, cols: 99,
+          isOn: (l) => this.draft.labels.includes(l.id), select: (l) => this.toggleLabel(l.id),
+          when: () => labels.length > 0 },
+        { id: 'review', type: 'input', ref: 'reviewInput' },
+        // the body: one row per source line — this is what makes the ladder continuous
+        ...this.bodyLines.map((_, i) => ({ id: 'body_' + i, type: 'static' })),
+        { id: 'links',  type: 'button', activate: () => { if (this.$refs.links) this.$refs.links.focus(); }, when: () => !!this.sel },
+        // the action row, in the order it renders left→right (§6.2): back · edit/render · delete · save
+        { id: 'back',   type: 'button', activate: () => this.closeEditor() },
+        { id: 'mode',   type: 'button', activate: () => this.toggleMode() },
+        { id: 'delete', type: 'button', activate: () => this.del(), when: () => !!this.sel },
+        { id: 'save',   type: 'button', activate: () => this.save() },
+      ];
+    },
+    kbSubmit() { this.save(); },       // Enter anywhere in nav = save
+    kbDirty() { return this.dirty; },  // → KbForm's "Discard changes?" guard on Escape
+    kbOnClose() { this.back(); },      // Escape in nav = back to the notes list
+    // Body rows own their keys (the precedent is task-detail's recurrence sub-pane): we consume
+    // the vim verbs here and let j/k fall through to KbForm's kbMove, which is what keeps the
+    // fields and the text on ONE ladder. `d` splits by row: operator in the body, delete-note
+    // on a field row (mirrors tasks, where d fires while nav-ing the detail).
+    kbDelegate(e) {
+      if (!this.editing || this.mode === 'insert') return false;
+      const el = document.activeElement, tag = (el && el.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return false;  // typing in a field
+      if (!this.onBody) {
+        if (e.key === 'd') { e.preventDefault(); this.del(); return true; }
+        return false;                                   // fields: plain KbForm
+      }
+      if (e.key === 'j' || e.key === 'k' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        this.pending = null;
+        return false;                                   // let the ladder move
+      }
+      return this.bodyKey(e);
+    },
+    // ---- §6.1 block cursor: motions, insert entry, and the operators (n.2/n.5/n.12) ----
+    bodyKey(e) {
+      const lines = this.bodyLines;
       const lineLen = () => (lines[this.curLine] || '').length;
       const setCol = (c) => { this.curCol = Math.max(0, Math.min(lineLen(), c)); this.goalCol = this.curCol; };
-      const setLine = (n) => { this.curLine = Math.max(0, Math.min(maxLine, n)); this.curCol = Math.min(this.goalCol, lineLen()); };
-      if (this.pendingG) {                       // gg → first line
-        this.pendingG = false;
-        if (e.key === 'g') { e.preventDefault(); setLine(0); this.scrollCursor(); return; }
+      // a pending operator swallows the next key
+      if (this.pending) {
+        const p = this.pending;
+        this.pending = null;
+        e.preventDefault();
+        if (p === 'g' && e.key === 'g') { this.curLine = 0; setCol(Math.min(this.goalCol, 0)); this.scrollCursor(); return true; }
+        if (p === 'd' && e.key === 'd') { this.deleteLine(); return true; }
+        if (p === 'd' && e.key === 'w') { this.deleteWord(); return true; }
+        if (p === 'r' && e.key.length === 1) { this.replaceChar(e.key); return true; }
+        return true;                                    // any other follow-up: operator aborts
       }
       switch (e.key) {
         case 'h': case 'ArrowLeft':  e.preventDefault(); setCol(this.curCol - 1); break;
         case 'l': case 'ArrowRight': e.preventDefault(); setCol(this.curCol + 1); break;
-        case 'j': case 'ArrowDown':  e.preventDefault(); setLine(this.curLine + 1); break;
-        case 'k': case 'ArrowUp':    e.preventDefault(); setLine(this.curLine - 1); break;
         case '0': e.preventDefault(); setCol(0); break;
         case '$': e.preventDefault(); setCol(lineLen()); break;
         case 'w': e.preventDefault(); this.wordFwd(); break;
         case 'b': e.preventDefault(); this.wordBack(); break;
-        case 'g': e.preventDefault(); this.pendingG = true; return;   // await a second g
-        case 'G': e.preventDefault(); setLine(maxLine); break;
-        case 'i': case 'a': case 'I': case 'A': e.preventDefault(); this.enterInsert(e.key); return;
-        case 'Enter': e.preventDefault(); this.save(); return;
-        case 'd': e.preventDefault(); this.del(); return;
-        case 'Escape': e.preventDefault(); this.closeEditor(); return;
-        default: return;
+        case 'g': e.preventDefault(); this.pending = 'g'; return true;          // await gg
+        case 'd': e.preventDefault(); this.pending = 'd'; return true;          // await dd / dw
+        case 'r': e.preventDefault(); this.pending = 'r'; return true;          // await the replacement char
+        case 'G': e.preventDefault(); this.curLine = lines.length - 1; setCol(Math.min(this.goalCol, lineLen())); break;
+        case 'i': case 'a': case 'I': case 'A': e.preventDefault(); this.enterInsert(e.key); return true;
+        case 'o': case 'O': e.preventDefault(); this.openLine(e.key === 'o'); return true;
+        case 'D': e.preventDefault(); this.deleteToEol(); return true;
+        default: return false;   // unhandled → KbForm (Enter=save · Escape=close · space)
       }
       this.scrollCursor();
+      return true;
+    },
+    // ---- body edits (operate on the source, then re-render) ----
+    setLines(lines) { this.draft.body = lines.join('\n'); },
+    deleteLine() {                                     // dd
+      const lines = this.bodyLines.slice();
+      const at = this.curLine;
+      lines.splice(at, 1);
+      if (!lines.length) lines.push('');               // never leave a bodyless note (no rows to stand on)
+      this.setLines(lines);
+      this.$nextTick(() => { this.curLine = Math.min(at, this.bodyLines.length - 1); this.curCol = Math.min(this.goalCol, (this.bodyLines[this.curLine] || '').length); });
+    },
+    deleteToEol() {                                    // D
+      const lines = this.bodyLines.slice();
+      lines[this.curLine] = (lines[this.curLine] || '').slice(0, this.curCol);
+      this.setLines(lines);
+    },
+    deleteWord() {                                     // dw — cursor → next word start (or EOL)
+      const lines = this.bodyLines.slice();
+      const text = lines[this.curLine] || '';
+      const rest = text.slice(this.curCol);
+      const m = rest.match(/^\s*\S+\s*/);              // this word + trailing space
+      const cut = m ? m[0].length : rest.length;
+      lines[this.curLine] = text.slice(0, this.curCol) + rest.slice(cut);
+      this.setLines(lines);
+    },
+    replaceChar(ch) {                                  // r<char>
+      const lines = this.bodyLines.slice();
+      const text = lines[this.curLine] || '';
+      if (!text.length) return;
+      const col = Math.min(this.curCol, text.length - 1);
+      lines[this.curLine] = text.slice(0, col) + ch + text.slice(col + 1);
+      this.setLines(lines);
+    },
+    openLine(below) {                                  // o / O — new line, then insert on it
+      const lines = this.bodyLines.slice();
+      const at = this.curLine + (below ? 1 : 0);
+      lines.splice(at, 0, '');
+      this.setLines(lines);
+      this.$nextTick(() => { this.curLine = at; this.curCol = 0; this.goalCol = 0; this.enterInsert('i'); });
     },
     // word motions (scan \b\w across lines)
     wordFwd() {
@@ -172,7 +310,9 @@ window.NotesView = {
       this.$nextTick(() => { const ta = this.$refs.bodyArea; if (ta) { ta.focus(); ta.setSelectionRange(off, off); } });
     },
     // ---- normal-mode block rendering (current block raw, rest rendered) ----
-    isActive(seg) { return seg.start <= this.curLine && this.curLine < seg.end; },
+    // the block cursor only exists while the ladder is IN the body — on a field row the
+    // whole note renders as markdown and the kfocus highlight marks the field instead
+    isActive(seg) { return this.onBody && seg.start <= this.curLine && this.curLine < seg.end; },
     segSource(seg) { return this.bodyLines.slice(seg.start, seg.end).join('\n'); },
     segHtml(seg) { return window.MdRender ? window.MdRender.html(this.segSource(seg)) : this.segSource(seg); },
     // raw source of the active block with a terminal block cursor over (curLine,curCol)
@@ -195,15 +335,30 @@ window.NotesView = {
     // keys routed from the app's global handler (so they inherit its modal/typing gate)
     onKey(e) {
       if (this.editing) {
-        if (this.mode === 'normal') this.normalKey(e);
-        return; // insert mode types into the textarea (global handler already returned on typing)
+        // insert mode types into the textarea (the global handler already returned on typing);
+        // Esc out of it is onBodyKey's job, so it can write the file + carry the caret back
+        if (this.mode === 'insert') return;
+        this.kbKey(e);            // nav: KbForm drives the ladder, kbDelegate owns the body rows
+        return;
       }
-      // list mode
+      // ---- list mode ----
+      // h leaves left into the notes nav, like the task list does (audit n.9)
+      if (e.key === 'h' || e.key === 'ArrowLeft') { e.preventDefault(); this.$emit('enter-nav'); return; }
       const rows = this.rows;
       if (!rows.length) return;
       if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); this.listSel = Math.min(rows.length - 1, this.listSel + 1); this.scrollListSel(); }
       else if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); this.listSel = Math.max(0, this.listSel - 1); this.scrollListSel(); }
       else if (e.key === 'Enter' || e.key === 'o') { e.preventDefault(); const n = rows[this.listSel]; if (n) this.open(n.id); }
+      // d deletes the highlighted note — the same one-key delete tasks get from their list
+      else if (e.key === 'd') { e.preventDefault(); this.delRow(rows[this.listSel]); }
+    },
+    async delRow(n) {
+      if (!n) return;
+      if (await this.store.askConfirm('Delete "' + (n.title || 'this note') + '"?')) {
+        await this.store.deleteNote(n.id);
+        await this.load();
+        this.listSel = Math.max(0, Math.min(this.listSel, this.rows.length - 1));
+      }
     },
     scrollListSel() { this.$nextTick(() => { const el = this.$el && this.$el.querySelector('.notes-row.on'); if (el) el.scrollIntoView({ block: 'nearest' }); }); },
     labelName(id) { const l = this.store.labelById(id); return l ? l.name : '?'; },
@@ -249,7 +404,32 @@ window.NotesView = {
         if (e.key === 'Escape') { e.preventDefault(); this.closeLinkMenu(); return; }
         return; // keep typing — @input re-detects
       }
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.commitAndNormal(); } // esc writes + renders
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.commitAndNormal(); return; } // esc writes + renders
+      if (e.key === 'Enter' && !e.shiftKey) this.continueList(e);   // bullets/numbers/checkboxes (n.4)
+    },
+    // Enter on a list line carries the leader down: same indent, same bullet (checkbox → a fresh
+    // UNCHECKED one), ordered → n+1. On an EMPTY leader, Enter strips it instead — that's how you
+    // end a list. Headings are NOT continued (`## ` on the next line is never what you want).
+    continueList(e) {
+      const ta = this.$refs.bodyArea;
+      if (!ta || ta.selectionStart !== ta.selectionEnd) return;
+      const pos = ta.selectionStart;
+      const body = this.draft.body;
+      const lineStart = body.lastIndexOf('\n', pos - 1) + 1;
+      const line = body.slice(lineStart, pos);
+      const m = line.match(/^(\s*)(?:([-*+])|(\d+)\.)\s+(\[[ xX]\]\s+)?/);
+      if (!m) return;
+      const [lead, indent, bullet, num, box] = [m[0], m[1], m[2], m[3], m[4]];
+      e.preventDefault();
+      // nothing after the leader → the user is ending the list: drop the leader
+      if (line.length === lead.length) {
+        this.draft.body = body.slice(0, lineStart) + body.slice(pos);
+        this.$nextTick(() => { ta.focus(); ta.setSelectionRange(lineStart, lineStart); });
+        return;
+      }
+      const next = '\n' + indent + (bullet ? bullet : String(Number(num) + 1) + '.') + ' ' + (box ? '[ ] ' : '');
+      this.draft.body = body.slice(0, pos) + next + body.slice(pos);
+      this.$nextTick(() => { ta.focus(); const c = pos + next.length; ta.setSelectionRange(c, c); this.detectLink(); });
     },
     openWikilink(el) {
       const type = el.getAttribute('data-type');
@@ -310,20 +490,26 @@ window.NotesView = {
       return head + rows;
     },
     // ---- save / delete ----
+    // the wire payload — labels + reviewAt included, or a save from here would look like a
+    // patch that leaves them behind (the drawer sets them; the full editor must too)
+    payload(title) {
+      return { id: this.sel?.id, title, body: this.draft.body, folderId: this.draft.folderId,
+        reviewAt: this.draft.reviewAt || null, labels: [...this.draft.labels] };
+    },
     async persist() {           // quiet save (checkbox toggles); needs an existing note
       if (!this.sel) return;
-      const n = await this.store.saveNote({ id: this.sel.id, title: this.draft.title.trim() || this.sel.title, body: this.draft.body, folderId: this.draft.folderId });
-      if (n) { this.sel = n; this.draft = { title: n.title, body: n.body, folderId: n.folderId ?? null }; this.saved = { title: n.title, body: n.body, folderId: n.folderId ?? null }; }
+      const n = await this.store.saveNote(this.payload(this.draft.title.trim() || this.sel.title));
+      if (n) { this.sel = n; this.draft = this.seed(n); this.saved = this.seed(n); }
     },
     async save() {
       const title = this.draft.title.trim();
       if (!title) { this.store.toast('name the note first'); return; }
-      const n = await this.store.saveNote({ id: this.sel?.id, title, body: this.draft.body, folderId: this.draft.folderId });
+      const n = await this.store.saveNote(this.payload(title));
       if (n) {
         this.sel = n;
         this.creating = false;
-        this.draft = { title: n.title, body: n.body, folderId: n.folderId ?? null };
-        this.saved = { title: n.title, body: n.body, folderId: n.folderId ?? null };
+        this.draft = this.seed(n);
+        this.saved = this.seed(n);
         await this.load();
         this.$nextTick(() => { if (this.$refs.links) this.$refs.links.load(); }); // saving can change content links
         this.store.toast('✓ saved');
@@ -341,7 +527,13 @@ window.NotesView = {
       if (this.dirty) { const ok = await this.store.askConfirm('Discard unsaved changes?'); if (!ok) return; }
       this.back();
     },
-    back() { this.sel = null; this.creating = false; this.mode = 'normal'; this.draft = { title: '', body: '' }; this.saved = { title: '', body: '' }; this.load(); },
+    back() {
+      this.sel = null; this.creating = false; this.mode = 'normal';
+      this.draft = newDraft(); this.saved = newDraft();   // (the old reset dropped folderId — it lied about being clean)
+      this.resetCursor();
+      this.kbRow = 0;
+      this.load();
+    },
     async sync() {
       const s = await this.store.syncNotes();
       if (s) { await this.load(); this.store.toast(`synced · ${s.updated} updated · ${s.tombstoned} removed`); }
@@ -356,8 +548,8 @@ window.NotesView = {
       <span class="grow"></span>
       <span v-if="!editing" class="qbtn" @click="newNote">＋ new</span>
       <span v-if="!editing" class="qbtn" @click="sync" title="reconcile external edits">sync</span>
-      <span v-if="editing" class="qbtn note-mode" @click="toggleMode">{{ mode==='insert' ? 'render' : 'edit' }} <span class="mut">{{ mode==='insert' ? '⎋' : 'i' }}</span></span>
-      <span v-if="editing" class="qbtn" @click="closeEditor">‹ back</span>
+      <!-- §6.2: every editor control now lives in the bottom action row — the header's
+           back + edit/render moved there, and the redundant close is gone (back IS close) -->
     </div>
 
     <div v-if="!editing" class="notes-list">
@@ -381,13 +573,28 @@ window.NotesView = {
     </div>
 
     <div v-else class="note-editor">
-      <input ref="titleInput" class="ti note-title" v-model="draft.title" placeholder="note name (this is the filename)" @keydown.enter="save">
-      <div v-if="store.folders.length" class="note-folder-row">
+      <input ref="titleInput" class="ti note-title" :class="navCls('title')" v-model="draft.title"
+             placeholder="note name (this is the filename)" @focus="kbFocusRow('title')"
+             @keydown.enter="save" @keydown.esc.stop.prevent="blurField">
+      <div v-if="store.folders.length" class="note-folder-row" :class="navCls('folder')">
         <span class="ev-rl">folder</span>
-        <select class="ti" v-model="draft.folderId">
+        <select ref="folderSel" class="ti" v-model="draft.folderId"
+                @focus="kbFocusRow('folder')" @keydown.esc.stop.prevent="blurField">
           <option :value="null">— none (root) —</option>
           <option v-for="f in store.folders" :key="f.id" :value="f.id">{{ f.glyph }} {{ f.name }}</option>
         </select>
+      </div>
+      <div v-if="store.sortedLabels().length" class="note-meta-row">
+        <span class="ev-rl">labels</span>
+        <div class="labelpick">
+          <span v-for="(l,i) in store.sortedLabels()" :key="l.id" class="chip"
+                :class="[{ on: draft.labels.includes(l.id) }, navCls('labels', i)]" @click="kbPick('labels', i)">#{{ l.name }}</span>
+        </div>
+      </div>
+      <div class="note-meta-row" :class="navCls('review')">
+        <span class="ev-rl">review date</span>
+        <input ref="reviewInput" class="ti note-date" type="date" v-model="draft.reviewAt"
+               @focus="kbFocusRow('review')" @keydown.enter="save" @keydown.esc.stop.prevent="blurField">
       </div>
       <div class="note-body-wrap">
         <template v-if="mode==='insert'">
@@ -407,11 +614,18 @@ window.NotesView = {
           </template>
         </div>
       </div>
-      <linked-items v-if="sel" ref="links" :store="store" type="note" :id="sel.id"></linked-items>
+      <div v-if="sel" :class="navCls('links')" class="note-links-row">
+        <linked-items ref="links" :store="store" type="note" :id="sel.id"></linked-items>
+      </div>
       <div class="note-actions">
-        <button class="btn" @click="closeEditor">close <span class="mut">⎋</span></button>
-        <button v-if="sel" class="btn danger" @click="del"><span><u>d</u>elete</span></button>
-        <button class="btn primary" @click="save">save ↵</button>
+        <div class="na-left">
+          <!-- the hint counts the ESCAPES it takes to get back from where you are: from insert,
+               the first Esc commits + hands back the ladder, the second leaves the note -->
+          <button class="btn" :class="navCls('back')" @click="closeEditor" title="Back to the notes list (esc)">back <span class="mut">{{ mode==='insert' ? '⎋⎋' : '⎋' }}</span></button>
+          <button class="btn" :class="navCls('mode')" @click="toggleMode">{{ mode==='insert' ? 'render' : 'edit' }} <span class="mut">{{ mode==='insert' ? '⎋' : 'i' }}</span></button>
+        </div>
+        <button v-if="sel" class="btn danger" :class="navCls('delete')" @click="del"><span><u>d</u>elete</span></button>
+        <button class="btn primary" :class="navCls('save')" @click="save">save ↵</button>
       </div>
     </div>
   </div>`,

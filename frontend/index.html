@@ -42,7 +42,7 @@
       <div class="pin-flow">
         <template v-for="pv in store.pinnedViews()" :key="pv.id">
           <span class="dim pin-view" :class="{ active: store.view.kind==='query' && store.view.id===pv.id }"
-                @click="store.openQueryView(pv)" :title="pv.query"><template v-if="store.viewCountable(pv)">{{ store.queryCount(pv.query) }} </template>{{ pv.name.toLowerCase() }}</span>
+                @click="store.openQueryView(pv)" :title="pv.query">{{ store.viewCountable(pv) ? store.queryCount(pv.query) + ' ' : '' }}{{ pv.name.toLowerCase() }}</span>
           <span class="sep">│</span>
         </template>
         <template v-for="pl in store.pinnedLabels()" :key="pl.id">
@@ -88,7 +88,7 @@
       <template v-else-if="store.view.kind==='notes'">
         <query-bar ref="qbar" :store="store" @save-query="openSave"></query-bar>
         <mixed-list v-if="store.isMixedView()" ref="mixed" :store="store"></mixed-list>
-        <notes-view v-else ref="notes" :store="store"></notes-view>
+        <notes-view v-else ref="notes" :store="store" @enter-nav="enterSidebar"></notes-view>
       </template>
       <template v-else>
         <query-bar ref="qbar" :store="store" @save-query="openSave"></query-bar>
@@ -110,7 +110,10 @@
         <mixed-list v-else ref="mixed" :store="store"></mixed-list>
       </template>
       <task-detail ref="detail" :store="store"></task-detail>
-      <event-detail v-if="store.eventDetailOpen" :store="store" @close="store.eventDetailOpen=false"></event-detail>
+      <!-- :key = the event id — the drawer snapshots the event in data(), which Vue won't re-run
+           while it stays open, so clicking a SECOND event must remount it (audit e.2) -->
+      <event-detail v-if="store.eventDetailOpen" :key="store.editingEvent && store.editingEvent.id"
+                    :store="store" @close="store.eventDetailOpen=false"></event-detail>
       <note-detail v-if="store.noteDetailOpen" :key="store.selectedNoteId" :store="store" @close="store.noteDetailOpen=false"></note-detail>
       <day-detail v-if="store.dayDetailOpen" ref="dayDetail" :store="store"></day-detail>
     </main>

@@ -3,9 +3,35 @@
 Some notes about keyboard accessiblity for section 6. (2E §6.4 — the final keyboard/mouse pass.)
 
 > **IDs:** `n.*` notes · `e.*` events · `t.*` tasks · `a.*` all-apps. Cross-references use those ids.
-> Claude's assessment + a proposed order of attack live at the bottom under **Triage**. Nothing below has been changed in code except where explicitly marked.
+> Claude's assessment + the order of attack live at the bottom under **Triage**.
+
+## Status
+**Batch 1 shipped and passed testing** — 11 items (**n.2** `o`/`O` · **n.3** the unified ladder · **n.4** list continuation · **n.5** `r` replace · **n.6** checkbox styling · **n.7** wikilink clicks · **n.8** the `o|pen` gap · **n.9** `h` → notes nav · **n.12** `dd`/`D`/`dw` · **a.1** header count spacing · **e.2** the event drawer not switching), plus **n.1** closed as standard markdown behavior. Each section's **Resolved issues** subsection holds them, in their original order — collapse those to see only what's outstanding.
+
+Also resolved along the way: **2E §6.2** (note button layout). One `back ⎋` control replaced the header's `‹ back` **and** the bottom-right `close` — they had never actually been different (both called `closeEditor()`) — and every editor control now lives in the bottom action row as a ladder rung.
+
+**Behavior change now live:** **`d` in the note body no longer deletes the note** — it's vim's operator prefix (`dd`/`dw`). Delete-the-note lives on the **field rows** and in the **notes list** (see **n.12**).
+
+**Still outstanding:** **n.10** + **e.3** (the `h`-at-the-edge nav model — needs your call on the calendar edge-rule) · **n.11** (design open) · **n.13** (links have no keyboard model) · **n.14** (`i` → new note) · **n.15** (notes search unreachable) · **e.1** (a decision, not a task) → which gates **a.2** (the capstone).
 
 ## notes
+
+**n.10 — Bug: collapsing View/Calendars/Folders/Projects/Labels doesn't work with `h`.** Instead I get put into the deep nav menu. I can still collapse those areas with space. I'd like to hit `h` and collapse the area then land in the deep nav if I want to by hitting `h` again. This keeps the `h` to collapse functionality we have in prod today. If someone wants to quick access the deep nav we support `N` to get there so this is collapsing is a more natural flow for users.
+> *This is a **regression against the §4.4 spec**, which already says `h` jumps to the deep nav "only when there's nothing left to collapse/walk-up." The implementation is jumping too eagerly. Same family as **n.9** / **e.3**.*
+
+**n.11 — Feature: navigate wikilinks with keyboard.** Not sure how I want to implement this. Right now you've got to click any imbedded wikilinks with a mouse. Open to ideas on how to get this one done.
+> *Depends on **n.3** (there's no in-note field/nav ladder to hang link-hopping off of yet) and on **n.7** (links have to resolve before they're worth navigating to). Ideas in Triage — no decision needed now.*
+
+**n.13 — Nav gap: the `links` section can't be navigated (GENUINE DESIGN GAP, not a wiring miss).** Found while testing **n.3**. `linked-items.js` — the component shared by the task, event **and** note detail surfaces — has **no keyboard model at all**: no cursor over the link chips, no way to open a linked item or unlink one. The only keyboard affordance is the `+ link` picker input (which the n.3 ladder now focuses). It has always been mouse-only; the ladder just made that visible.
+> *The fix is a **nested KbForm sub-pane**, exactly like the task drawer's recurrence builder: `l`/`i` on the links row descends into it, `j`/`k` walk the chips, Enter/space opens the linked item, `x` unlinks, `h`/`Esc` pops back out to the host ladder. Because the component is **shared**, doing this once fixes links in the task and event drawers too. That's real work, not a patch — sizing it as its own item rather than smuggling it into the n.3 batch. **Depends on nothing; can go anytime.***
+
+**n.14 — Bug: `i` doesn't create a new note from the notes list.** I'd like to mirror the way you add new tasks on the tasks screen. Right now you have to click the `＋ new` button to create a note; `i` would be much easier.
+> *Straightforward and consistent: `i` is already "create" on the tasks list (`index.html`), and the notes list is the one list where it does nothing. `newNote()` exists and the `＋ new` button already calls it — this is a binding, not a feature. Note it lands you in the **title** (a note needs a name before it can be written to the vault), which is the one way it differs from the task list's inline quick-add.*
+
+**n.15 — Nav gap: the notes list's own search box can't be reached by keyboard.** The global `/` find works, but the notes screen's search input — which searches within the current folder/list — is mouse-only. Not sure how I want to handle this yet.
+> *Real gap, and it needs a small design call first — the notes search box is a **third** search surface alongside the global `/` find and the query bar (`q`), so the question is which key owns it without stomping the other two. Options: give the notes list its own focus key, or fold folder-scoped search into the existing query bar (`folder:` is already a query field) and retire the bespoke box. **No code until you decide.** Related: **e.1** (the other "what is this surface for" question).*
+
+### Resolved issues
 
 **n.1 — Bug: view mode does not show line breaks while insert mode does.** Example in Pragmatic Programmer highlights note. There's a line break between "design." and "See also" when I'm in insert mode but view mode shows them all on a single line. I think this is a single line break versus double line break issue. Let's discuss before you implement a fix so I can understand it better.
 > *Root cause is known and cheap to explain — it's a one-word markdown-it option (`breaks: false`), not a bug in our code. Related: **n.4** (both are about how source lines map to rendered output). Discussion below in Triage.*
@@ -13,6 +39,8 @@ Some notes about keyboard accessiblity for section 6. (2E §6.4 — the final ke
 
 **n.2 — Feature: `o` and `O` in vim style.** `O` opens a line above the cursor and `o` opens a new line below the cursor.
 > *Same family as **n.5** (`r`) — both are normal-mode editing operators on top of the §6.1 block cursor.*
+> **✅ RESOLVED**
+> **How to test:** open a note, `Esc` to nav mode, put the cursor on a line. `o` → a new empty line **below**, dropped into insert. `O` → same **above**. Type, then `Esc`.
 
 **n.3 — Nav issue: no way to access the Title, Folder, or links below the text field.** Escape sends you back to the notes list.
 I would like this to work similar to how inserting notes works on the task detail pane. Basically when you shift+enter create a note you get dropped into the note field in insert mode. If you hit escape it lets you keyboard nav around the task detail and insert to edit any metadata. Escape again will drop you into the task list.
@@ -43,56 +71,73 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 > - **notes list** → delete the note. Currently unbound there (`j`/`k`/`Enter`/`o` only); adding it makes note deletion mirror task deletion — one key, from the list, where you'd naturally do it.
 >
 > *Cost to accept: `d` inside the body no longer deletes the note, so it will surprise you once if that's already in your fingers.*
+> **✅ RESOLVED**
+> **How to test:** from the notes list press `Enter` — you land on **body line 1** (block cursor). Now `k` walks **up** out of the body → review date → labels → folder → title; `j` walks back down through the body and off the bottom → links → save → delete. `i` edits whatever you're on (a field, or insert-at-cursor in the body); `Esc` returns to the ladder. `Esc` on the ladder → back to the notes list (with a discard prompt if dirty). `Enter` anywhere = save. Labels + review date are **new on this screen** — set them here and confirm they persist (and that they still match what the peek drawer shows).
 
 **n.4 — Feature: continue lists on Enter.** It'd be nice if bulletted lists and numbered lists inserted a bullet/number at the same indention level if you hit enter on a bulletted row. Basically the logic would be: if the first non-whitespace character is a `-`/`*`/`#`. then the new line will inherit the white space and the bullet leader or increase the number if it's a number.
 > *Insert-mode behavior; independent of the normal-mode operators (**n.2**, **n.5**). Related to **n.1** only in that both concern markdown source semantics.*
+> **✅ RESOLVED**
+> **How to test:** in insert mode, `Enter` at the end of `- eggs` → `- `; `3. third` → `4. `; `- [ ] todo` → a fresh **unchecked** `- [ ] ` (a checked `- [x]` also continues unchecked); indentation is preserved. `Enter` on an **empty** leader ends the list (strips it). Headings are deliberately **not** continued.
 
 **n.5 — Feature: `r` for vim style replace.** Basically if you're in nav/normal mode and you hit `r` the next key replaces where your cursor is with the key you pressed. Super helpful for updating checkboxes in place.
 > *Pairs with **n.2** (normal-mode operators) and is the keyboard counterpart to the click-to-check behavior discussed in **n.6**.*
+> **✅ RESOLVED**
+> **How to test:** in nav mode, put the cursor on the space inside `- [ ]` and press `r` then `x` → `- [x]`. `r` + any key replaces the character under the block cursor.
 
 **n.6 — Bug: styling of `- [ ]`.** I'd be interested in what we could do with this. Right now it looks like it's just a default interactive checkbox. this might be necessary because I do want the clicking to check functionality to work on notes. However it looks a little out of place. If we could figure out how to style it with the default system colors that would be ideal. The checked state looks good and on brand so if we could inherit some style from that it'd be nice.
 > *Pure CSS — the click-to-toggle behavior does **not** depend on the native checkbox appearance, so we can restyle it freely. Related: **n.5** (toggling the same checkboxes from the keyboard).*
+> **✅ RESOLVED**
+> **How to test:** open a note with checkboxes — the unchecked box should now be a brand-amber outline (not the OS widget), the checked state amber-filled with a tick. **Clicking still toggles** (that behavior was untouched).
 
 **n.7 — Bug: task linking doesn't work on notes via clicking.** On the Standup notes file the first line has `[[t_0009]]` at the end of it. When I click on it I get the error that the note is not found. I suspect this is because it's only searching for notes and this is a task. The Links under the note text area does successfully link the task and clicking that works just fine so I suspect this is either something about how the link is inserted into the text area. This may not be a code bug but a note creation bug. Look into it but don't make any code changes until we understand the root cause.
 > ***Your diagnosis was exactly right, and this is already fixed in the working tree*** *(uncommitted, from the readable-id sweep). Root cause: the frontend markdown renderer had no concept of readable ids, so `[[t_0009]]` fell through to the "note by name" branch and searched notes **by title** → "note not found." Nothing wrong with the note or how the link was inserted — the **backend** resolved it correctly all along, which is why the Links section worked. The renderer now recognizes readable ids, resolves them through the store, and hands the click the real uuid. **Needs your smoke test to confirm.** Related: **n.11** (keyboard access to these same links).*
+> **✅ RESOLVED**
+> **How to test (was already fixed, never smoke-tested):** open the Standup note and click `[[t_0009]]` — it should open that **task's** drawer, and render as the task's **title** rather than the raw id. Titles resolve live, so renaming the task re-renders the link.
 
 **n.8 — Bug: gap between "o" and "pen" in the `open fully` button** on the right-hand drawers. This is likely an artifact of the o being underlined, we see this often so it should be fixed not to have the gap.
 > *Cosmetic, and it's the shared accesskey-underline pattern (`<u>o</u>pen`), so the fix applies everywhere we underline a hotkey letter — not just this button. Same cosmetic bucket as **a.1**.*
+> **✅ RESOLVED**
+> **How to test:** open a note's peek drawer — the `open fully` button should read cleanly with no gap. (Root cause was `.btn`'s flex `gap`, not the underline: `<u>o</u>` and the loose text were two flex items. Every other button already wrapped its label; this was the last one.)
 
 **n.9 — Bug: can't get to the notes nav (left-hand drawer) with `h`** when navigating a list of notes. Landing in there with `n` works fine but I'd like to be able to get in there with a normal `h` nav like I can with tasks.
 > *One of the three "`h` at the edge" items: **n.9**, **n.10**, **e.3**. Fix them together as one model, not three patches.*
-
-**n.10 — Bug: collapsing View/Calendars/Folders/Projects/Labels doesn't work with `h`.** Instead I get put into the deep nav menu. I can still collapse those areas with space. I'd like to hit `h` and collapse the area then land in the deep nav if I want to by hitting `h` again. This keeps the `h` to collapse functionality we have in prod today. If someone wants to quick access the deep nav we support `N` to get there so this is collapsing is a more natural flow for users.
-> *This is a **regression against the §4.4 spec**, which already says `h` jumps to the deep nav "only when there's nothing left to collapse/walk-up." The implementation is jumping too eagerly. Same family as **n.9** / **e.3**.*
-
-**n.11 — Feature: navigate wikilinks with keyboard.** Not sure how I want to implement this. Right now you've got to click any imbedded wikilinks with a mouse. Open to ideas on how to get this one done.
-> *Depends on **n.3** (there's no in-note field/nav ladder to hang link-hopping off of yet) and on **n.7** (links have to resolve before they're worth navigating to). Ideas in Triage — no decision needed now.*
+> **✅ RESOLVED**
+> **How to test:** from the notes **list**, press `h` → the notes nav takes focus, same as `h` from the task list. (Only the list — inside the editor `h` is still a cursor motion.)
 
 **n.12 — Feature: vim delete operators in the note body (`dd`, `D`, `dw`).** None of these exist today — the body's normal mode has exactly one `d` binding (delete the whole note). `dd` deletes the current line, `D` deletes from the cursor to end of line, `dw` deletes a word forward.
 > *Spun out of the **n.3** `d` decision, which frees `d` in the body to act as an operator prefix. Same family as **n.2** (`o`/`O`) and **n.5** (`r`) — all normal-mode operators on the §6.1 block cursor, and all cheap once the first one establishes the pending-key pattern (the `gg` `pendingG` flag is the existing precedent). **Depends on n.3** (the row-context split is what makes `d` available at all).*
+> **✅ RESOLVED**
+> **How to test:** in nav mode, in the body: `dd` deletes the line · `D` deletes cursor→end of line · `dw` deletes the word forward. **`d` no longer deletes the note while you're in the body** — it deletes the note from a **field row** (title/folder/labels/review/links/save/delete) and from the **notes list**. This is the one thing likely to surprise your fingers.
 
 ## events
 
 **e.1 — Feature?: think deeply about how the views in the event screen work.** Right now the calendar specific queries don't seem to do anything. Realistically I don't think they should show the calendar view and it might be worth showing it as a list. No decision on this quite yet but I'd like you to look into what/how the code works today and then I can decide what direction we want to go.
 > *Blocks **a.2** — mixed-list `j`/`k` can't be finished while event-only views have no list to navigate. This is a **design decision first, code second**; I'll write up how it works today when you want it, not before.*
 
-**e.2 — Bug: clicking a second event doesn't switch the right-hand drawer.** When I click on a view like "Everything Work" which returns multiple event items. Clicking on the first event shows the event detail in the right drawer. Clicking a second event does not switch/change the event details that appear in the drawer. This isn't acctually accessible on the events screen, but it shows up in tasks and notes screen whn you select a view that returns multiple items. This does not seem to be a problem with the notes or tasks, they switch/change propperly. This is specifically a mouse only issue, keyboard nav forces you to close the drawer before switching tasks which is fine.
-> *Root cause is almost certainly structural and small: the event drawer snapshots the event into a local form object **once, in `data()`**. While the drawer stays open, Vue doesn't re-run `data()`, so a second click updates the store but not the form. Tasks/notes don't have this problem because they read the item reactively instead of snapshotting it. Cheap fix (force a re-mount per event, or watch the selection).*
-
 **e.3 — Feature?: `h` doesn't reach the events nav** — the only way to get to the events nav lh drawer is by hitting `n`. In other apps like tasks and notes you can hit `h` and it puts you in the app nav drawer. However `h` on this one navigates you to the previous day, that makes sense. `H` will switch your month which is also desired. I'm not sure if I want to part with that functionality to make it consistent or just say "calendar/events are different and you've got to use `n` to get there." Open to suggestions on how to fix this. No code change for this one quite yet.
 > *The genuine conflict in the "`h` at the edge" family (**n.9**, **n.10**). A suggestion is in Triage — the grid gives us a natural edge to work with.*
 
-## tasks
+### Resolved issues
 
+**e.2 — Bug: clicking a second event doesn't switch the right-hand drawer.** When I click on a view like "Everything Work" which returns multiple event items. Clicking on the first event shows the event detail in the right drawer. Clicking a second event does not switch/change the event details that appear in the drawer. This isn't acctually accessible on the events screen, but it shows up in tasks and notes screen whn you select a view that returns multiple items. This does not seem to be a problem with the notes or tasks, they switch/change propperly. This is specifically a mouse only issue, keyboard nav forces you to close the drawer before switching tasks which is fine.
+> *Root cause is almost certainly structural and small: the event drawer snapshots the event into a local form object **once, in `data()`**. While the drawer stays open, Vue doesn't re-run `data()`, so a second click updates the store but not the form. Tasks/notes don't have this problem because they read the item reactively instead of snapshotting it. Cheap fix (force a re-mount per event, or watch the selection).*
+> **✅ RESOLVED**
+> **How to test:** open a view returning several events, click one (drawer opens), then click another — the drawer should now switch to the second. (The drawer snapshotted the event in `data()`, which Vue won't re-run while it stays open; it's now keyed by event id so it remounts.)
+
+## tasks
 *(none yet)*
 
 ## all
 
-**a.1 — Bug: no space between the count and the view title in the header.** The header view/query counts like open overdue urgent appear as `13open | 10overdue | 2urgent`. Look into the root cause here don't auto fix it.
-> ***This one is mine, and recent.*** *When I gated the count badges (so event/note views don't show a bogus `0`), I wrapped the count in a `<template v-if>` and left the separating space **inside** it — Vue's whitespace condensing then drops that trailing space. Fix is to own the spacing in CSS/markup rather than rely on a text-node space. Same cosmetic bucket as **n.8**.*
-
 **a.2 — Bug: `j`/`k` don't work on mixed item lists.** It seems to still work as designed in task only views. Event only views don't seem to display as lists (see **e.1**) and notes open the note in full screen instead of a rh side drawer. However mixed lists show all items and should be navigatable through `j`/`k` to switch detailed items without closing the rh side bar. Let's make sure we write this in a way that doesn't duplicate the existing logic that works for tasks and find an intelligent way to implement this so we don't have duplicate code. We should resolve this after we're happy with keyboard nav for notes and events.
 > *Agreed on the sequencing, and it's the right instinct: this should be the **generalization** of the task-list cursor, not a second copy of it. Depends on **e.1** (events need a list) and **n.3** (notes need the drawer/ladder). Do it last — it's the capstone that proves the model is actually shared.*
+
+### Resolved issues
+
+**a.1 — Bug: no space between the count and the view title in the header.** The header view/query counts like open overdue urgent appear as `13open | 10overdue | 2urgent`. Look into the root cause here don't auto fix it.
+> ***This one is mine, and recent.*** *When I gated the count badges (so event/note views don't show a bogus `0`), I wrapped the count in a `<template v-if>` and left the separating space **inside** it — Vue's whitespace condensing then drops that trailing space. Fix is to own the spacing in CSS/markup rather than rely on a text-node space. Same cosmetic bucket as **n.8**.*
+> **✅ RESOLVED**
+> **How to test:** look at the header — `13 open │ 10 overdue │ 2 urgent`. (My regression: the separating space was a whitespace-only text node inside a `<template v-if>`, which Vue drops at compile time. It's now folded into the interpolation.)
 
 ---
 
@@ -120,11 +165,18 @@ This is the largest item and the one everything else waits on. It's not really "
 - **n.11** (keyboard wikilinks) rides on **n.3**. Cheapest idea that fits your existing vocabulary: since the links already render as spans, give them a **hint-label** overlay (vim-easymotion / Vimium `f` style) — press a key, each visible link gets a letter, press the letter to follow it. That reuses no cursor state and doesn't fight the block cursor. The alternative — `Tab`/`n` cycling through links in the current block — is simpler but clumsier in long notes. No decision needed now.
 - **a.2** is the capstone: generalize the task-list cursor into one shared list-cursor used by task, mixed, and event lists. Doing it last means the model has been proven by the others first, which is exactly what stops it becoming a second copy of the logic.
 
-### Suggested sequence
-1. **Theme B** (cosmetics) + **e.2** — an afternoon; visible wins, no design risk.
-2. **Theme A** (normal-mode operators) — contained, improves daily feel immediately.
-3. **Theme C** (`h` at the edge) — one rule, three call sites; needs your yes/no on the calendar edge-rule suggestion in **e.3**.
-4. **Theme D** (**n.3**, the Escape ladder) — the big one; budget iteration time.
-5. **e.1 decision** → then **a.2** (shared list cursor) → then **n.11**.
+### Sequence
+1. ~~**Theme B** (cosmetics) + **e.2**~~ — ✅ **shipped in batch 1** (a.1, n.6, n.8, e.2).
+2. ~~**Theme A** (normal-mode operators)~~ — ✅ **shipped in batch 1** (n.2, n.4, n.5, n.12).
+3. ~~**Theme D** (**n.3**, the ladder)~~ — ✅ **shipped in batch 1**, together with **n.9**. It came in *smaller* than billed: the fields were already on screen, and `notes.js` was simply the one module that had never adopted `KbForm`. Making the body's lines KbForm rows meant `j`/`k` crossing from the fields into the text needed **no** boundary code — the mixin's own row-clamp does it.
+4. **Theme C** (`h` at the edge — **n.10**, **e.3**) — ← **next.** One rule, three call sites. Blocked only on your yes/no to the calendar edge-rule in **e.3**. (**n.9** shipped early because the notes list handler was already open on the bench.)
+5. **n.14** (`i` → new note) — a **binding, not a feature**; it can ride along with anything.
+6. **n.13** (links keyboard model) — its own slice, but it pays for itself: `linked-items` is **shared**, so one nested KbForm sub-pane fixes links in the task and event drawers too.
+7. **e.1 decision** → then **a.2** (shared list cursor) → then **n.11**.
+8. **n.15** (notes search) — deliberately last: it's a **surface question** before it's a keyboard one (three search surfaces already exist), and it may dissolve into the query bar rather than need a key.
 
-**What I need from you, and when:** the **e.1** direction (calendar vs list for event views) is the only thing that blocks planning — everything else I can sequence without you. **n.1** you asked to discuss before I touch it; short version is that it's not our bug at all, it's markdown's "a single newline is not a line break" rule (we render with `breaks: false`, which is standard/CommonMark behavior — Obsidian's default too). The real question is whether *your* notes should follow that rule or be more WYSIWYG, and that's a taste call worth making deliberately since it changes how every existing note renders.
+**What I need from you — two calls, both design, neither code:**
+- **e.3** — does `h` on the calendar's **leftmost column** walk out into the events nav? (That's what unblocks Theme C, the next batch.)
+- **e.1** — calendar vs list for event views. This one gates the **a.2** capstone.
+
+**n.15** needs a decision too, but it isn't blocking anything, so it can wait.

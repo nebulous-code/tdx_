@@ -116,7 +116,7 @@ window.NoteDetail = {
     <div v-else class="detail-body"><span class="mut">loading…</span></div>
 
     <div class="d-actions">
-      <button class="btn" :class="kbCls('openFull')" style="margin-right:auto;" @click="openFull" title="Open in the full editor (o)"><u>o</u>pen fully</button>
+      <button class="btn" :class="kbCls('openFull')" style="margin-right:auto;" @click="openFull" title="Open in the full editor (o)"><span><u>o</u>pen fully</span></button>
       <button class="btn" :class="kbCls('cancel')" @click="kbAttemptClose">cancel</button>
       <button class="btn primary" :class="kbCls('save')" @click="save">save ↵</button>
     </div>

@@ -47,6 +47,11 @@ window.LinkedItems = {
       }
     },
     async unlink(l) { if (await this.store.deleteLink(l.id)) await this.load(); },
+    // public — a host's KbForm `i`/space on its "links" row lands here (mirrors md-field.focus())
+    focus() { const el = this.$refs.add; if (el && el.focus) el.focus(); },
+    // Esc out of the picker → back to the host's ladder. Must live on the field: the app's global
+    // onKey returns at its typing gate before routing to the host, so the key never reaches KbForm.
+    blur() { this.query = ''; const el = this.$refs.add; if (el && el.blur) el.blur(); },
   },
   template: `
   <div class="linkbox">
@@ -60,7 +65,8 @@ window.LinkedItems = {
       <span v-if="!links.length" class="mut lc-empty">none yet</span>
     </div>
     <div class="link-add">
-      <input v-model="query" class="ti" @focus="ensureSources" :placeholder="'＋ link a ' + pickTypes.join(' / ') + '…'">
+      <input ref="add" v-model="query" class="ti" @focus="ensureSources" @keydown.esc.stop.prevent="blur"
+             :placeholder="'＋ link a ' + pickTypes.join(' / ') + '…'">
       <div v-if="candidates.length" class="ev-link-menu">
         <div v-for="c in candidates" :key="c.type + c.id" class="ev-link-opt" @click="pick(c)" :title="c.title"><span class="lc-type mut">{{ c.type }}</span>{{ c.title }}</div>
       </div>
