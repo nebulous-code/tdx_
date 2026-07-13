@@ -23,14 +23,15 @@ window.DayDetail = {
     calFilter() { return this.store.view.calendarId || null; },   // selected-calendar filter (mirrors the grid)
     // every occurrence on this day, honoring the calendar selection + the active query filter
     dayOccs() {
+      if (!this.store.gridShowsEvents()) return [];   // the query didn't ask for events (e.5)
       return this.store.events.filter((e) =>
         e.date === this.ymd
         && (!this.calFilter || e.calendarId === this.calFilter)
-        && (!this.store.calMatchIds || this.store.calMatchIds.has(e.id)));
+        && this.store.calShows(e));   // series-level + this occurrence's own date (e.1)
     },
     allDay() { return this.dayOccs.filter((e) => e.allDay || (e.startAt || '').length <= 10); },
-    // dated tasks due this day (top strip, like the month grid; hidden when a query filter is active)
-    dayTasks() { return this.store.calMatchIds ? [] : this.store.tasks.filter((t) => t.due === this.ymd); },
+    // dated tasks due this day (top strip, like the month grid) — gated by type: + the query (e.5)
+    dayTasks() { return this.store.tasks.filter((t) => t.due === this.ymd && this.store.taskShows(t)); },
     // timed occurrences with parsed start/end minutes + duration
     timed() {
       return this.dayOccs.filter((e) => !e.allDay && (e.startAt || '').length > 10).map((e) => {

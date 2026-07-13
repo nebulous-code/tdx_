@@ -104,6 +104,10 @@ export async function seedUserDefaults(db: DB, ownerId: string): Promise<void> {
         color: null,
         position,
         pinned,
+        // 'auto' lets the app infer presentation (e.1): the events screen renders a
+        // DATE-RANGE view as a list (a grid is already a date filter) and keeps the grid
+        // otherwise. Toggle + `u` pins an explicit 'grid'/'list' on any view.
+        display: 'auto',
       })
       .execute();
   }

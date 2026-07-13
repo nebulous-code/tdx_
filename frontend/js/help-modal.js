@@ -85,7 +85,7 @@ window.HelpModal = {
         { k:'- (negate)',    d:'prefix any term with - to exclude it (type in the raw query, i) — e.g. -status:done, -label:quick' },
         { k:'s',             d:'save the query as a NEW smart view' },
         { k:'u',             d:'update the active saved view in place' },
-        { k:'x',             d:'clear the query' },
+        { k:'c',             d:'clear the query' },
         { k:'esc',           d:'back to the task list' },
       ]},
       { name:'new task', code:'amber', items:[

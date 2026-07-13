@@ -19,7 +19,7 @@ window.CalendarView = {
     activeCalendar() { return this.calFilter ? this.store.calendarById(this.calFilter) : null; },
     // the active query (type:event by default); a real predicate beyond type: narrows the grid
     activeQuery() { return this.store.currentQuery(); },
-    hasPredicate() { return Q.parse(this.activeQuery()).terms.some((t) => t.field !== 'type'); },
+    hasPredicate() { return Q.parse(this.activeQuery).terms.some((t) => t.field !== 'type'); },
     weekdays() {
       const ws = this.weekStart;
       return Array.from({ length: 7 }, (_, i) => WD_BASE[(ws + i) % 7]);
@@ -44,9 +44,13 @@ window.CalendarView = {
           inMonth: d.getMonth() === this.month,
           isToday: ymd === today,
           isCursor: ymd === this.cursor,
-          events: this.store.events.filter((e) => e.date === ymd && (!this.calFilter || e.calendarId === this.calFilter) && (!this.store.calMatchIds || this.store.calMatchIds.has(e.id))),
-          // a query predicate narrows the grid to events → hide the dated-task overlay
-          tasks: this.store.calMatchIds ? [] : this.store.tasks.filter((t) => t.due === ymd),
+          // Each overlay is gated by the query's type: rule (e.5), then filtered by the query.
+          // store.calShows = series-level match AND this occurrence's own date (e.1) — an id-only
+          // filter can't narrow a recurring series to the dates that actually matched.
+          events: this.store.gridShowsEvents()
+            ? this.store.events.filter((e) => e.date === ymd && (!this.calFilter || e.calendarId === this.calFilter) && this.store.calShows(e))
+            : [],
+          tasks: this.store.tasks.filter((t) => t.due === ymd && this.store.taskShows(t)),
         });
       }
       return out;
@@ -64,14 +68,51 @@ window.CalendarView = {
   },
   mounted() { this.load(); this.refilter(); },
   methods: {
-    // run the query through the unified engine and keep the set of matching event ids;
-    // a query with only type: (no real predicate) clears the filter (show every event)
+    // Run the query through the unified engine and keep the matching EVENT ids (a query with only
+    // type: and no real predicate clears the filter). Events only: tasks are filtered synchronously
+    // by store.taskShows (the client engine) — they don't need the server, and an async id-set left
+    // the grid unfiltered until the fetch landed.
+    //
+    // NOTE `this.activeQuery` is a COMPUTED — a string, not a function. Calling it (`activeQuery()`)
+    // threw, so this whole method died before it set calMatchIds or jumped. It failed silently:
+    // the date filtering still worked (store.calShows does that pass independently), which is
+    // exactly why only the month-jump looked broken.
     async refilter() {
       if (!this.hasPredicate) { this.store.calMatchIds = null; return; }
       const seq = ++this._fseq;
-      const items = await this.store.runQuery(this.activeQuery());
+      const items = await this.store.runQuery(this.activeQuery);
       if (seq !== this._fseq) return;
-      this.store.calMatchIds = new Set((items || []).filter((i) => i.type === 'event').map((i) => i.id));
+      const evs = (items || []).filter((i) => i.type === 'event');
+      this.store.calMatchIds = new Set(evs.map((i) => i.id));
+      this.jumpToMatches(evs);
+    },
+    // A DATE query picks the window: move the grid to the first thing it matched. (Other
+    // predicates — label:, calendar: — just filter; they shouldn't yank you to another month.)
+    //
+    // Two things this has to get right:
+    //  · Compare against the DISPLAYED MONTH, not the 42-day grid window. July's sheet runs to
+    //    Aug 9, so "next month" had a match "in view" and never jumped — you were looking at
+    //    August's first days on the July sheet, which only ever looked right by coincidence.
+    //  · Consider TASKS too, not just events. The grid draws dated tasks now (e.5), so a
+    //    task-only query (`type:task due:>90d`) has no events to jump to and would sit still.
+    //
+    // (`date` on an event result is the matching OCCURRENCE, not the series start — a recurring
+    // event's startAt can be months earlier, so startAt would jump to the wrong place.)
+    jumpToMatches(evs) {
+      if (!this.store.isDateRangeQuery(this.activeQuery)) return;
+      const dates = [];
+      for (const e of evs) { const d = e.date || (e.startAt || '').slice(0, 10); if (d) dates.push(d); }
+      if (this.store.gridShowsTasks()) {
+        for (const t of this.store.tasks) if (t.due && this.store.taskShows(t)) dates.push(t.due);
+      }
+      if (!dates.length) return;
+      dates.sort();
+      const d = Rec.parseYMD(dates[0]);
+      if (d.getFullYear() === this.year && d.getMonth() === this.month) return;   // already showing it
+      this.year = d.getFullYear();
+      this.month = d.getMonth();
+      this.cursor = dates[0];
+      this.load();
     },
     // start (top-left cell) of the 6-week grid for a given month
     gridStart(y, m) {
@@ -146,6 +187,8 @@ window.CalendarView = {
       <span class="qbtn cal-nav" @click="moveMonth(1)" title="next month (L)">›</span>
       <span class="qbtn" @click="today" title="jump to today">today</span>
       <span v-if="activeCalendar" class="cal-filter" :style="{ color: store.resolveColor(activeCalendar.color) }" title="filtered to this calendar">{{ activeCalendar.glyph }} {{ activeCalendar.name }} <span class="cal-filter-x" @click="store.openCalendar()" title="show all calendars">✕</span></span>
+      <span class="grow"></span>
+      <span class="qbtn" @click="store.toggleDisplay()" title="show this query as a list (v)">☰ list <span class="mut">v</span></span>
       <span class="mut cal-hint">hjkl move · H/L · J/K month · i new event</span>
     </div>
     <div class="cal-weekdays">

@@ -81,17 +81,26 @@
         <search-list ref="searchList" :store="store"></search-list>
       </template>
       <template v-else-if="store.view.kind==='calendar'">
-        <query-bar ref="qbar" :store="store" @save-query="openSave"></query-bar>
-        <mixed-list v-if="store.isMixedView()" ref="mixed" :store="store"></mixed-list>
-        <calendar-view v-else ref="cal" :store="store"></calendar-view>
+        <query-bar ref="qbar" :store="store" @save-query="openSave" @toggle-query="toggleQueryPane"></query-bar>
+        <!-- e.1: an event view renders as the agenda LIST when its display resolves to list
+             (pinned on the view, or inferred for a date-range query) — same mixed-list the
+             cross-type results use, so there's one result surface, not two -->
+        <div v-if="!store.showsGrid()" class="cal-head">
+          <span class="cal-title">{{ store.view.title }}</span>
+          <span class="mut" style="font-size:11px;">› {{ store.currentQuery() }}</span>
+          <span class="grow"></span>
+          <span v-if="store.gridAllowed()" class="qbtn" @click="store.toggleDisplay()" title="show as a calendar (v)">▦ calendar <span class="mut">v</span></span>
+        </div>
+        <calendar-view v-if="store.showsGrid()" ref="cal" :store="store"></calendar-view>
+        <mixed-list v-else ref="mixed" :store="store"></mixed-list>
       </template>
       <template v-else-if="store.view.kind==='notes'">
-        <query-bar ref="qbar" :store="store" @save-query="openSave"></query-bar>
+        <query-bar ref="qbar" :store="store" @save-query="openSave" @toggle-query="toggleQueryPane"></query-bar>
         <mixed-list v-if="store.isMixedView()" ref="mixed" :store="store"></mixed-list>
         <notes-view v-else ref="notes" :store="store" @enter-nav="enterSidebar"></notes-view>
       </template>
       <template v-else>
-        <query-bar ref="qbar" :store="store" @save-query="openSave"></query-bar>
+        <query-bar ref="qbar" :store="store" @save-query="openSave" @toggle-query="toggleQueryPane"></query-bar>
         <div class="view-title" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:5px 12px;border-bottom:1px solid var(--line);background:var(--bg);">
           <span class="hi" style="font-family:var(--crt);font-size:18px;line-height:1;">{{ store.view.title }}</span>
           <span class="mut view-q" style="font-size:11px;" v-if="store.currentQuery()">› {{ store.currentQuery() }}</span>
@@ -105,8 +114,16 @@
             </template>
             <span v-else class="hb-healthy"><span class="hb-check">✓</span> healthy</span>
           </span>
+          <span class="grow"></span>
+          <!-- e.5: once the grid honors type:, a dated-task view can BE a calendar. Same toggle
+               as the events header; hidden when the query includes notes (nothing to place). -->
+          <span v-if="store.gridAllowed()" class="qbtn" @click="store.toggleDisplay()"
+                :title="store.showsGrid() ? 'show as a list (v)' : 'show these on a calendar (v)'">
+            {{ store.showsGrid() ? '☰ list' : '▦ calendar' }} <span class="mut">v</span>
+          </span>
         </div>
-        <task-list v-if="!store.isMixedView()" ref="list" :store="store"></task-list>
+        <calendar-view v-if="store.showsGrid()" ref="cal" :store="store"></calendar-view>
+        <task-list v-else-if="!store.isMixedView()" ref="list" :store="store"></task-list>
         <mixed-list v-else ref="mixed" :store="store"></mixed-list>
       </template>
       <task-detail ref="detail" :store="store"></task-detail>
@@ -573,21 +590,36 @@ const app = createApp({
       if(this.store.focusPane==='side'){ this.sidebarKey(e); return; }
       if(this.store.focusPane==='query'){ this.queryKey(e); return; }
 
-      // a query broadened beyond the app's own type → the flat mixed list (any app)
-      if(this.store.isMixedView()){ this.mixedKey(e); return; }
+      // 'v' flips between the calendar grid and the list — on Events AND Tasks, since a dated
+      // task view can be a calendar too (e.5). Presentation, not a query: `u` pins it to a view.
+      if(e.key==='v' && !this.store.dayDetailOpen &&
+         (this.store.currentApp()==='events' || this.store.currentApp()==='tasks')){
+        e.preventDefault(); this.store.toggleDisplay(); return;
+      }
+      // the grid owns the keys whenever it's the thing on screen (either app) — see below
+      if(!this.store.showsGrid()){
+        // a query broadened beyond the app's own type → the flat mixed list;
+        // an events view whose display resolves to 'list' renders there too (e.1)
+        if(this.store.isMixedView() || this.store.eventsAsList()){ this.mixedKey(e); return; }
+      }
 
       // calendar: a focused-day cursor. Routed through here (not a private listener) so it
       // inherits the modal gate above — keys don't leak to the grid behind an open menu.
-      if(this.store.view.kind==='calendar'){
+      if(this.store.showsGrid()){
         // the day-schedule drawer (§4.2) owns the keys while it's open (an event opened FROM
         // it makes onKey bail at the modal-takeover guard above, so the event drawer wins; on
         // Esc the event closes and the day drawer resumes here)
         if(this.store.dayDetailOpen){ const dd=this.$refs.dayDetail; if(dd) dd.dayKey(e); return; }
         const cal=this.$refs.cal;
         if(cal){
+          // `i` creates the thing the app you're IN is about: an event on Events, a task due that
+          // day on Tasks (e.5 — the grid is a tasks surface now, so `i` must not make an event there)
+          const create = this.store.currentApp()==='tasks'
+            ? ()=>{ const t=this.store.addTask({ title:'', due:cal.cursor }); this.store.selectedTaskId=t.id; this.store.detailOpen=true; }
+            : ()=>cal.newEvent(cal.cursor);
           const map={ h:()=>cal.moveCursor(-1), l:()=>cal.moveCursor(1), k:()=>cal.moveCursor(-7), j:()=>cal.moveCursor(7),
             H:()=>cal.moveMonth(-1), L:()=>cal.moveMonth(1), K:()=>cal.moveMonthKeepCell(-1), J:()=>cal.moveMonthKeepCell(1),
-            i:()=>cal.newEvent(cal.cursor), E:()=>cal.openDay() };
+            i:create, E:()=>cal.openDay() };
           const fn=map[e.key]; if(fn){ e.preventDefault(); fn(); }
         }
         return;
@@ -726,6 +758,15 @@ const app = createApp({
       if(!this.store.selectedTaskId){ const r=this.store.visibleRoots(); if(r.length) this.store.selectedTaskId=r[0].id; }
     },
     toggleQueryFocus(){ if(this.store.focusPane==='query') this.exitQuery(); else this.enterQuery(); },
+    // the ⊞ query button (mouse) — the same action as the q key, routed through enterQuery so the
+    // pane actually gets focus and its save/update/clear controls appear (audit a.3). Closing also
+    // collapses the builder, since exitQuery alone would leave the panel open but its buttons gone.
+    toggleQueryPane(){
+      if(this.store.focusPane==='query' || this.store.builderOpen){
+        this.store.builderOpen=false;
+        if(this.store.focusPane==='query') this.exitQuery();
+      } else this.enterQuery();
+    },
     toggleBuilder(){
       this.store.builderOpen=!this.store.builderOpen;
       if(!this.store.builderOpen && this.store.focusPane==='query') this.exitQuery();
@@ -736,9 +777,16 @@ const app = createApp({
         case 'i': e.preventDefault(); qb.focus(); return;        // into the raw query editor (from anywhere)
         case 's': e.preventDefault(); qb.save(); return;         // save as a NEW smart view
         case 'u': e.preventDefault(); qb.update(); return;       // update the active saved view in place
-        case 'x': e.preventDefault(); qb.clearQuery(); return;   // clear the query
+        // c = clear. Safe to reuse here: the tasks list's own `c` (show/hide completed) lives in
+        // the focusPane==='list' branch, and this pane returns long before that.
+        case 'c': e.preventDefault(); qb.clearQuery(); return;   // clear the query
         case 'Escape': e.preventDefault(); this.exitQuery(); return;
         case 'Enter': e.preventDefault(); this.exitQuery(); return;  // apply & view results
+      }
+      // h at the LEFT EDGE of a chip group walks out into the app nav — the same "h at the edge"
+      // rule the task list and the recurrence sub-pane use. Anywhere else, h still moves a cell.
+      if((e.key==='h' || e.key==='ArrowLeft') && qb.kbCell===0){
+        e.preventDefault(); this.enterSidebar(); return;
       }
       // j/k between groups · h/l within a group · space toggles — handled by KbForm
       qb.kbKey(e);

@@ -175,6 +175,7 @@
     dayDetailOpen: false,    // the calendar day-schedule drawer (§4.2; stacks left of the event drawer)
     dayDetailYmd: null,      // the day shown in the day-schedule drawer
     calMatchIds: null,       // event-id set when a query predicate narrows the calendar (null = no filter); shared by grid + day drawer
+    displayOverride: null,   // 'grid'|'list' — the events screen's transient toggle (e.1); cleared on view change, pinned onto a view with `u`
     calFrom: null, calTo: null,  // current calendar range (to refetch after a mutate)
   });
 
@@ -390,6 +391,95 @@
   // mixed view = the query selects a type beyond the current app's own. Each app keeps its
   // native screen (task tree / calendar grid / notes list) for its own type or no type:;
   // broadening (e.g. type:event,task in the Events app) falls back to the shared mixed list.
+  // ---- presentation: grid vs list on the events screen (audit e.1) --------------------
+  // Grid-vs-list is VIEW metadata (saved_queries.display), never a query term — the query
+  // language is parity-locked and type-agnostic, and 'list' means nothing to tasks/notes.
+  // A date-range query fights the grid (a calendar IS already a date filter, and it owns what
+  // gets fetched), so 'auto' renders those as a list and keeps the grid for everything else.
+  store.isDateRangeQuery = (q) =>
+    Q.parse(q || '').terms.some(t => !t.neg && (t.field==='due' || t.field==='created' || t.field==='edited'));
+  // the saved view behind the current screen — INCLUDING system/seed views (activeSavedQuery
+  // deliberately excludes them, since they can't be updated; we still want to read their display)
+  store.currentSavedView = () => {
+    const v = store.view;
+    const id = store.savedQueries.some(s=>s.id===v.id) ? v.id : v.originId;
+    return id ? (store.savedQueries.find(s=>s.id===id) || null) : null;
+  };
+  // A grid can only draw DATEABLE things: tasks and events both have a date, notes don't — so a
+  // query touching notes can never be a grid (e.5). Tasks + events on a grid together is fine.
+  store.gridAllowed = () => {
+    const app = store.currentApp();
+    if(app !== 'tasks' && app !== 'events') return false;
+    return store.queryTypes().every(t => t==='task' || t==='event');
+  };
+  store.viewDisplay = () => {
+    if(store.displayOverride) return store.displayOverride;          // the session's toggle wins
+    const sv = store.currentSavedView();
+    const d = (sv && sv.display) || 'auto';
+    if(d==='grid' || d==='list') return d;                           // pinned on the view
+    // auto = the app's NATIVE presentation. Events are a calendar by nature — except for a
+    // date-range query, which fights the grid (e.1). Tasks/notes are lists by nature.
+    if(store.currentApp() !== 'events') return 'list';
+    return store.isDateRangeQuery(store.currentQuery()) ? 'list' : 'grid';
+  };
+  // does THIS screen render the calendar grid? (the one question the templates + onKey ask)
+  store.showsGrid = () => store.gridAllowed() && store.viewDisplay()==='grid';
+  store.eventsAsList = () => store.currentApp()==='events' && !store.showsGrid();
+  store.toggleDisplay = () => {
+    if(!store.gridAllowed() && store.viewDisplay()==='list'){
+      store.toast('no grid for this query — notes have no date to place');   // e.5
+      return;
+    }
+    store.displayOverride = store.viewDisplay()==='list' ? 'grid' : 'list';
+    const sv = store.currentSavedView();
+    const pin = sv && !sv.system ? ' · q then u to pin it to this view' : '';
+    store.toast((store.displayOverride==='grid' ? 'calendar' : 'list') + ' view' + pin);
+  };
+  // ---- grid filtering: SERIES vs OCCURRENCE (audit e.1) -------------------------------
+  // The grid draws OCCURRENCES; the unified query matches SERIES. Filtering by matched-id alone
+  // therefore CANNOT express a date range — a weekly standup that matches `due:this-week` puts its
+  // id in the set, and every one of its 17 monthly occurrences stays on the grid (which is why the
+  // calendar looked unfiltered). So compose two passes:
+  //   1. series-level  — calMatchIds (label: / calendar: / category: / text)
+  //   2. occurrence-level — `due:` evaluated against THIS occurrence's own date, which is the same
+  //      due:→occurrence mapping the server does in unifiedQuery (*AsTask). Reuses the parity engine.
+  let _dueSrc = null, _dueProg = null;
+  store.calDueTerms = () => {
+    const q = store.currentQuery() || '';
+    if(q !== _dueSrc){ _dueSrc = q; _dueProg = { terms: Q.parse(q).terms.filter(t => t.field==='due') }; }
+    return _dueProg;
+  };
+  store.calShows = (ev) => {
+    if(store.calMatchIds && !store.calMatchIds.has(ev.id)) return false;   // pass 1
+    const prog = store.calDueTerms();
+    if(!prog.terms.length) return true;
+    return Q.evaluate({ due: ev.date }, prog, store.ctx());                // pass 2
+  };
+  // ---- what the grid may DRAW: the type: rule, same as everywhere else (audit e.5) -----
+  // The task overlay predates the type: rule and was gated on "does a predicate exist", which
+  // was wrong both ways (type:event still drew tasks; any predicate hid tasks you'd asked for).
+  // no type: at all → every type (the §3.1 rule).
+  store.gridShowsTasks = () => { const ts = store.queryTypes(); return !ts.length || ts.includes('task'); };
+  store.gridShowsEvents = () => { const ts = store.queryTypes(); return !ts.length || ts.includes('event'); };
+  // A dated task passes if its type is wanted AND the query matches it — evaluated SYNCHRONOUSLY
+  // by the client engine, the same one the task list uses (so grid and list can't disagree).
+  //
+  // This deliberately does NOT use a server match-set. Events need one (only the server expands
+  // recurrences), but every task is already in the store. An async id-set starts out null, and
+  // "null" has to mean "no filter" — so the grid painted EVERY dated task in the window before the
+  // fetch landed, which on the Tasks screen is the very first thing you see. No async, no window.
+  let _tqSrc = null, _tqProg = null;
+  store.gridTaskQuery = () => {
+    const q = store.currentQuery() || '';
+    if(q !== _tqSrc){ _tqSrc = q; _tqProg = { terms: Q.parse(q).terms.filter(t => t.field !== 'type') }; }
+    return _tqProg;   // type: is the gate above; the client engine has no 'type' field
+  };
+  store.taskShows = (t) => {
+    if(!store.gridShowsTasks()) return false;
+    const prog = store.gridTaskQuery();
+    if(!prog.terms.length) return true;
+    return Q.evaluate(t, prog, store.ctx());
+  };
   store.isMixedView = () => {
     if(store.view.kind==='project') return false;
     const ts = store.queryTypes();
@@ -523,11 +613,20 @@
   };
 
   // True when the current view filters on parameters we can't apply to a new task
-  // (Flags or free text) — drives the quick-add warning indicator. `has:no-labels`
-  // ("no tag") is exempt: a brand-new task has no labels, so it already satisfies it.
+  // (Flags or free text) — drives the quick-add warning indicator. Two exemptions, both
+  // things a brand-new task ALREADY satisfies, so warning about them is just noise:
+  //   · `has:no-labels` ("no tag") — a new task has no labels.
+  //   · `type:` that includes task — a new task IS a task. Every default task view now carries
+  //     `type:task` (the §3.1 type: rule), which lit this warning on Today/Open/This week.
+  const satisfiedByNewTask = (t) => {
+    if(t.neg) return false;                                   // -type:task / -has:no-labels do exclude it
+    if(t.field==='has' && t.value==='no-labels') return true;
+    if(t.field==='type') return String(t.value).split(',').map(s=>s.trim()).includes('task');
+    return false;
+  };
   store.viewWarn = () =>
     Q.parse(store.currentQuery()).terms.some(t =>
-      !APPLIED_FIELDS.has(t.field) && !(t.field==='has' && t.value==='no-labels'));
+      !APPLIED_FIELDS.has(t.field) && !satisfiedByNewTask(t));
 
   // ---- mutations ----
   store.toast = (msg) => {
@@ -555,6 +654,7 @@
     store.searchActive = false;   // switching views exits search (the term is kept for the next '/')
     store.healthFilter = null;    // and drops any project health-bar filter
     store.dayDetailOpen = false;  // and closes the calendar day-schedule drawer (calendar-only)
+    store.displayOverride = null; // a grid/list toggle belongs to the view you toggled it on (e.1)
   };
   store.setView = (v) => {
     if(store.dirtyCheck && store.dirtyCheck() && store.askConfirm){
@@ -791,8 +891,11 @@
   };
 
   store.saveQuery = (name, query, glyph, color, pinned) => {
-    const sv = { id: uid('sv'), name, glyph: glyph || '◆', color: color || COLORS[0], query, system:false, pinned: !!pinned };
+    // a grid/list toggle in flight is pinned onto the new view; otherwise 'auto' (app infers) — e.1
+    const display = store.displayOverride || 'auto';
+    const sv = { id: uid('sv'), name, glyph: glyph || '◆', color: color || COLORS[0], query, system:false, pinned: !!pinned, display };
     store.savedQueries.push(sv);
+    store.displayOverride = null;
     store.openQueryView(sv);
     return sv;
   };

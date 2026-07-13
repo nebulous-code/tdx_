@@ -12,7 +12,11 @@ Also resolved along the way: **2E §6.2** (note button layout). One `back ⎋` c
 
 **Behavior change now live:** **`d` in the note body no longer deletes the note** — it's vim's operator prefix (`dd`/`dw`). Delete-the-note lives on the **field rows** and in the **notes list** (see **n.12**).
 
-**Still outstanding:** **n.10** + **e.3** (the `h`-at-the-edge nav model — needs your call on the calendar edge-rule) · **n.11** (design open) · **n.13** (links have no keyboard model) · **n.14** (`i` → new note) · **n.15** (notes search unreachable) · **e.1** (a decision, not a task) → which gates **a.2** (the capstone).
+**Batch 2 shipped and passed testing** — **e.1** (grid/list toggle; `display` as view metadata; occurrence-level date filtering) and **e.5** (the grid obeys the `type:` rule — which gave **tasks a calendar view** for free).
+
+**Batch 3 shipped** — **a.3** (the ⊞ query button never revealed save/update/clear), **a.4** (the quick-add ⚠ fired on every default task view), **a.5** (`h` in the query builder now reaches the app nav). Plus query-bar polish: clear is now **`c`** (not `x`), the toggle's label carries its state (**`query`** ⇄ **`hide Q`**) instead of a glow, and the buttons are text-only with underlined shortcut letters.
+
+**Still outstanding:** **n.10** + **e.3** (the `h`-at-the-edge nav model — needs your call on the calendar edge-rule) · **n.11** (design open) · **n.13** (links have no keyboard model) · **n.14** (`i` → new note) · **n.15** (notes search — a surface question first) · **e.4** (`t` → today; written up, not built) · **a.2** (the capstone — **unblocked**: event views now have a list to navigate).
 
 ## notes
 
@@ -111,18 +115,72 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 
 ## events
 
-**e.1 — Feature?: think deeply about how the views in the event screen work.** Right now the calendar specific queries don't seem to do anything. Realistically I don't think they should show the calendar view and it might be worth showing it as a list. No decision on this quite yet but I'd like you to look into what/how the code works today and then I can decide what direction we want to go.
-> *Blocks **a.2** — mixed-list `j`/`k` can't be finished while event-only views have no list to navigate. This is a **design decision first, code second**; I'll write up how it works today when you want it, not before.*
-
 **e.3 — Feature?: `h` doesn't reach the events nav** — the only way to get to the events nav lh drawer is by hitting `n`. In other apps like tasks and notes you can hit `h` and it puts you in the app nav drawer. However `h` on this one navigates you to the previous day, that makes sense. `H` will switch your month which is also desired. I'm not sure if I want to part with that functionality to make it consistent or just say "calendar/events are different and you've got to use `n` to get there." Open to suggestions on how to fix this. No code change for this one quite yet.
 > *The genuine conflict in the "`h` at the edge" family (**n.9**, **n.10**). A suggestion is in Triage — the grid gives us a natural edge to work with.*
 
+**e.4 — Feature: shortcut to today.** It'd be nice if you could jump to today with the `t` key. Assuming it's not already bookmarked for something. We should underline the `t` in the today button next to the month name and year in the header. Maybe make that today button look more like a button in our style.
+> *`t` is **completely unbound** — nothing global, nothing in the calendar's key map (`h/l/j/k` · `H/L/J/K` · `i` · `E` · now `v`). So it's free, and `cal.today()` already exists (the button calls it). This is a **binding + a restyle**, not a feature. Small enough to ride along with anything. Note the button underline must wrap its label in a single element — a bare `<u>t</u>oday` next to loose text hits the `.btn` flex-gap trap from **n.8**.*
+
 ### Resolved issues
+
+**e.1 — Feature?: think deeply about how the views in the event screen work.** Right now the calendar specific queries don't seem to do anything. Realistically I don't think they should show the calendar view and it might be worth showing it as a list. No decision on this quite yet but I'd like you to look into what/how the code works today and then I can decide what direction we want to go.
+> *Blocks **a.2** — mixed-list `j`/`k` can't be finished while event-only views have no list to navigate. This is a **design decision first, code second**.*
+>
+> **How it works today (investigated — nothing was documented; `calMatchIds` appears in no design doc).** A query on the events screen **filters the grid; it never replaces it.** `calendar.js` runs the query through the unified engine and keeps the matching event ids in `store.calMatchIds`; the grid then draws only events in that set. The **server side is fine** — against the dev DB: `type:event` → 8 · `due:this-week` → 5 · `due:this-month` → 8 · `due:next-month` → 5 · `due:last-week` → 3.
+>
+> **The grid filters but never *moves*, and it only ever fetches the visible month** (`calendar.js` `load()` → `range`). So:
+> - **"this month"** → filters a month grid to that same month: a **literal no-op**.
+> - **"next month"** → the matches were never fetched; you get a **silently empty current month**.
+> - **"this week" / "last week"** → the only ones that visibly do anything, and they read as a bug rather than a filter.
+> - Side effect: while any query is active, **dated tasks vanish from the grid** (`calendar.js:49`, `day-detail.js:33`).
+>
+> *Diagnosis: the seed views and the filter mechanism were **designed past each other**. A calendar grid **is already a date filter** — the month you're looking at — so a **date-range** query fights it and the grid always wins (it controls what gets fetched). Note what does work: **non-date** predicates (`calendar:`, `label:`, `category:`) narrow the grid meaningfully, because they filter along an axis the grid isn't already filtering.*
+>
+> **DECIDED — grid/list toggle, with display as VIEW METADATA (not a query term).**
+> - **`display` becomes a column on `saved_queries`** (`auto | grid | list`), sitting alongside `glyph` / `color` / `pinned` — which are *already* presentation metadata. The **query language never learns the word "list"**: a `view:list` predicate would drag presentation into the parity-locked engine (`query.ts` ≡ `query.js` + goldens), where it's meaningless for tasks and notes.
+> - **The query bar stays generic** — it gains no grid/list control. The **toggle lives on the events screen** (header, by the month nav — like the notes editor's edit/render toggle), plus a key.
+> - **Persisting needs no new UI:** flip the toggle → press **`u`** (Update-in-place, §1) → that view opens that way from then on. Same mechanism as editing a view's query text.
+> - **`auto` (the default) infers:** a **date-range** predicate → **list**; anything else → **grid**. Toggle + `u` pins an explicit override. Sensible out of the box, never a cage.
+> - **Seeds:** the date-range event views (this week / this month / next month / last week) resolve to **list** — which is exactly what stops them being no-ops.
+> - **Ad-hoc (unsaved) queries** use the screen's current mode. Nothing to store.
+>
+> **Fix required regardless of the toggle:** in **grid** mode a date-bounded query must **move the grid to the range** instead of filtering into emptiness — otherwise grid mode stays broken for exactly the queries you'd most want in it ("next month" → blank current month).
+>
+> **THE DEEPER BUG (found while testing the first cut — the grid still looked unfiltered).** The unified query matches **SERIES**; the grid draws **OCCURRENCES**. Filtering the grid by matched-**id** therefore *cannot express a date range*: a weekly standup that matches `due:this-week` puts its id in `calMatchIds`, and then **all 17 of its July occurrences stay on the grid**. Measured against the dev data for `due:this-week`: the id-only filter drew **62 of 66** occurrences — which is why it read as "no filtering at all," since the recurring events that dominate the grid were exactly the ones surviving intact. This is the same series-vs-occurrence line `2D_APP_SHELL.md:28` drew ("the unified query is series-only → … **not the grid**").
+>
+> **DECIDED: grid + date query = filter to the matching OCCURRENCES** (not merely navigate). Two composed passes:
+> 1. **series-level** — `calMatchIds`, as before (handles `label:` / `calendar:` / `category:` / text).
+> 2. **occurrence-level** — the query's `due:` terms evaluated against **that occurrence's own date**, via `Q.evaluate` on the client. No new date interpreter: it's the **same `due:`→occurrence mapping the server already does** (`*AsTask` in `unifiedQuery.ts`), reusing the parity-locked engine.
+>
+> Composed, they narrow exactly: `due:this-week` now draws **13 of 66** occurrences — the standup keeps only Jul 13/15/17, and Pay rent's Jul 1 correctly disappears. Applied to **both** the month grid (`calendar.js`) and the day-schedule drawer (`day-detail.js`), which had the same bug.
+>
+> *Cost is small, and it **feeds** the capstone rather than competing with it: the event list is `mixed-list` scoped to events — the component **a.2** already wants to generalize. Backend: one column + migration, threaded through the saved-query service **and** the Fastify response schema (the usual strip-trap).*
+> **✅ RESOLVED**
+> **How to test:** **Events** still opens on the **calendar** (`type:event` has no date predicate). Pick a date view (**This week / Next month**) → it now renders as an **agenda list** instead of doing nothing. Press **`v`** → back to the grid; a date query now **filters to the matching occurrences** (a weekly standup keeps only the days inside the range) and **jumps the grid** to the range if it's off-screen. Non-date views (`calendar:`, `label:`) stay grids, as they should. On one of *your own* saved views, `v` then `q` `u` pins the choice permanently.
 
 **e.2 — Bug: clicking a second event doesn't switch the right-hand drawer.** When I click on a view like "Everything Work" which returns multiple event items. Clicking on the first event shows the event detail in the right drawer. Clicking a second event does not switch/change the event details that appear in the drawer. This isn't acctually accessible on the events screen, but it shows up in tasks and notes screen whn you select a view that returns multiple items. This does not seem to be a problem with the notes or tasks, they switch/change propperly. This is specifically a mouse only issue, keyboard nav forces you to close the drawer before switching tasks which is fine.
 > *Root cause is almost certainly structural and small: the event drawer snapshots the event into a local form object **once, in `data()`**. While the drawer stays open, Vue doesn't re-run `data()`, so a second click updates the store but not the form. Tasks/notes don't have this problem because they read the item reactively instead of snapshotting it. Cheap fix (force a re-mount per event, or watch the selection).*
 > **✅ RESOLVED**
 > **How to test:** open a view returning several events, click one (drawer opens), then click another — the drawer should now switch to the second. (The drawer snapshotted the event in `data()`, which Vue won't re-run while it stays open; it's now keyed by event id so it remounts.)
+
+**e.5 — Bug: dated tasks on the calendar ignore the `type:` rule (and the query entirely).** Tasks should be filtered out altogether if the query doesn't select tasks. If tasks ARE selected they should respect the calendar/list view (rendered as they are today — no special treatment, just make the queries respect them).
+> *Confirmed, and it's **wrong at both ends**. The grid decides tasks by whether **any predicate exists**, never by `type:` (`calendar.js` `tasks: this.store.calMatchIds ? [] : …`; same in `day-detail.js`):*
+> - *Default events view is `type:event` → no predicate → `calMatchIds` null → **tasks show anyway**, though the query says events only.*
+> - *Add any predicate (`due:this-week`) → **tasks vanish entirely**, even if you wrote `type:task,event` and explicitly asked for them.*
+>
+> *The task overlay is from D2 2a ("the calendar co-displays events and dated tasks") and **predates the `type:` rule** — it was never brought under it. Note the "settle-for" fallback (**no calendar when tasks are selected**) is already today's behavior by accident: `type:task,event` trips `isMixedView()` and renders the list instead of the grid.*
+>
+> **DECIDED — the grid obeys the same `type:` rule as everything else:**
+> - **Tasks draw on the grid iff the query's types include `task`** (or there's no `type:` at all = everything). Not "iff no predicate exists."
+> - **When they draw, the query filters them** (matched task ids from the same unified query) instead of the current all-or-nothing.
+> - **Grid mode is available while every requested type is *dateable*** — `task` and `event` both have dates and sit on a grid fine; **`note` cannot**, so any query including notes falls back to the list. A principled line, rather than "tasks force a list."
+> - Tasks keep their current rendering on the grid (the small chips under a day's events).
+>
+> **Consequence — this gives TASKS a calendar view for free.** Once the grid honors `type:`, "show me my dated tasks on a calendar" is just `display:grid` on a task view. So the grid/list toggle (`v`) moves onto the **tasks screen's `{view title} › {query}` row** too, mirroring the events header. The `auto` default stays app-native: **tasks → list**, **events → grid** (unless it's a date-range query, per **e.1**). The two-pass filter from e.1 already accepts this without change.
+> **✅ RESOLVED**
+> **How to test:** the **Events** calendar no longer shows task chips by default (`type:event` = events only). A **`type:task,event`** query draws **both** on the grid. On **Tasks**, `v` gives you a calendar of your dated tasks — **Today** draws only today's, **Open** draws all open dated ones — and `i` on a day there creates a **task** due that day (not an event). A query touching **notes** can't be a grid, so it falls back to the list.
+>
+> *Post-test fix: the task filter originally used an **async server match-set**, and "no set yet" had to mean "no filter" — so the grid painted **every** dated task until the fetch landed, which on the Tasks screen was the first thing you saw. Tasks never needed the server (only events do, for recurrence expansion): `taskShows` now evaluates each task **synchronously** through the **same client engine the task list uses**, so the grid and list can't disagree, and the first paint is already correct.*
 
 ## tasks
 *(none yet)*
@@ -132,12 +190,35 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 **a.2 — Bug: `j`/`k` don't work on mixed item lists.** It seems to still work as designed in task only views. Event only views don't seem to display as lists (see **e.1**) and notes open the note in full screen instead of a rh side drawer. However mixed lists show all items and should be navigatable through `j`/`k` to switch detailed items without closing the rh side bar. Let's make sure we write this in a way that doesn't duplicate the existing logic that works for tasks and find an intelligent way to implement this so we don't have duplicate code. We should resolve this after we're happy with keyboard nav for notes and events.
 > *Agreed on the sequencing, and it's the right instinct: this should be the **generalization** of the task-list cursor, not a second copy of it. Depends on **e.1** (events need a list) and **n.3** (notes need the drawer/ladder). Do it last — it's the capstone that proves the model is actually shared.*
 
+a.3 Bug: the view list screens pop you back to the Tasks app if you select an everything list. I would prefer if it kept you in whatever app you're currently in. This would apply to situations where we've searched 2/3 of the types as well. 
+
 ### Resolved issues
 
 **a.1 — Bug: no space between the count and the view title in the header.** The header view/query counts like open overdue urgent appear as `13open | 10overdue | 2urgent`. Look into the root cause here don't auto fix it.
 > ***This one is mine, and recent.*** *When I gated the count badges (so event/note views don't show a bogus `0`), I wrapped the count in a `<template v-if>` and left the separating space **inside** it — Vue's whitespace condensing then drops that trailing space. Fix is to own the spacing in CSS/markup rather than rely on a text-node space. Same cosmetic bucket as **n.8**.*
 > **✅ RESOLVED**
 > **How to test:** look at the header — `13 open │ 10 overdue │ 2 urgent`. (My regression: the separating space was a whitespace-only text node inside a `<template v-if>`, which Vue drops at compile time. It's now folded into the interpolation.)
+
+**a.3 — Bug: the ⊞ query button doesn't reveal save / update / clear.** Long-standing. Clicking the query button in the top right opens the builder but shows none of the save/update/close controls — you have to use the `q` shortcut to get them.
+> *Root cause: **the mouse and the keyboard were two different implementations of one action.** The button's click handler was a raw state flip, `store.builderOpen = !store.builderOpen` — it opened the builder **panel** but never set `focusPane`. The save / update / clear controls are gated on `focusPane==='query'`, so for a mouse user they could never appear. The `q` key instead calls `enterQuery()`, which sets **both** `builderOpen` **and** `focusPane`, plus seeds the pane's keyboard cursor.*
+> **✅ RESOLVED**
+> **How to test:** click the **⊞ query** button (any app) — the builder opens **and** `★ save`, `⟳ update` (on one of your own views) and `x` appear, exactly as if you'd pressed `q`. The pane also takes the keyboard, so `s` / `u` / `x` work immediately. Clicking ⊞ again closes the builder and hands the keyboard back to the list.
+>
+> *Fixed by giving the button **one path**: it now emits `toggle-query`, which the app routes through the same `enterQuery()` / `exitQuery()` the `q` key uses. Closing also collapses the panel — `exitQuery()` alone would have left the builder open with its buttons gone, which is the same class of mismatch as the original bug.*
+
+**a.4 — Bug: the quick-add ⚠ warning fires on every default task view.** The "filter parameters will cause new tasks to land outside the filter" warning shows on **Today / Open / This week** — views where it makes no sense. Seems new.
+> *It **is** new, and it's mine. `store.viewWarn()` flags any term whose field isn't in `APPLIED_FIELDS` (`project` · `label` · `status` · `due`) — the fields a quick-add can actually apply to a new task. **`type:` isn't in that set**, and the §3.1 cleanup added **`type:task` to every default task view** — so they all lit up. But a brand-new task **is** a task: it satisfies `type:task` automatically, exactly like it satisfies `has:no-labels` (which was already exempt).*
+> **✅ RESOLVED**
+> **How to test:** the quick-add prompt on **Today / Open / This week / Overdue** shows `+`, not `⚠`. It still warns where it should: free text (`groceries`), unappliable fields (`priority:high`), a negated `-type:task`, or an events-only query.
+>
+> *Fixed by exempting terms a new task already satisfies: non-negated `has:no-labels`, and a non-negated `type:` whose token list includes `task`. Negations (`-type:task`) still warn, since those genuinely would exclude the new task.*
+
+**a.5 — Bug: `h` in the query builder doesn't reach the app nav.** Legacy, and independent of the calendar question.
+> *The query pane was the one place that never got the **"h at the edge"** rule. `h`/`l` there are KbForm cell moves across the chips, so `h` just dead-ended on the leftmost chip instead of walking out left.*
+> **✅ RESOLVED**
+> **How to test:** `q` into the builder, `h` until you're on the first chip of a group, then `h` once more → the app nav takes focus (revealing it if collapsed, landing on the active view). Anywhere else, `h` still moves a chip.
+>
+> *Fixed in `queryKey`: `h` when `kbCell===0` → `enterSidebar()`. Same rule the task list and the recurrence sub-pane already use. **Does not pre-empt e.3** — that's the calendar's own `h` conflict (`h` = previous day), still an open decision.*
 
 ---
 
@@ -172,11 +253,12 @@ This is the largest item and the one everything else waits on. It's not really "
 4. **Theme C** (`h` at the edge — **n.10**, **e.3**) — ← **next.** One rule, three call sites. Blocked only on your yes/no to the calendar edge-rule in **e.3**. (**n.9** shipped early because the notes list handler was already open on the bench.)
 5. **n.14** (`i` → new note) — a **binding, not a feature**; it can ride along with anything.
 6. **n.13** (links keyboard model) — its own slice, but it pays for itself: `linked-items` is **shared**, so one nested KbForm sub-pane fixes links in the task and event drawers too.
-7. **e.1 decision** → then **a.2** (shared list cursor) → then **n.11**.
-8. **n.15** (notes search) — deliberately last: it's a **surface question** before it's a keyboard one (three search surfaces already exist), and it may dissolve into the query bar rather than need a key.
+7. ~~**e.1**~~ + ~~**e.5**~~ — ✅ **shipped in batch 2.** The event list is `mixed-list` scoped to events, so **a.2** now has the surface it was waiting on. e.5 fell out of it: once the grid honors `type:`, a dated-task view can *be* a calendar.
+8. **a.2** (shared list cursor) — ← **next**, now unblocked. Then **n.11**.
+9. **n.14** (`i` → new note) + **e.4** (`t` → today) — bindings, not features; can ride along with anything.
+10. **n.15** (notes search) — deliberately last: it's a **surface question** before it's a keyboard one (three search surfaces already exist), and it may dissolve into the query bar rather than need a key.
 
-**What I need from you — two calls, both design, neither code:**
-- **e.3** — does `h` on the calendar's **leftmost column** walk out into the events nav? (That's what unblocks Theme C, the next batch.)
-- **e.1** — calendar vs list for event views. This one gates the **a.2** capstone.
+**What I still need from you — one call, design not code:**
+- **e.3** — does `h` on the calendar's **leftmost column** walk out into the events nav? (That's what unblocks Theme C.)
 
 **n.15** needs a decision too, but it isn't blocking anything, so it can wait.

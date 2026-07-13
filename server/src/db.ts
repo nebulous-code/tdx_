@@ -200,6 +200,7 @@ export interface SavedQueriesTable {
   color: string | null;
   position: number;
   pinned: number;
+  display: string; // 'auto' | 'grid' | 'list' — how the view presents (e.1); see migration 007
 }
 
 export interface GrantsTable {

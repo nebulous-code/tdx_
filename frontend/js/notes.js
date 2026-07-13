@@ -42,7 +42,7 @@ window.NotesView = {
     activeFolder() { return this.folderFilter ? this.store.folderById(this.folderFilter) : null; },
     // the active query (type:note by default); a real predicate beyond type: narrows the list
     activeQuery() { return this.store.currentQuery(); },
-    hasPredicate() { return Q.parse(this.activeQuery()).terms.some((t) => t.field !== 'type'); },
+    hasPredicate() { return Q.parse(this.activeQuery).terms.some((t) => t.field !== 'type'); },
     rows() {
       if (this.hits) return this.hits;   // search results ignore the folder + query filter
       let r = this.folderFilter ? this.list.filter((n) => n.folderId === this.folderFilter) : this.list;
@@ -81,7 +81,7 @@ window.NotesView = {
     async refilter() {
       if (!this.hasPredicate) { this.matchIds = null; return; }
       const seq = ++this._fseq;
-      const items = await this.store.runQuery(this.activeQuery());
+      const items = await this.store.runQuery(this.activeQuery);
       if (seq !== this._fseq) return;
       this.matchIds = new Set((items || []).filter((i) => i.type === 'note').map((i) => i.id));
     },

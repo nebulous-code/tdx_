@@ -6,6 +6,7 @@
    docs/KEYBOARD_FRAMEWORK.md. */
 window.QueryBar = {
   props: ['store'],
+  emits: ['save-query', 'toggle-query'],
   mixins: [window.KbForm],
   template: `
   <div class="qbar">
@@ -14,10 +15,19 @@ window.QueryBar = {
       <input class="qinput" ref="q" v-model="queryString" spellcheck="false"
              placeholder="query… e.g.  label:urgent due:<7d status:open"
              @keydown.enter="run" @keydown.esc="blur" />
-      <span class="qbtn" :class="{on: store.builderOpen}" @click="store.builderOpen=!store.builderOpen" title="Query builder (q · Q to collapse)">⊞<span><u>q</u>uery</span></span>
-      <span v-if="store.focusPane==='query' && updatable" class="qbtn" @click="update" title="Update this saved view in place (u)">⟳<span><u>u</u>pdate</span></span>
-      <span v-if="store.focusPane==='query'" class="qbtn" @click="save" title="Save as a new smart view (s)">★<span><u>s</u>ave</span></span>
-      <span v-if="store.focusPane==='query'" class="qbtn" @click="clearQuery" title="Clear (x)"><u>x</u></span>
+      <!-- Clicking this does exactly what the q key does (audit a.3): one action, one path.
+           The open state is carried by the LABEL (query → hide query), not by a glow. -->
+      <span class="qbtn" @click="$emit('toggle-query')" :title="store.builderOpen ? 'Hide the query builder (Q)' : 'Query builder (q)'">
+        <template v-if="store.builderOpen"><span>hide <u>Q</u></span></template>
+        <template v-else><span><u>q</u>uery</span></template>
+      </span>
+      <!-- These belong to the OPEN BUILDER, so that is what reveals them. Gating them on
+           focusPane==='query' (who owns the keyboard) was a single point of failure: any path
+           that opens the panel without taking focus — or hands focus back while it stays open,
+           which Esc does — left an open builder with no controls on it (audit a.3). -->
+      <span v-if="store.builderOpen && updatable" class="qbtn" @click="update" title="Update this saved view in place (u)"><span><u>u</u>pdate</span></span>
+      <span v-if="store.builderOpen" class="qbtn" @click="save" title="Save as a new smart view (s)"><span><u>s</u>ave</span></span>
+      <span v-if="store.builderOpen" class="qbtn" @click="clearQuery" title="Clear the query (c)"><span><u>c</u>lear</span></span>
     </div>
 
     <div v-if="store.builderOpen" class="builder">
@@ -209,6 +219,9 @@ window.QueryBar = {
       const sv=this.store.activeSavedQuery();
       if(!sv) return;
       sv.query=(this.queryString||'').trim();
+      // an explicit grid/list toggle (e.1) is pinned onto the view here — that's the whole
+      // persistence story, no new UI. Untoggled views keep 'auto' (the app infers).
+      if(this.store.displayOverride){ sv.display=this.store.displayOverride; this.store.displayOverride=null; }
       this.store.openQueryView(sv);
       this.store.toast('✓ updated "'+sv.name+'"');
     },

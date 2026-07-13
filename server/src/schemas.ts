@@ -90,6 +90,12 @@ export const LabelSchema = Type.Object({
   name: Type.String(),
   pinned: Type.Boolean(),
 });
+// how a view presents its results — view metadata, not a query term (e.1; migration 007)
+export const DisplaySchema = Type.Union([
+  Type.Literal('auto'),
+  Type.Literal('grid'),
+  Type.Literal('list'),
+]);
 export const SavedQuerySchema = Type.Object({
   id: Type.String(),
   name: Type.String(),
@@ -99,6 +105,7 @@ export const SavedQuerySchema = Type.Object({
   color: NStr(),
   position: Type.Integer(),
   pinned: Type.Boolean(),
+  display: DisplaySchema,
 });
 
 // ---- create / update request schemas --------------------------------------
@@ -209,6 +216,7 @@ export const SavedQueryCreateSchema = Type.Object({
   color: Type.Optional(NStr()),
   pinned: Type.Optional(Type.Boolean()),
   position: Type.Optional(Type.Integer()),
+  display: Type.Optional(DisplaySchema),
 });
 export const SavedQueryUpdateSchema = Type.Partial(
   Type.Object({
@@ -218,6 +226,7 @@ export const SavedQueryUpdateSchema = Type.Partial(
     color: NStr(),
     pinned: Type.Boolean(),
     position: Type.Integer(),
+    display: DisplaySchema,
   }),
 );
 export const AssignSchema = Type.Object({ assigneeId: NStr() });
@@ -343,6 +352,7 @@ export function rowToSavedQuery(row: SavedQueriesTable) {
     color: row.color,
     position: row.position,
     pinned: !!row.pinned,
+    display: (row.display || 'auto') as 'auto' | 'grid' | 'list',
   };
 }
 

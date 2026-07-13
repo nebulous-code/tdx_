@@ -184,6 +184,7 @@ const baseSq: SavedQueriesTable = {
   color: null,
   position: 0,
   pinned: 0,
+  display: 'auto',
 };
 
 test('rowToSavedQuery: falsy arms (system/pinned false, color null)', () => {
