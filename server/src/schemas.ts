@@ -516,9 +516,11 @@ export const NoteListItemSchema = Type.Object({
   path: Type.String(),
   title: Type.String(),
   mtime: Type.String(),
+  createdAt: Type.String(), // notes-list "created" date (§6.5)
   updatedAt: Type.String(),
   folderId: NStr(), // notes-list folder filter (§2E) — Fastify strips undeclared props, so declare it
   readableId: NStr(), // readable-id chip on note rows
+  labels: Type.Array(Type.String()), // labels-beneath in the list row (§6.5)
 });
 export const NoteListSchema = Type.Array(NoteListItemSchema);
 export const NoteSearchHitSchema = Type.Object({

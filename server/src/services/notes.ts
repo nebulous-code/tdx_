@@ -525,9 +525,11 @@ export interface NoteListItem {
   path: string;
   title: string;
   mtime: string;
+  createdAt: string;
   updatedAt: string;
   folderId: string | null;
   readableId: string | null;
+  labels: string[];
 }
 export async function listNotes(db: DB, owner: string): Promise<NoteListItem[]> {
   const rows = await db
@@ -537,14 +539,31 @@ export async function listNotes(db: DB, owner: string): Promise<NoteListItem[]> 
     .where('tombstoned', '=', 0)
     .orderBy('updated_at', 'desc')
     .execute();
+  // labels per (live) note in a single pass — mirrors bootstrap's task-label batch
+  const nls = await db
+    .selectFrom('note_labels')
+    .innerJoin('notes', 'notes.id', 'note_labels.note_id')
+    .select(['note_labels.note_id', 'note_labels.label_id'])
+    .where('notes.owner_id', '=', owner)
+    .where('notes.tombstoned', '=', 0)
+    .orderBy('note_labels.label_id')
+    .execute();
+  const byNote = new Map<string, string[]>();
+  for (const nl of nls) {
+    const a = byNote.get(nl.note_id) ?? [];
+    a.push(nl.label_id);
+    byNote.set(nl.note_id, a);
+  }
   return rows.map((r) => ({
     id: r.id,
     path: r.path,
     title: r.title,
     mtime: r.mtime,
+    createdAt: r.created_at,
     updatedAt: r.updated_at,
     folderId: r.folder_id,
     readableId: r.readable_id,
+    labels: byNote.get(r.id) ?? [],
   }));
 }
 

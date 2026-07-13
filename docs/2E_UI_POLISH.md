@@ -19,10 +19,17 @@ Locked in 2d that 2e builds on (`2D_APP_SHELL.md` → Decided): the **notes-tags
 
 Sizable backend changes riding under "UI polish": the **calendars/folders entities** (§2) and **human-readable ids** (§5) — both effectively their own slices.
 
+## Status (as of the §6 note-editor pass)
+**§1–§5 are DONE. §6 is done except the audit.** Each section heading below carries its own status + a one-line record of what shipped.
+- **Remaining to build:** **§6.4** — the keyboard + mouse accessibility audit (always planned as the final sweep once everything else landed).
+- **Remaining to decide:** **§6.2** — note button layout / back-vs-close, deliberately deferred until the new frontend had been lived with. Now decidable.
+- **Remaining to feel out:** **§6.1** reflow/motion tuning, and the provisional §4.2 day-drawer key mappings — both explicitly "iterate in-product."
+- **Not a 2e item, but the real gate on shipping this:** the **prod cutover**. `docs/DEPLOY.md` is a **D1-only** runbook — neither it nor `compose.yaml` mentions the notes **vault** (no `VAULT_DIR` volume/env in prod), and there's no backfill rehearsal for the D2 migrations (`002`–`006`: events, links, notes, calendars/folders, readable ids) against real data. Refresh the runbook + dry-run the migration on a copy of the prod DB before flipping anything.
+
 ---
 
-## 1. Update / save-in-place query
-*Recommended first build — self-contained, straightforward, testable.*
+## 1. Update / save-in-place query — ✅ DONE
+*Shipped: an **Update** action (`u`) beside Save in `frontend/js/query-bar.js` — Save = save-as-new, Update = overwrite the selected saved view in place.*
 
 Today, selecting a saved query and changing its syntax only offers **Save**, which creates a **new** query — there's no in-place edit (confirmed: `query-bar.js` `save()` just emits `save-query`). Add an **Update** action beside Save: **Save** = save-as-new, **Update** = overwrite the selected query in place. Needed to make the §3 `type:`-scoping cleanup practical (you edit old queries rather than re-create them).
 
@@ -32,7 +39,8 @@ Today, selecting a saved query and changing its syntax only offers **Save**, whi
 
 ---
 
-## 2. Per-app navs + calendars & folders
+## 2. Per-app navs + calendars & folders — ✅ DONE
+*Shipped: `migrations/005_calendars_folders.sql` (calendars flat, folders nesting + on-disk sync + `.tdx-folder.json` marker); `services/calendars.ts` / `services/folders.ts`; the nav's category tree swaps by app via `store.categoryKind` (`js/sidebar.js`); per-app seed views in `server/src/seed.ts`. Defaults + icon/color polish stay open below.*
 
 ### 2.1 Per-app navigation (Tasks / Events / Notes each get their own nav)
 Today the Tasks nav (projects + labels) is the only app nav and only makes sense on Tasks. Each app gets its own `n`-toggled nav, all sharing the same project-style "category" shape (per-owner, name, user-pickable icon + color):
@@ -72,12 +80,13 @@ These rely on the §3.3 date model (universal `created:`/`edited:`, `due:`-per-t
 
 ---
 
-## 3. Query system everywhere
+## 3. Query system everywhere — ✅ DONE (all four subsections)
 
 ### 3.1 App-type selector + the `type:` rule — ✅ DONE (see "Completed")
 Built at the larger "live mixed results" scope, which also delivered the §3.2 **inline cross-type rendering**. Full record in the **Completed** section.
 
-### 3.2 Per-app query bar (bring it to Events & Notes)
+### 3.2 Per-app query bar (bring it to Events & Notes) — ✅ DONE
+*Shipped: one shared, app-aware `js/query-bar.js` on all three app screens, auto-defaulting `type:<app>`; saved queries route to the navs whose type they address.*
 Only **Tasks** has the top query bar today; the unified query already works for events and notes, so the query top-drawer should appear on **all three** app screens. Each app's builder offers the chip groups that fit its type (Tasks: project/status/due/labels; Events: calendar/date/labels; Notes: folder/labels), all writing the same language, results rendering in that app.
 
 **Decided**
@@ -86,7 +95,8 @@ Only **Tasks** has the top query bar today; the unified query already works for 
 - **One shared, app-aware `query-bar.js`** (swap chip groups by app, not three copies); rename "filter" → "query" (§12); focus key + layout carry over per app.
 - **Cross-type results render inline** — ✅ **done in §3.1** (the `mixed-list` component with deep-nav type icons, on the Tasks screen). Remaining: per-type result-format polish (task → checkbox, event → start date, note → edited date), refined once all types share a result view.
 
-### 3.3 Unified query date model (created / edited · due-per-type · note "review" date)
+### 3.3 Unified query date model (created / edited · due-per-type · note "review" date) — ✅ DONE
+*Shipped: `created:`/`edited:` + true calendar-month keywords in the parity engine (`query.ts` ≡ `query.js`, goldens regenerated); the per-type `due:` mapping in `unifiedQuery.ts`; the note **review date** (`review_at`, from frontmatter).*
 Make the date predicates work **consistently across all item types**, so a mixed query like `type:task,note created:>=-7d` behaves sensibly instead of silently matching nothing.
 
 **Decided**
@@ -104,7 +114,8 @@ Make the date predicates work **consistently across all item types**, so a mixed
 **Parked (not 2e)**
 - **Review recurrence.** Manual bump for v1; a future "review every week" recurrence could automate it.
 
-### 3.4 Global search (`/`) → live text find across all types
+### 3.4 Global search (`/`) → live text find across all types — ✅ DONE
+*Shipped: `store.runSearch` runs `type:task,event,note` through `POST /api/query` (debounced, sequence-guarded); results render in `js/search-list.js` with deep-nav type icons.*
 Upgrade the `/` bottom-bar search (today: tasks only, client-side) to a **text-only live find** over tasks + events + notes. This is **not** the query system — it's the throwaway find defined in `STYLE_GUIDE.md` §12.
 
 **Decided**
@@ -113,7 +124,8 @@ Upgrade the `/` bottom-bar search (today: tasks only, client-side) to a **text-o
 
 ---
 
-## 4. Keyboard everywhere + detail drawers
+## 4. Keyboard everywhere + detail drawers — ✅ DONE
+*Shipped: all four detail surfaces (task · the event drawer replacing the old modal · note · the shared `js/md-field.js` render-when-not-editing editor), the §4.2 calendar day-schedule drawer (`E`, all-day + dated-task strips, task rows opening the task drawer atop it), and deep-nav (`N`) + per-app nav keyboard models. The **§6.4 audit** is the remaining coverage check.*
 
 ### 4.1 Unified right-hand detail drawer (all item types)
 Every item type opens in a **consistent right-hand drawer** (like today's task-detail drawer), so a mixed-type search/query result behaves the same regardless of type and there's one detail surface to learn.
@@ -170,7 +182,8 @@ The deep-nav drawer (Tasks/Events/Notes switcher) is currently mouse-only. Make 
 
 ---
 
-## 5. Human-readable per-user item ids
+## 5. Human-readable per-user item ids — ✅ DONE
+*Shipped: `migrations/006_readable_ids.sql` + `services/readableIds.ts` (per-user, per-type, monotonic, no reuse); UUID stays canonical, readable id is display/authoring only.*
 UUIDs were the right backend call but read badly in the UI — you should never see a UUID on the frontend. Each user-facing item gets a **per-user, per-type readable id** purely as a **display/authoring name** (like a note's filename → displayed title): the UUID stays the canonical key + backend link target; the readable id is what you read and type. *Its own backend slice (new column + allocation + backfill + search reindex); can slot early so everything renders readable ids from the start.*
 
 **Decided**
@@ -189,7 +202,8 @@ UUIDs were the right backend call but read badly in the UI — you should never 
 
 ## 6. Note-editor feel + final polish
 
-### 6.1 Note editor: cursor + navigation feel
+### 6.1 Note editor: cursor + navigation feel — ✅ FIRST CUT (iterating on feel)
+*Shipped: `MdRender.blocks()` segments the body by markdown-it token line-ranges; normal mode renders every block except the cursor's, which goes raw under a terminal block cursor; motions `hjkl` `w` `b` `0` `$` `gg` `G` + `i`/`a`/`I`/`A` (insert reuses the full-body textarea, so the `[[` picker is untouched); always-on editor border. **Reflow feel + motion edges still to tune live.***
 The note editor's presentation/navigation need work. Minimum bar: a **border around the editor at all times** (render-mode border can use the dimmer theme color). Plus a **vim-like cursor** (`hjkl`), `i`/`a`/`I`/`A` insert entries, and a **terminal-style block cursor** over characters. Most feel-dependent item here; will iterate.
 
 **Decided — current-block-raw / rest-rendered.** Normal mode renders markdown on everything **except the block the cursor is in**; the active block shows **raw source** with the block cursor over its characters. Whole-**block** (not just one line) goes raw — a half-rendered table/code-fence reads as broken, so the enclosing construct switches as a unit. (markdown-it tokens carry line-range `.map`s — already used for clickable checkboxes — so "find the block whose line range contains the cursor" is tractable.) Reconciles 2d's "normal = rendered" with a real editable cursor. `j`/`k` move between lines/blocks (which block is raw, so the view reflows); `h`/`l` within the current raw line.
@@ -204,18 +218,21 @@ The note editor has back + edit/render buttons top-right and others bottom-right
 - **Captured to fix:** the yes/no "navigate away?" confirmation buttons show **"esc" as text** instead of the **escape symbol** we use elsewhere — make it consistent.
 - **Back vs close** (two buttons — back = prior context, close = notes list — or collapse to one `Esc`) and the final button order/glyphs: **deferred.**
 
-### 6.3 Enter-to-save + `↵` sweep
+### 6.3 Enter-to-save + `↵` sweep — ✅ DONE
 Adopted globally in 2d; this sweep catches stragglers across every save UI. Largely mechanical.
 
-### 6.4 Keyboard + mouse accessibility audit
+### 6.4 Keyboard + mouse accessibility audit — ⬜ THE ONE REMAINING BUILD ITEM
 Wire the shared `KbForm` model (`KEYBOARD_FRAMEWORK.md`) into **every** module and modal so the high-level 2d keyboard wins extend to consistent coverage everywhere. **Approach:** build keyboard-first **per feature** as each lands above, then a short **final audit** here to catch gaps (rather than one big bolt-on sweep).
 
-### 6.5 Notes list/detail layout polish
+### 6.5 Notes list/detail layout polish — ✅ DONE
+*Shipped: `listNotes` + `NoteListItemSchema` now return `labels` + `createdAt`; rows render title, labels beneath, created/edited dates on the right.*
 Lay out the notes list/detail like tasks: title with **labels beneath**, created/edited dates on the right. Overlaps with the notes-tags + note-drawer work — likely lands with §4.3 / §2.3 rather than standalone.
 
 ---
 
 ## Completed
+
+> Per-section status now lives **inline** on each heading above (with a one-line record of what shipped). This section keeps the long-form build record for §3.1, whose scope changed enough during the build to be worth writing down.
 
 ### §3.1 — App-type selector + the `type:` rule ✅
 Built at the **"live mixed results"** scope, which also delivered §3.2's inline cross-type rendering early.

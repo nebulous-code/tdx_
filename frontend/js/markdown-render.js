@@ -6,7 +6,7 @@
    regardless of that option. Exposes window.MdRender. */
 
 (function () {
-  if (!window.markdownit) { window.MdRender = { html: (s) => s || '', toggleCheckbox: (b) => b }; return; }
+  if (!window.markdownit) { window.MdRender = { html: (s) => s || '', toggleCheckbox: (b) => b, blocks: (b) => [{ start: 0, end: Math.max(1, (b || '').split('\n').length) }] }; return; }
 
   const md = window.markdownit({ html: false, linkify: true, breaks: false, typographer: false });
   if (window.markdownitMark) md.use(window.markdownitMark);

@@ -7,9 +7,14 @@
 window.NotesView = {
   props: ['store'],
   data() {
-    return { list: [], q: '', hits: null, sel: null, creating: false, mode: 'normal', draft: { title: '', body: '' }, saved: { title: '', body: '' }, listSel: 0, eventList: [], linkMenu: null, matchIds: null, _fseq: 0 };
+    return { list: [], q: '', hits: null, sel: null, creating: false, mode: 'normal', draft: { title: '', body: '' }, saved: { title: '', body: '' }, listSel: 0, eventList: [], linkMenu: null, matchIds: null, _fseq: 0,
+      // §6.1 normal-mode block cursor: position in the body source + a remembered goal column
+      curLine: 0, curCol: 0, goalCol: 0, pendingG: false };
   },
   computed: {
+    // the body as source lines + the top-level block segments (current-block-raw model, §6.1)
+    bodyLines() { return this.draft.body.split('\n'); },
+    segs() { return window.MdRender ? window.MdRender.blocks(this.draft.body) : [{ start: 0, end: this.bodyLines.length }]; },
     // when a folder is selected in the nav, narrow the (non-search) list to it
     folderFilter() { return this.store.view.folderId || null; },
     activeFolder() { return this.folderFilter ? this.store.folderById(this.folderFilter) : null; },
@@ -23,12 +28,11 @@ window.NotesView = {
       return r;
     },
     editing() { return !!this.sel || this.creating; },
-    rendered() { return window.MdRender ? window.MdRender.html(this.draft.body) : this.draft.body; },
     dirty() { return this.editing && (this.draft.title !== this.saved.title || this.draft.body !== this.saved.body || this.draft.folderId !== this.saved.folderId); },
   },
   watch: {
     // markdown renders synchronously; tdx-query blocks fetch async, so hydrate after paint
-    rendered() { if (this.mode === 'normal') this.$nextTick(this.hydrateQueries); },
+    'draft.body'() { if (this.mode === 'normal') this.$nextTick(this.hydrateQueries); },
     mode(v) { if (v === 'normal') this.$nextTick(this.hydrateQueries); },
     // opened from a link chip on a task/event (store.openNote sets this)
     'store.pendingNoteId'(id) { if (id) { this.store.pendingNoteId = null; this.open(id); } },
@@ -67,6 +71,7 @@ window.NotesView = {
       this.mode = 'normal';        // open into the rendered view
       this.draft = { title: n.title, body: n.body, folderId: n.folderId ?? null };
       this.saved = { title: n.title, body: n.body, folderId: n.folderId ?? null };
+      this.curLine = 0; this.curCol = 0; this.goalCol = 0; this.pendingG = false;
     },
     // open a blank editor — NOTHING is written to the vault until the first save
     newNote() {
@@ -75,6 +80,7 @@ window.NotesView = {
       // a note created while viewing a folder is filed there
       this.draft = { title: '', body: '', folderId: this.folderFilter || null };
       this.saved = { title: '', body: '', folderId: this.folderFilter || null };
+      this.curLine = 0; this.curCol = 0; this.goalCol = 0; this.pendingG = false;
       this.mode = 'insert';        // a fresh note starts in edit mode
       this.$nextTick(() => { const el = this.$refs.titleInput; if (el) el.focus(); });
     },
@@ -84,21 +90,112 @@ window.NotesView = {
       this.store.fetchEventList().then((e) => { this.eventList = e; }); // refresh [[ picker candidates
       this.$nextTick(() => { const el = this.$refs.bodyArea; if (el) el.focus(); });
     },
-    // leaving insert (Esc or the toggle) WRITES the file, then renders — no manual save
+    // leaving insert (Esc or the toggle) WRITES the file, then renders — no manual save.
+    // Carry the textarea caret back to the block cursor so normal mode lands where you left off.
     async commitAndNormal() {
+      const ta = this.$refs.bodyArea;
+      const caret = ta ? ta.selectionStart : null;
       if (this.draft.title.trim() && this.dirty) { if (this.sel) await this.persist(); else await this.save(); }
+      if (caret != null) this.setCursorFromOffset(caret);
       this.mode = 'normal';
     },
     toggleMode() { this.mode === 'insert' ? this.commitAndNormal() : this.toInsert(); },
     // keys routed from the app's global handler (so they inherit its modal/typing gate)
+    // ---- §6.1 normal-mode block cursor: vim motions + insert entry ----
+    normalKey(e) {
+      const lines = this.bodyLines, maxLine = lines.length - 1;
+      const lineLen = () => (lines[this.curLine] || '').length;
+      const setCol = (c) => { this.curCol = Math.max(0, Math.min(lineLen(), c)); this.goalCol = this.curCol; };
+      const setLine = (n) => { this.curLine = Math.max(0, Math.min(maxLine, n)); this.curCol = Math.min(this.goalCol, lineLen()); };
+      if (this.pendingG) {                       // gg → first line
+        this.pendingG = false;
+        if (e.key === 'g') { e.preventDefault(); setLine(0); this.scrollCursor(); return; }
+      }
+      switch (e.key) {
+        case 'h': case 'ArrowLeft':  e.preventDefault(); setCol(this.curCol - 1); break;
+        case 'l': case 'ArrowRight': e.preventDefault(); setCol(this.curCol + 1); break;
+        case 'j': case 'ArrowDown':  e.preventDefault(); setLine(this.curLine + 1); break;
+        case 'k': case 'ArrowUp':    e.preventDefault(); setLine(this.curLine - 1); break;
+        case '0': e.preventDefault(); setCol(0); break;
+        case '$': e.preventDefault(); setCol(lineLen()); break;
+        case 'w': e.preventDefault(); this.wordFwd(); break;
+        case 'b': e.preventDefault(); this.wordBack(); break;
+        case 'g': e.preventDefault(); this.pendingG = true; return;   // await a second g
+        case 'G': e.preventDefault(); setLine(maxLine); break;
+        case 'i': case 'a': case 'I': case 'A': e.preventDefault(); this.enterInsert(e.key); return;
+        case 'Enter': e.preventDefault(); this.save(); return;
+        case 'd': e.preventDefault(); this.del(); return;
+        case 'Escape': e.preventDefault(); this.closeEditor(); return;
+        default: return;
+      }
+      this.scrollCursor();
+    },
+    // word motions (scan \b\w across lines)
+    wordFwd() {
+      const lines = this.bodyLines;
+      for (let li = this.curLine, co = this.curCol; li < lines.length; li++, co = -1) {
+        const re = /\b\w/g; let m;
+        while ((m = re.exec(lines[li])) ) { if (m.index > co) { this.curLine = li; this.curCol = m.index; this.goalCol = m.index; this.scrollCursor(); return; } }
+      }
+      this.curLine = lines.length - 1; this.curCol = (lines[this.curLine] || '').length; this.goalCol = this.curCol; this.scrollCursor();
+    },
+    wordBack() {
+      const lines = this.bodyLines;
+      for (let li = this.curLine, co = this.curCol; li >= 0; li--, co = Infinity) {
+        const re = /\b\w/g; let m, prev = null;
+        while ((m = re.exec(lines[li])) ) { if (m.index < co) prev = m.index; else break; }
+        if (prev !== null) { this.curLine = li; this.curCol = prev; this.goalCol = prev; this.scrollCursor(); return; }
+      }
+      this.curLine = 0; this.curCol = 0; this.goalCol = 0; this.scrollCursor();
+    },
+    // absolute char offset of (line,col) within draft.body
+    offsetOf(line, col) { let off = 0; for (let i = 0; i < line; i++) off += (this.bodyLines[i] || '').length + 1; return off + col; },
+    // (line,col) from an absolute offset (caret → block cursor)
+    setCursorFromOffset(off) {
+      const lines = this.bodyLines; let acc = 0;
+      for (let i = 0; i < lines.length; i++) {
+        if (off <= acc + lines[i].length) { this.curLine = i; this.curCol = off - acc; this.goalCol = this.curCol; return; }
+        acc += lines[i].length + 1;
+      }
+      this.curLine = lines.length - 1; this.curCol = (lines[this.curLine] || '').length; this.goalCol = this.curCol;
+    },
+    // i/a/I/A → drop into the (existing) full-body textarea at the mapped caret
+    enterInsert(kind) {
+      const line = this.bodyLines[this.curLine] || '';
+      let col = this.curCol;
+      if (kind === 'a') col = Math.min(line.length, col + 1);
+      else if (kind === 'A') col = line.length;
+      else if (kind === 'I') { const f = line.search(/\S/); col = f < 0 ? 0 : f; }
+      this.curCol = col;
+      const off = this.offsetOf(this.curLine, col);
+      this.toInsert();   // sets mode + focuses bodyArea
+      this.$nextTick(() => { const ta = this.$refs.bodyArea; if (ta) { ta.focus(); ta.setSelectionRange(off, off); } });
+    },
+    // ---- normal-mode block rendering (current block raw, rest rendered) ----
+    isActive(seg) { return seg.start <= this.curLine && this.curLine < seg.end; },
+    segSource(seg) { return this.bodyLines.slice(seg.start, seg.end).join('\n'); },
+    segHtml(seg) { return window.MdRender ? window.MdRender.html(this.segSource(seg)) : this.segSource(seg); },
+    // raw source of the active block with a terminal block cursor over (curLine,curCol)
+    activeHtml(seg) {
+      const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+      const out = [];
+      for (let ln = seg.start; ln < seg.end; ln++) {
+        const text = this.bodyLines[ln] || '';
+        if (ln === this.curLine) {
+          const col = Math.min(this.curCol, text.length);
+          const at = text[col] !== undefined ? esc(text[col]) : ' ';
+          out.push(esc(text.slice(0, col)) + '<span class="nb-cursor">' + at + '</span>' + esc(text.slice(col + 1)));
+        } else {
+          out.push(esc(text) || ' ');
+        }
+      }
+      return out.join('\n');
+    },
+    scrollCursor() { this.$nextTick(() => { const el = this.$el && this.$el.querySelector('.nb-cursor'); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' }); }); },
+    // keys routed from the app's global handler (so they inherit its modal/typing gate)
     onKey(e) {
       if (this.editing) {
-        if (this.mode === 'normal') {
-          if (e.key === 'i') { e.preventDefault(); this.toInsert(); return; }
-          if (e.key === 'Enter') { e.preventDefault(); this.save(); return; }
-          if (e.key === 'd') { e.preventDefault(); this.del(); return; }
-          if (e.key === 'Escape') { e.preventDefault(); this.closeEditor(); return; }
-        }
+        if (this.mode === 'normal') this.normalKey(e);
         return; // insert mode types into the textarea (global handler already returned on typing)
       }
       // list mode
@@ -109,6 +206,8 @@ window.NotesView = {
       else if (e.key === 'Enter' || e.key === 'o') { e.preventDefault(); const n = rows[this.listSel]; if (n) this.open(n.id); }
     },
     scrollListSel() { this.$nextTick(() => { const el = this.$el && this.$el.querySelector('.notes-row.on'); if (el) el.scrollIntoView({ block: 'nearest' }); }); },
+    labelName(id) { const l = this.store.labelById(id); return l ? l.name : '?'; },
+    fmtDate(ts) { return (ts || '').slice(0, 10); },   // YYYY-MM-DD (created/edited in the list row)
     // ---- [[ link picker (insert mode) ----
     detectLink() {
       const ta = this.$refs.bodyArea;
@@ -160,12 +259,15 @@ window.NotesView = {
       if (note) this.store.openNoteDrawer(note.id);   // peek in place (§4.3)
       else this.store.toast('note not found');
     },
-    // click in the rendered view — checkbox toggle · tdx-query item · wikilink
+    // click in the rendered view — checkbox toggle · tdx-query item · wikilink · else move cursor
+    // (each rendered segment carries data-seg; checkbox data-line is segment-relative, so offset it)
     onRenderClick(e) {
+      const segEl = e.target.closest && e.target.closest('[data-seg]');
+      const segBase = segEl ? (this.segs[+segEl.getAttribute('data-seg')] || {}).start || 0 : 0;
       const cb = e.target.closest && e.target.closest('.md-check');
       if (cb) {
         e.preventDefault();
-        const line = parseInt(cb.getAttribute('data-line'), 10);
+        const line = segBase + parseInt(cb.getAttribute('data-line'), 10);
         this.draft.body = window.MdRender.toggleCheckbox(this.draft.body, line);
         if (this.sel) this.persist();   // existing note → quiet save
         else this.save();               // unsaved note → create it (toasts to name it first if untitled)
@@ -175,6 +277,8 @@ window.NotesView = {
       if (wl) { e.preventDefault(); this.openWikilink(wl); return; }
       const qi = e.target.closest && e.target.closest('.tdx-query-item');
       if (qi) { e.preventDefault(); this.openEntity(qi.getAttribute('data-type'), qi.getAttribute('data-id')); return; }
+      // plain click on a rendered block → move the cursor into it
+      if (segEl) { this.curLine = segBase; this.curCol = 0; this.goalCol = 0; }
     },
     openEntity(type, id) {
       if (type === 'task') { this.store.selectedTaskId = id; this.store.detailOpen = true; }
@@ -183,7 +287,7 @@ window.NotesView = {
     },
     // ---- tdx-query embeds: fill each block with live results ----
     async hydrateQueries() {
-      const root = this.$el && this.$el.querySelector('.md-body');
+      const root = this.$el && this.$el.querySelector('.note-render');
       if (!root) return;
       for (const el of root.querySelectorAll('.tdx-query[data-query]')) {
         if (el._hydrated) continue;
@@ -249,16 +353,27 @@ window.NotesView = {
       <span class="grow"></span>
       <span v-if="!editing" class="qbtn" @click="newNote">＋ new</span>
       <span v-if="!editing" class="qbtn" @click="sync" title="reconcile external edits">sync</span>
-      <span v-if="editing" class="qbtn note-mode" @click="toggleMode">{{ mode==='insert' ? 'render' : 'edit' }} <span class="mut">{{ mode==='insert' ? 'esc' : 'i' }}</span></span>
+      <span v-if="editing" class="qbtn note-mode" @click="toggleMode">{{ mode==='insert' ? 'render' : 'edit' }} <span class="mut">{{ mode==='insert' ? '⎋' : 'i' }}</span></span>
       <span v-if="editing" class="qbtn" @click="closeEditor">‹ back</span>
     </div>
 
     <div v-if="!editing" class="notes-list">
       <div v-if="!rows.length" class="mut notes-empty">no notes yet — ＋ new, or drop .md files in the vault and hit sync</div>
       <div v-for="(n, i) in rows" :key="n.id" class="notes-row" :class="{ on: i===listSel }" @click="listSel=i; open(n.id)">
-        <span v-if="n.readableId" class="mut notes-row-rid">{{ n.readableId }}</span>
-        <span class="notes-row-title">{{ n.title }}</span>
-        <span v-if="n.snippet" class="mut notes-row-snip">{{ n.snippet }}</span>
+        <div class="nr-main">
+          <div class="nr-title-line">
+            <span v-if="n.readableId" class="mut notes-row-rid">{{ n.readableId }}</span>
+            <span class="notes-row-title">{{ n.title }}</span>
+          </div>
+          <div v-if="n.snippet" class="mut notes-row-snip">{{ n.snippet }}</div>
+          <div v-if="n.labels && n.labels.length" class="nr-labels">
+            <span v-for="lid in n.labels" :key="lid" class="tag">#{{ labelName(lid) }}</span>
+          </div>
+        </div>
+        <div v-if="n.updatedAt || n.createdAt" class="nr-dates mut">
+          <div v-if="n.updatedAt">edited {{ fmtDate(n.updatedAt) }}</div>
+          <div v-if="n.createdAt">created {{ fmtDate(n.createdAt) }}</div>
+        </div>
       </div>
     </div>
 
@@ -282,11 +397,16 @@ window.NotesView = {
             </div>
           </div>
         </template>
-        <div v-else class="md-body" v-html="rendered" @click="onRenderClick"></div>
+        <div v-else class="note-render" @click="onRenderClick">
+          <template v-for="(seg, si) in segs" :key="si">
+            <pre v-if="isActive(seg)" class="nb-raw" v-html="activeHtml(seg)"></pre>
+            <div v-else class="md-body nb-seg" :data-seg="si" v-html="segHtml(seg)"></div>
+          </template>
+        </div>
       </div>
       <linked-items v-if="sel" ref="links" :store="store" type="note" :id="sel.id"></linked-items>
       <div class="note-actions">
-        <button class="btn" @click="closeEditor">close<span class="mut">esc</span></button>
+        <button class="btn" @click="closeEditor">close <span class="mut">⎋</span></button>
         <button v-if="sel" class="btn danger" @click="del"><span><u>d</u>elete</span></button>
         <button class="btn primary" @click="save">save ↵</button>
       </div>
