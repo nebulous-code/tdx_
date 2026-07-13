@@ -16,7 +16,9 @@ Also resolved along the way: **2E §6.2** (note button layout). One `back ⎋` c
 
 **Batch 3 shipped** — **a.3** (the ⊞ query button never revealed save/update/clear), **a.4** (the quick-add ⚠ fired on every default task view), **a.5** (`h` in the query builder now reaches the app nav). Plus query-bar polish: clear is now **`c`** (not `x`), the toggle's label carries its state (**`query`** ⇄ **`hide Q`**) instead of a glow, and the buttons are text-only with underlined shortcut letters.
 
-**Still outstanding:** **n.10** + **e.3** (the `h`-at-the-edge nav model — needs your call on the calendar edge-rule) · **n.11** (design open) · **n.13** (links have no keyboard model) · **n.14** (`i` → new note) · **n.15** (notes search — a surface question first) · **e.4** (`t` → today; written up, not built) · **a.2** (the capstone — **unblocked**: event views now have a list to navigate).
+**Batch 4 shipped** — **e.3** (DECIDED: `h` stays "previous day" on the calendar; the nav is reached with `n`) and **a.6** (**`n` now enters the app nav** and closes it on a second press — `N` already did; both left-hand drawers now behave identically, in every app).
+
+**Still outstanding:** **n.10** (`h` inside the nav jumps to the deep nav too eagerly — untouched by a.6) · **n.11** (design open) · **n.13** (links have no keyboard model) · **n.14** (`i` → new note) · **n.15** (notes search — a surface question first) · **e.4** (`t` → today; written up, not built) · **a.2** (the capstone — **unblocked**: event views now have a list to navigate).
 
 ## notes
 
@@ -115,9 +117,6 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 
 ## events
 
-**e.3 — Feature?: `h` doesn't reach the events nav** — the only way to get to the events nav lh drawer is by hitting `n`. In other apps like tasks and notes you can hit `h` and it puts you in the app nav drawer. However `h` on this one navigates you to the previous day, that makes sense. `H` will switch your month which is also desired. I'm not sure if I want to part with that functionality to make it consistent or just say "calendar/events are different and you've got to use `n` to get there." Open to suggestions on how to fix this. No code change for this one quite yet.
-> *The genuine conflict in the "`h` at the edge" family (**n.9**, **n.10**). A suggestion is in Triage — the grid gives us a natural edge to work with.*
-
 **e.4 — Feature: shortcut to today.** It'd be nice if you could jump to today with the `t` key. Assuming it's not already bookmarked for something. We should underline the `t` in the today button next to the month name and year in the header. Maybe make that today button look more like a button in our style.
 > *`t` is **completely unbound** — nothing global, nothing in the calendar's key map (`h/l/j/k` · `H/L/J/K` · `i` · `E` · now `v`). So it's free, and `cal.today()` already exists (the button calls it). This is a **binding + a restyle**, not a feature. Small enough to ride along with anything. Note the button underline must wrap its label in a single element — a bare `<u>t</u>oday` next to loose text hits the `.btn` flex-gap trap from **n.8**.*
 
@@ -162,6 +161,15 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 > *Root cause is almost certainly structural and small: the event drawer snapshots the event into a local form object **once, in `data()`**. While the drawer stays open, Vue doesn't re-run `data()`, so a second click updates the store but not the form. Tasks/notes don't have this problem because they read the item reactively instead of snapshotting it. Cheap fix (force a re-mount per event, or watch the selection).*
 > **✅ RESOLVED**
 > **How to test:** open a view returning several events, click one (drawer opens), then click another — the drawer should now switch to the second. (The drawer snapshotted the event in `data()`, which Vue won't re-run while it stays open; it's now keyed by event id so it remounts.)
+
+**e.3 — Feature?: `h` doesn't reach the events nav** — the only way to get to the events nav lh drawer is by hitting `n`. In other apps like tasks and notes you can hit `h` and it puts you in the app nav drawer. However `h` on this one navigates you to the previous day, that makes sense. `H` will switch your month which is also desired. I'm not sure if I want to part with that functionality to make it consistent or just say "calendar/events are different and you've got to use `n` to get there." Open to suggestions on how to fix this. No code change for this one quite yet.
+> *The genuine conflict in the "`h` at the edge" family (**n.9**, **n.10**). A suggestion is in Triage — the grid gives us a natural edge to work with.*
+>
+> **DECIDED — `h` stays "previous day" on the calendar; the events nav is NOT reachable with `h`.** The grid-edge rule was declined: `h`/`H` day/month nav is worth more than cross-app `h` symmetry, and the nav doesn't need a second door.
+>
+> *Instead, the door itself got better — a change that is **generic across every app, present and future** (see **a.6**): **`n` now takes you INTO the app nav** (landing on the project/view/calendar/folder/label you're currently on, exactly like `h` does), and **`n` again — while you're in it — closes it.** So on Events, `h` keeps the day cursor and `n` is the one-key way into the nav. Nothing is lost.*
+> **✅ RESOLVED**
+> **How to test:** on the calendar, `h`/`l` still walk days and `H`/`L` still walk months — `h` never leaves the grid. `n` drops you into the events nav on the calendar you're viewing; `n` again closes it.
 
 **e.5 — Bug: dated tasks on the calendar ignore the `type:` rule (and the query entirely).** Tasks should be filtered out altogether if the query doesn't select tasks. If tasks ARE selected they should respect the calendar/list view (rendered as they are today — no special treatment, just make the queries respect them).
 > *Confirmed, and it's **wrong at both ends**. The grid decides tasks by whether **any predicate exists**, never by `type:` (`calendar.js` `tasks: this.store.calMatchIds ? [] : …`; same in `day-detail.js`):*
@@ -219,6 +227,13 @@ a.3 Bug: the view list screens pop you back to the Tasks app if you select an ev
 > **How to test:** `q` into the builder, `h` until you're on the first chip of a group, then `h` once more → the app nav takes focus (revealing it if collapsed, landing on the active view). Anywhere else, `h` still moves a chip.
 >
 > *Fixed in `queryKey`: `h` when `kbCell===0` → `enterSidebar()`. Same rule the task list and the recurrence sub-pane already use. **Does not pre-empt e.3** — that's the calendar's own `h` conflict (`h` = previous day), still an open decision.*
+
+**a.6 — Feature: `n` should take you INTO the app nav, and close it on a second press (all apps).** Right now I hit `n` twice — once to close it, once to reopen and land in it. Short-circuit that: if the nav is open, `n` puts me in it on whatever project/view/calendar/folder/label I'm on (just like `h` does); pressing `n` while inside it toggles it closed. Same for **`N`** and the app rail — consistency with muscle memory matters more to me than keystroke count. *(This is what makes **e.3** acceptable: if the nav is one key away, it doesn't matter that `h` can't reach it on the calendar.)*
+> *Confirmed, and the asymmetry was real: **`N` already worked this way** (`toggleDeepNav` branches on "am I IN it?"), but **`n` branched on VISIBLE vs HIDDEN** — so on a visible-but-unfocused nav (the normal state) it just collapsed the thing, forcing the double-press. Generic across every app, present and future: the nav is one key away everywhere.*
+> **✅ RESOLVED**
+> **How to test:** from any app (Tasks / Events / Notes), press **`n`** → the nav takes focus, landing on the **project/view/calendar/folder** you're currently viewing (same landing rule as `h`). Press **`n`** again → it closes and hands the keyboard back to the list. If the nav was collapsed, `n` reveals it *and* enters it in one press. **`N`** does the same for the app rail. On mobile, `n` reveals/hides the slide-in.
+>
+> *One-line change: `toggleNav()` now branches on `showing && focusPane==='side'` — mirroring `toggleDeepNav()` exactly — instead of on `navCollapsed`. `n`/`N` are intercepted before the pane dispatch, so they still fire from inside the nav (which the close case needs).*
 
 ---
 

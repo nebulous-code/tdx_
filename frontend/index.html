@@ -734,17 +734,21 @@ const app = createApp({
       this.scrollSideIntoView();
     },
     exitSidebar(){ this.store.focusPane='list'; this.store.sidebarOpen=false; this.store.moveId=null; },
-    // show/hide the whole sidebar nav column; if we hide it while focused there,
-    // drop keyboard focus back to the task list
+    // n = GO TO the app nav; n again (while you're in it) = close it. Same model as N/the app
+    // rail (toggleDeepNav), so both left-hand drawers behave identically (audit a.6).
+    //
+    // The old rule branched on VISIBLE vs HIDDEN, so `n` on a visible-but-unfocused nav (the
+    // normal state) just collapsed it — you had to press n twice to land in it. Branching on
+    // "am I IN it?" makes one press do the useful thing and the second press close it.
+    // Entering also lands the cursor on the view/project/calendar/folder you're currently on.
     toggleNav(){
-      if(this.store.navCollapsed){
-        // expanding: reveal and drop the cursor into the nav (like h/←)
-        this.enterSidebar();
+      const mobile = window.matchMedia('(max-width: 860px)').matches;
+      const showing = mobile ? this.store.sidebarOpen : !this.store.navCollapsed;
+      if(showing && this.store.focusPane==='side'){
+        if(mobile) this.store.sidebarOpen = false; else this.store.navCollapsed = true;
+        this.exitSidebar();                 // hand the keyboard back to the list
       } else {
-        // collapsing: hide and, if we were navigating it, fall back to the list
-        this.store.navCollapsed = true;
-        this.store.sidebarOpen = false;
-        if(this.store.focusPane==='side') this.exitSidebar();
+        this.enterSidebar();                // reveal if hidden, then drop the cursor in
       }
     },
     // ---- query builder keyboard navigation ----
