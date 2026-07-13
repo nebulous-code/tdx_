@@ -21,6 +21,7 @@ window.EventDetail = {
     const start = e.startAt || Rec.ymd(new Date());
     const f = {
       id: e.id || null,
+      readableId: e.readableId || null,   // display-only (e_0001); the uuid stays canonical
       title: e.title || '',
       allDay: e.allDay ?? true,
       date: start.slice(0, 10),
@@ -95,7 +96,7 @@ window.EventDetail = {
   <div class="detail">
     <div class="detail-head">
       <span class="mut">event</span>
-      <span class="cy">{{ f.id ? '#'+f.id : 'new' }}</span>
+      <span class="cy">{{ f.id ? (f.readableId || '') : 'new' }}</span>
       <span class="x" @click="kbAttemptClose" title="Close (esc)">✕</span>
     </div>
 

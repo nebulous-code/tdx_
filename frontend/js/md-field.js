@@ -19,12 +19,19 @@ window.MdField = {
     placeholder: { type: String, default: '# markdown…' },
   },
   emits: ['update:modelValue', 'submit'],
-  data() { return { editing: false }; },
+  data() { return { editing: false, mdReady: !!window.MdRender }; },
+  // markdown-it is lazy-loaded (it's big) and used to ride in with the notes module only —
+  // which left task/event notes showing raw `**text**` until you'd visited Notes. Pull it in
+  // here; `mdReady` is reactive, so the body re-renders the moment it lands.
+  mounted() {
+    if (this.mdReady || !window.loadMarkdown) return;
+    window.loadMarkdown().then(() => { this.mdReady = true; }).catch(() => {});
+  },
   computed: {
     rendered() {
       const v = this.modelValue || '';
       if (!v.trim()) return '';
-      return window.MdRender ? window.MdRender.html(v) : v;
+      return this.mdReady && window.MdRender ? window.MdRender.html(v) : v;
     },
   },
   methods: {

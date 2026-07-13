@@ -11,6 +11,18 @@
   const md = window.markdownit({ html: false, linkify: true, breaks: false, typographer: false });
   if (window.markdownitMark) md.use(window.markdownitMark);
 
+  // A readable id ([[t_0001]], or a cross-user [[alice_t_0001]]) — mirrors the server's
+  // READABLE_LINK in services/markdown.ts, which is what turns these into note_links edges.
+  const READABLE = /^(?:.+_)?[ten]_\d+$/i;
+  // Link targets are resolved through the store (titles stay live — a renamed task re-renders
+  // with its new title, since the store caches are reactive). Renderer stays usable without a
+  // store (tests, a bare page): no resolver → no title, and we still never print a raw id.
+  const resolve = (type, id) => {
+    try {
+      return window.store && window.store.resolveLink ? window.store.resolveLink(type, id) : null;
+    } catch (e) { return null; }
+  };
+
   // ---- clickable task-list checkboxes, line-mapped for write-back ----
   md.core.ruler.after('inline', 'tdx-tasklists', (state) => {
     const t = state.tokens;
@@ -61,13 +73,28 @@
       const typed = inner.match(/^(task|event):([\w-]+)(?:\|([^\]]*))?$/);
       const tok = state.push('html_inline', '', 0);
       if (typed) {
-        const display = (typed[3] || '').trim() || `${typed[1]}:${typed[2]}`;
+        // legacy typed link. Show the target's TITLE — never the raw uuid (§5: no UUID
+        // reaches the UI). Unresolvable (deleted, or the cache hasn't landed) → the type word.
+        const hit = resolve(typed[1], typed[2]);
+        const display = (typed[3] || '').trim() || (hit && hit.title) || typed[1];
         tok.content = `<span class="wikilink" data-type="${typed[1]}" data-id="${esc(typed[2])}">${esc(display)}</span>`;
       } else {
         const parts = inner.split('|');
         const name = parts[0].trim();
-        const display = (parts[1] || '').trim() || name;
-        tok.content = `<span class="wikilink" data-note="${esc(name)}">${esc(display)}</span>`;
+        const alias = (parts[1] || '').trim();
+        // readable-id link ([[t_0001]], the form the `[[` picker writes) — resolve it to the
+        // live title so the body never goes stale, and hand the click handler the uuid.
+        // Mirrors the server's READABLE_LINK (services/markdown.ts); the optional `alice_`
+        // prefix is a cross-user ref the client can't resolve → falls through as plain text.
+        const hit = READABLE.test(name) ? resolve(null, name) : null;
+        if (hit) {
+          const display = alias || hit.title || name;
+          tok.content = `<span class="wikilink" data-type="${hit.type}" data-id="${esc(hit.id)}">${esc(display)}</span>`;
+        } else if (READABLE.test(name)) {
+          tok.content = `<span class="wikilink dangling" data-rid="${esc(name)}">${esc(alias || name)}</span>`;
+        } else {
+          tok.content = `<span class="wikilink" data-note="${esc(name)}">${esc(alias || name)}</span>`;
+        }
       }
     }
     state.pos = end + 2;

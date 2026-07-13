@@ -994,6 +994,8 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .mixed-row .mx-meta { flex: 0 0 auto; font-size: 10px; }
 .md-body .wikilink { color: var(--amber-hi); cursor: pointer; border-bottom: 1px dotted var(--amber-mut); }
 .md-body .wikilink:hover { text-shadow: var(--glow); }
+/* a readable-id link whose target we can't resolve (deleted, or another user's item) */
+.md-body .wikilink.dangling { color: var(--amber-mut); border-bottom-style: dashed; }
 
 /* notes list keyboard cursor + the [[ link picker dropdown */
 .notes-row.on { background: var(--bg-2); box-shadow: inset 2px 0 0 var(--amber-hi); }

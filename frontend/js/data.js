@@ -163,6 +163,11 @@
     currentUser: null,       // { id, username, email } once authenticated; null = logged out
     // ---- calendar / events (D2) ----
     events: [],              // event occurrences for the calendar's visible range
+    // Notes and the full event series aren't in the store (they're fetched per-screen), but
+    // the markdown renderer needs to resolve [[t_0001]] / [[task:<uuid>]] links to a TITLE from
+    // anywhere a body renders. fetchNotes/fetchEventList fill these; resolveLink reads them.
+    noteCache: [],           // last-fetched note list (id, title, readableId, …)
+    eventCache: [],          // last-fetched event series (±1y window, deduped)
     eventDetailOpen: false,  // the event editor drawer
     editingEvent: null,      // the event being created/edited
     noteDetailOpen: false,   // the note PEEK drawer (metadata + light edit; §4)
@@ -306,6 +311,25 @@
       if(t.field==='type' && !t.neg) for(const tok of String(t.value).split(',').map(s=>s.trim()))
         if(tok==='event' || tok==='note') return false;
     return true;
+  };
+
+  // Resolve a link target for the markdown renderer (§5): either a TYPED uuid link
+  // ([[task:<uuid>]], type given) or a readable id ([[t_0001]], type null). Returns
+  // { type, id, title } or null. Reads the reactive caches, so a body re-renders on its
+  // own once fetchNotes/fetchEventList land. A cross-user ref (alice_t_0001) never
+  // resolves here — the client only holds your own items — so it renders as plain text.
+  store.resolveLink = (type, id) => {
+    if(!id) return null;
+    const hit = (t, o) => o ? { type:t, id:o.id, title:o.title || '' } : null;
+    if(type==='task')  return hit('task',  store.tasks.find(t=>t.id===id));
+    if(type==='event') return hit('event', store.eventCache.find(e=>e.id===id) || store.events.find(e=>e.id===id));
+    if(type==='note')  return hit('note',  store.noteCache.find(n=>n.id===id));
+    if(type) return null;
+    const rid = String(id).toLowerCase();
+    const byRid = (o) => (o.readableId||'').toLowerCase() === rid;
+    return hit('task',  store.tasks.find(byRid))
+        || hit('event', store.eventCache.find(byRid) || store.events.find(byRid))
+        || hit('note',  store.noteCache.find(byRid));
   };
 
   // completion filter (open / completed pills + the list-head toggle). A task passes if

@@ -11,7 +11,7 @@ window.TaskDetail = {
   <div class="detail" :class="{ hidden: !store.detailOpen || !task }">
     <div v-if="task" class="detail-head">
       <span class="mut">task</span>
-      <span class="cy">#{{ task.id }}</span>
+      <span v-if="task.readableId" class="cy">{{ task.readableId }}</span>
       <span v-if="parentTask" class="mut">· sub of "{{ parentTask.title.slice(0,18) }}"</span>
       <span class="x" @click="close" title="Close (esc)">✕</span>
     </div>

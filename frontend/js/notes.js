@@ -254,6 +254,9 @@ window.NotesView = {
     openWikilink(el) {
       const type = el.getAttribute('data-type');
       if (type) { this.openEntity(type, el.getAttribute('data-id')); return; }
+      // a readable id the renderer couldn't resolve: deleted, or someone else's item
+      const rid = el.getAttribute('data-rid');
+      if (rid) { this.store.toast(rid + ' not found'); return; }
       const name = (el.getAttribute('data-note') || '').toLowerCase();
       const note = this.list.find((n) => (n.title || '').toLowerCase() === name);
       if (note) this.store.openNoteDrawer(note.id);   // peek in place (§4.3)

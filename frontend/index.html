@@ -246,6 +246,11 @@ function loadScript(src){
   });
   return _scriptCache[src];
 }
+// markdown-it + our renderer, loaded once and shared. NOT notes-only: task/event notes
+// render markdown too (§4.3, via md-field), so anything that renders a body pulls this in.
+window.loadMarkdown = () => loadScript('js/markdown-it.min.js')
+  .then(()=>loadScript('js/markdown-it-mark.min.js'))
+  .then(()=>loadScript('js/markdown-render.js'));
 // Endpoint base per store array (granular API).
 const SYNC_EP = { tasks:'/api/tasks', projects:'/api/projects', calendars:'/api/calendars', folders:'/api/folders', labels:'/api/labels', savedQueries:'/api/saved-queries' };
 
@@ -1110,7 +1115,7 @@ const app = createApp({
       try{
         const r = await fetch('/api/notes', { credentials:'include' });
         if(r.status===401){ this.handleAuthExpired(); return []; }
-        if(r.ok) return await r.json();
+        if(r.ok){ this.store.noteCache = await r.json(); return this.store.noteCache; }   // cache → store.resolveLink
       }catch(e){ this.store.toast('offline — notes not loaded'); }
       return [];
     };
@@ -1179,6 +1184,7 @@ const app = createApp({
           for(const o of (await res.json()).occurrences){
             if(!seen.has(o.id)){ seen.add(o.id); out.push({ id:o.id, title:o.title, startAt:o.startAt, readableId:o.readableId }); }
           }
+          this.store.eventCache = out;   // cache → store.resolveLink
           return out;
         }
       }catch(e){ this.store.toast('offline — events not loaded'); }
@@ -1277,9 +1283,7 @@ app.component('linked-items', window.LinkedItems);
 // (the event editor stays eager — it opens from task links too)
 app.component('calendar-view', defineAsyncComponent(() => loadScript('js/calendar.js').then(() => window.CalendarView)));
 app.component('notes-view', defineAsyncComponent(() =>
-  loadScript('js/markdown-it.min.js')
-    .then(() => loadScript('js/markdown-it-mark.min.js'))
-    .then(() => loadScript('js/markdown-render.js'))
+  window.loadMarkdown()
     .then(() => loadScript('js/notes.js'))
     .then(() => window.NotesView)));
 app.component('event-detail', window.EventDetail);
