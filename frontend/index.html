@@ -140,7 +140,7 @@
         <note-detail v-if="store.noteDetailOpen" :store="store" @close="store.noteDetailOpen=false"></note-detail>
       </transition>
       <transition name="drawer">
-        <day-detail v-if="store.dayDetailOpen" ref="dayDetail" :store="store"></day-detail>
+        <day-detail v-if="store.dayDetailOpen" ref="dayDetail" :store="store" @shift-day="shiftDay"></day-detail>
       </transition>
     </main>
 
@@ -416,6 +416,15 @@ const app = createApp({
     },
     openCalendarModal(mode, calendar){
       this.calendarModal = { mode, calendar: calendar||null };
+    },
+    // H/L in the open agenda = previous / next day (e.8). The CALENDAR owns the cursor, so we
+    // move IT and then re-point the drawer — moving only store.dayDetailYmd would strand the
+    // grid cursor on the old date (Esc would drop you back on the wrong day). moveCursor()
+    // already handles a month boundary: it syncs year/month and reloads that month's events.
+    shiftDay(d){
+      const cal=this.$refs.cal; if(!cal) return;
+      cal.moveCursor(d);
+      cal.openDay();          // dayDetailYmd = the new cursor → the drawer's ymd watcher resets it
     },
     openFolderModal(mode, parentId, folder){
       this.folderModal = { mode, parentId: parentId||null, folder: folder||null };

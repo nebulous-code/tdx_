@@ -50,7 +50,9 @@ window.HelpModal = {
       ]},
       { name:'day schedule', code:'amber', items:[
         { k:'j  /  k',   d:'step the day by hour-slot, stopping on events' },
-        { k:'h  /  l',   d:'move across overlapping events in the same hour' },
+        { k:'J  /  K',   d:'jump to the next / previous thing that’s actually there — skips the empty hours' },
+        { k:'h  /  l',   d:'move across overlapping events in the same hour (and across the all-day / task chips)' },
+        { k:'H  /  L',   d:'previous / next day — the agenda follows the calendar cursor' },
         { k:'e',         d:'open the focused event’s detail (drawer to the right)' },
         { k:'i',         d:'new event at the focused hour' },
         { k:'mouse',     d:'click an event to open it · click an empty hour to add one' },

@@ -6,7 +6,7 @@ Some notes about keyboard accessiblity for section 6. (2E §6.4 — the final ke
 > Claude's assessment + the order of attack live at the bottom under **Triage**.
 
 ## Status
-**31 of 33 resolved.** Every original audit item (n.1–n.15 · e.1–e.6 · a.1–a.8) is closed; what's left was all spun out during testing. **n.16** is done and user-tested — the vault's base directory is now a folder you can **name** (a user preference, default `Inbox`; blank hides it), which is the last structural gap in notes. **n.17** shipped as something bigger than planned: **one creation engine for all three apps** (`CL`, `docs/CREATION_LANGUAGE.md`) — tasks got their first **typed due date** (`$friday`), notes got the whole grammar. Still open: **e.8** and **e.9** (captured, not scheduled) and **n.11** (⛔ gated on you).
+**33 of 34 resolved.** Every original audit item (n.1–n.15 · e.1–e.6 · a.1–a.8) is closed; what's left was all spun out during testing. **n.16** is done and user-tested — the vault's base directory is now a folder you can **name** (a user preference, default `Inbox`; blank hides it), which is the last structural gap in notes. **n.17** shipped as something bigger than planned: **one creation engine for all three apps** (`CL`, `docs/CREATION_LANGUAGE.md`) — tasks got their first **typed due date** (`$friday`), notes got the whole grammar. **n.11 is closed as a non-issue** — n.13 made the link chips keyboard-navigable, so every link is already reachable without a mouse. **The notes app has nothing open.** One item left: **e.9**.
 
 | batch | items |
 |---|---|
@@ -15,19 +15,19 @@ Some notes about keyboard accessiblity for section 6. (2E §6.4 — the final ke
 | 3 | a.3 the ⊞ query button · a.4 the quick-add ⚠ · a.5 `h` in the query builder · query-bar polish (`c` = clear · `query`⇄`hide Q` · text-only buttons) |
 | 4 | e.3 **decided** (`h` stays "previous day"; the nav is reached with `n`) · a.6 `n` enters the app nav, second press closes it |
 | 5 | ✅ n.10 · ✅ e.4 · ✅ a.7 · ✅ a.2 (one shared list cursor) · ✅ a.8 (every drawer slides) · ❌ n.13 · ❌ n.14 |
-| 6 | ✅ n.13 re-fix (`+ link` as its own ladder rung, entered with `i` **or** space) · ✅ n.14 **redo** (the notes quick-add bar — the phantom "unsaved note" state is gone) · ✅ n.15 (`f` = find text **in this view**; the box was silently searching the whole vault) · ✅ n.18 (`e` peeks a note in the right-hand drawer) · e.7 (`e` = the day's agenda · `E` = agenda + the day's first item) |
+| 6 | ✅ n.13 re-fix (`+ link` as its own ladder rung, entered with `i` **or** space) · ✅ n.14 **redo** (the notes quick-add bar — the phantom "unsaved note" state is gone) · ✅ n.15 (`f` = find text **in this view**; the box was silently searching the whole vault) · ✅ n.18 (`e` peeks a note in the right-hand drawer) · ✅ e.7 (`e` = the day's agenda · `E` = agenda + the day's first item) |
 | 7 | ✅ **e.7** (`e` = the day’s agenda · `E` = agenda + the day’s first item) · ✅ **n.16** — the vault's base directory as a folder you can name (`users.notes_root_name`, default `Inbox`, blank = hidden) · `folder:<name>` addresses the vault root · the verbs on that row are inert by construction |
+| 8 | ✅ **n.17** — the **creation language**: one engine (`CL`), `#` `$` `/` `{…}` on tasks **and** notes; tasks gain a typed due date · **n.11** closed as a non-issue (the link chips are navigable — n.13) · **e.8** (`J`/`K` jump event-to-event in the agenda) |
 
 **Behavior changes now live:** **`e` on the calendar** opens the day's agenda (that was `E`); **`E`** now opens the agenda *and* the day's first item in your current view. **`f` on the notes list** finds text *within the current folder/view* (it used to search the whole vault, ignoring both). **`d` in the note body** is vim's operator prefix (`dd`/`dw`), not delete-note (that's on the field rows + the notes list). **`n`** enters the app nav rather than just toggling it. **`c`** clears the query (was `x`). **Notes are created from a quick-add bar** (`i`, then a name, then `↵`) — the `＋ new` button and the unsaved-note editor state are gone.
 
-**Outstanding:** **e.8** (`J`/`K` = jump event-to-event in the agenda) · **e.9** (the calendar has no creation-language caller) — both captured, not scheduled · **n.11** (⛔ gated on the user — suggestions only, NOT approved to build).
+**Outstanding:** **e.9** — the calendar has no creation-language caller (captured, not scheduled). That's the whole list.
 
 ## notes
 
 ### Open
 
-**n.11 — Feature: navigate wikilinks with keyboard.** Not sure how I want to implement this. Right now you've got to click any imbedded wikilinks with a mouse. Open to ideas on how to get this one done.
-> *Depends on **n.3** (there's no in-note field/nav ladder to hang link-hopping off of yet) and on **n.7** (links have to resolve before they're worth navigating to). Ideas in Triage — no decision needed now.*
+*Nothing — every notes item is resolved.*
 
 ### Resolved issues
 
@@ -109,6 +109,11 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 > **How to test:** in the app nav, `h` on an **expanded** section header (Views / Projects / Labels…) now **collapses that section** and leaves the cursor on it. `h` again — with nothing left to collapse — jumps out to the app rail. `h` on a project still collapses its children, then walks up to its parent. (`Tab` still toggles a section too.)
 >
 > *One-line fix in `sidebarKey`'s `case 'h'`: on a `head` row, collapse via `toggleSection()` when `!store.navSections[section]`, and only `enterDeepNav()` once it's already collapsed. It now mirrors `case 'l'`, which expands a collapsed header. That is the §4.4 rule verbatim.*
+
+**n.11 — Feature: navigate wikilinks with keyboard.** Not sure how I want to implement this. Right now you've got to click any imbedded wikilinks with a mouse. Open to ideas on how to get this one done.
+> *Originally blocked on **n.3** (no in-note ladder to hang link-hopping off) and **n.7** (links had to resolve first). Both landed — but so did something that made the feature unnecessary.*
+> **✅ CLOSED — not an issue (user's call).** **n.13** made the **link chips keyboard-navigable**: the links row is a KbForm grid, `h`/`l` cross the chips, `space` opens the linked item in the right-hand drawer, and `i`/`space` reaches the `+ link` picker. **Every link a note has is already reachable without a mouse** — just from the links row rather than from inside the prose. *User: "now that link chips are navigatable I can link to them on that… the functionality is there and I don't have any better solutions, so I'm willing to let it lie until I come up with a better idea."*
+> *What a future version would add, if an idea shows up: hopping to a link **from where it sits in the text** (a `[[wikilink]]` mid-sentence), rather than from the chip list at the bottom. That's an ergonomic nicety, not a gap in access — which is why it isn't worth an open item.*
 
 **n.12 — Feature: vim delete operators in the note body (`dd`, `D`, `dw`).** None of these exist today — the body's normal mode has exactly one `d` binding (delete the whole note). `dd` deletes the current line, `D` deletes from the cursor to end of line, `dw` deletes a word forward.
 > *Spun out of the **n.3** `d` decision, which frees `d` in the body to act as an operator prefix. Same family as **n.2** (`o`/`O`) and **n.5** (`r`) — all normal-mode operators on the §6.1 block cursor, and all cheap once the first one establishes the pending-key pattern (the `gg` `pendingG` flag is the existing precedent). **Depends on n.3** (the row-context split is what makes `d` available at all).*
@@ -216,10 +221,30 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 > - **`type:` rule (e.5).** On a **tasks** calendar, `i` creates a *task*. A quick-add bar there should create a task and parse the **task** grammar (`!priority` becomes a symbol again) — the bar's type follows the app, not the surface.
 > - *Cheapest first step, if you want one: put the bar in the **day-agenda drawer** only. It's already a list with a cursor and an `i`, so it needs no new layout thinking, and it's where you're standing when you actually schedule something.*
 
-**e.8 — Feature: `J`/`K` in the open agenda should jump event-to-event, not hour-by-hour.** Walking an empty day one hour at a time to reach the 3pm is tedious. *(Not for today — captured while testing **e.7**.)*
-> *Shape of it: `j`/`k` already walk `navCells` (`day-detail.js:131`), which is **every** stop — the all-day strip, the dated-task strip, each hour that has events, **and every empty hour in between**. That's the right behavior for `j`/`k` (you need the empty slots: `i` on one creates there). **`J`/`K` are unbound in this drawer**, so they're free for the coarse move: skip to the next/previous cell that actually **has** something (`type` is `allday`/`task`/`event`, never `slot`) — the same `j`-vs-`J` split the rest of the app uses (fine step vs. jump). Small: a filtered index walk over the existing `navCells`, no new state. **Note the collision to avoid:** `J`/`K` elsewhere mean "swap what the drawer shows" via `store.listSwap()` (**a.2**) — the day drawer isn't a list-cursor consumer, so there's no conflict today, but if the agenda ever gets one, this binding has to win while it's focused.*
-
 ### Resolved issues
+
+**e.8 — Feature: the agenda's SHIFT keys — `J`/`K` jump event-to-event, `H`/`L` change the day.** Started as *"`J`/`K` should jump event-to-event, not hour-by-hour"* (walking an empty day one hour at a time to reach the 3pm is tedious) and **generalized on the user's call** into the agenda's whole shift layer: *"in a similar vein of extending the navigation… `H`/`L` should switch days forward and back."*
+>
+> **The rule the agenda now follows, end to end: lowercase steps, uppercase jumps.**
+>
+> | | fine (lower) | jump (UPPER) |
+> |---|---|---|
+> | **vertical** | `j`/`k` — every stop, **including empty hours** | `J`/`K` — the next thing that's **actually there** |
+> | **horizontal** | `h`/`l` — across overlapping events + the all-day / task chips | `H`/`L` — **previous / next day** |
+>
+> *That's the same shape as the calendar grid behind it (`h`/`l` = day, `H`/`L` = month): lowercase is the fine move, uppercase is the coarse one. Both new bindings were **unbound** in this drawer, so nothing was taken away — which is exactly why `h`/`l` keep crossing columns instead of being repurposed for days.*
+>
+> **`J`/`K` — DECIDED (user):** stop on **everything that has content** — the all-day strip, the dated-tasks strip, and each hour holding events (every `navCell` whose `type !== 'slot'`). One rule: *jump to the next thing that's actually there.* And **clamp, don't wrap** — `J` on the last item stays put, matching `j`/`k` here and `store.listSwap` everywhere else. A `J` that teleports you to the top of the day is a surprise, not a shortcut.
+> *Built as a `jump(d)` index walk over the existing `navCells`, reusing `move()`'s arrival behavior (`cursor.col = 0` + `scrollFocusIntoView()`) — it differs from `move()` only in **which index it lands on**. `J`/`K` are **additive**: `j`/`k` still stop on every empty hour, because `i` on one is how you create at that hour.*
+> ***The collision to stay aware of:*** `J`/`K` elsewhere mean "swap what the drawer shows" via `store.listSwap()` (**a.2**) — the agenda isn't a list-cursor consumer, so there's no conflict today, but if it ever registers one, this binding must still win while it has the keyboard.
+>
+> **`H`/`L` — the day switch.** *The trap here is ownership:* the **calendar** owns the cursor, and the drawer is a *view* of it (`store.dayDetailYmd`). Moving only the drawer's day would strand the grid cursor on the old date — `Esc` would drop you back on the wrong day, and `e` would reopen it. So the drawer **emits `shift-day`** and the app moves the calendar (`cal.moveCursor(±1)`, which already syncs year/month and reloads events across a month boundary) then re-points the drawer (`cal.openDay()`). The drawer's existing `ymd` watcher resets the cursor to the top and scrolls to morning, so a new day arrives clean.
+>
+> ***The `h`/`l` question this raised, and why it went the way it did:*** the user's first framing was `h`/`l` **and** `H`/`L` switching days — but `h`/`l` are **already bound** here (crossing overlapping events, and the chips on the all-day/task strips). Making them switch days would have deleted that. The alternative — `h`/`l` switch days only when there's nothing to cross — was rejected for the same reason **e.7**'s first build was: a key whose meaning depends on where the cursor happens to sit is unpredictable from the keyboard.
+>
+> **✅ READY TO TEST**
+> **How to test — `J`/`K`:** open a day with a **9am and a 2pm and nothing else** (`e` on the day). `J` from the top → the all-day strip if there is one, else the dated-tasks strip, else the **9am** — **never an empty hour**. `J` again → the **2pm**, skipping the empties between. `K` walks back up. `J` on the **2pm** (nothing after it) → **stays put**; same for `K` at the top. `j`/`k` still crawl **every** hour, and `i` on an empty slot still creates at that hour. An **empty day** → `J`/`K` do nothing; `j`/`k` still walk it.
+> **How to test — `H`/`L`:** in the agenda, `L` → **tomorrow's** agenda, `H` → **yesterday's**; the cursor lands at the top of the new day and the view scrolls to morning. **Watch the grid behind it: the calendar's day cursor moves too** — `Esc` leaves you on the day you navigated to, not the one you started on, and `e` reopens *that* day. Cross a **month boundary** (`H` from the 1st, `L` from the 31st) — the grid flips month and loads it. `h`/`l` still cross overlapping events and the all-day/task chips, unchanged.
 
 **e.7 — Feature: `e` on the calendar was a dead key; make it open the agenda, and `E` open the day's one item.** Noticed after living with it: `E` (shift) opening the agenda is unintuitive when plain `e` does nothing at all.
 > *Research first — **it was intentional, not an oversight.** `2E_UI_POLISH.md` §4.2: "**`E` = day schedule; `e` = event detail.** `e` is already 'edit/detail' for tasks … so `e` stays 'this item's detail' and **`E`** is 'this day's schedule.' The `E`-vs-`e` split is intentional but not yet fully designed." `e` **is** wired one level down — inside the day drawer it opens the focused event's detail. It was dead on the **grid** because the grid's cursor selects a **day**, not an item: there was no "focused item" for it to open.*

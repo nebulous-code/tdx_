@@ -13,6 +13,7 @@ const DEFAULT_DUR = 60;        // minutes assumed when an event has no end time
 
 window.DayDetail = {
   props: ['store'],
+  emits: ['shift-day'],   // H/L → the CALENDAR moves its cursor a day, then re-points us at it
   data() { return { cursor: { i: 0, col: 0 } }; },
   computed: {
     ymd() { return this.store.dayDetailYmd; },
@@ -132,8 +133,22 @@ window.DayDetail = {
       switch (e.key) {
         case 'j': case 'ArrowDown': e.preventDefault(); this.move(1); break;
         case 'k': case 'ArrowUp':   e.preventDefault(); this.move(-1); break;
+        // J/K = the coarse move (audit e.8). Elsewhere in the app J/K mean "swap what the
+        // drawer shows" via store.listSwap (a.2) — no conflict here, because the agenda is
+        // NOT a list-cursor consumer. If it ever registers one, this binding must still win
+        // while the agenda has the keyboard.
+        case 'J': e.preventDefault(); this.jump(1); break;
+        case 'K': e.preventDefault(); this.jump(-1); break;
         case 'l': case 'ArrowRight': e.preventDefault(); this.moveCol(1); break;
         case 'h': case 'ArrowLeft':  e.preventDefault(); this.moveCol(-1); break;
+        // H/L = the coarse horizontal move: PREVIOUS / NEXT DAY (e.8). Same rule as the rest of
+        // this drawer — lowercase steps, uppercase jumps — and the same meaning H/L already have
+        // on the grid behind it (the coarse horizontal move there is a month; here it's a day).
+        // We EMIT rather than set store.dayDetailYmd ourselves: the CALENDAR owns the cursor, and
+        // moving only the drawer's day would strand the grid cursor on the old date (Esc would
+        // drop you back on the wrong day, and `e` would reopen it).
+        case 'H': e.preventDefault(); this.$emit('shift-day', -1); break;
+        case 'L': e.preventDefault(); this.$emit('shift-day', 1); break;
         case 'e': e.preventDefault(); this.openFocused(); break;
         case 'i': e.preventDefault(); this.createAtFocus(); break;
         case 'Escape': e.preventDefault(); this.store.dayDetailOpen = false; break;
@@ -144,6 +159,23 @@ window.DayDetail = {
       this.cursor.i = Math.max(0, Math.min(n - 1, this.cursor.i + d));
       this.cursor.col = 0;                                  // arrive leftmost in a new group
       this.scrollFocusIntoView();
+    },
+    // J/K: skip to the next/previous cell that actually HAS something — the all-day strip, the
+    // dated-tasks strip, or an hour holding events — never an empty slot (audit e.8). Walking a
+    // quiet day hour-by-hour to reach the 3pm is the tedium this removes.
+    //
+    // ADDITIVE, never a replacement: j/k still stop on every empty hour, because `i` on one is
+    // how you create at that hour. Clamps rather than wraps — the same rule j/k and listSwap
+    // use, so J can't teleport you somewhere surprising.
+    jump(d) {
+      const cells = this.navCells;
+      for (let i = this.cursor.i + d; i >= 0 && i < cells.length; i += d) {
+        if (cells[i].type === 'slot') continue;
+        this.cursor.i = i;
+        this.cursor.col = 0;                                // arrive leftmost, same as move()
+        this.scrollFocusIntoView();
+        return;
+      }
     },
     moveCol(d) {
       const c = this.focusedCell; if (!c || !c.events) return;   // across overlap columns / all-day items
