@@ -9,12 +9,17 @@ window.LinkedItems = {
   // kbFocus = which chip the HOST's keyboard cursor is on (-1 = not on the links row). The links
   // row lives in the host's kbRows() (that's where KbForm is), but the chips render here — so the
   // host tells us which one is focused, and we tell the host what we've loaded (audit n.13).
-  props: { store: Object, type: String, id: String, kbFocus: { type: Number, default: -1 } },
+  // addFocus = the host's cursor is on its 'addlink' row (so the picker shows the kfocus ring).
+  props: {
+    store: Object, type: String, id: String,
+    kbFocus: { type: Number, default: -1 },
+    addFocus: { type: Boolean, default: false },
+  },
   // 'links' is NOT decoration: $refs is not reactive, so a host's kbRows() reading
   // $refs.links.links would run before we mount, see undefined, emit ZERO nav rows, and — having
   // registered no dependency — never recompute. Emitting into host state is what makes it work.
   emits: ['links', 'pick'],
-  data() { return { links: [], query: '', events: [], notes: [] }; },
+  data() { return { links: [], query: '', events: [], notes: [], sel: 0 }; },
   computed: {
     pickTypes() { return ['task', 'event', 'note'].filter((t) => t !== this.type); },
     candidates() {
@@ -31,7 +36,10 @@ window.LinkedItems = {
       return out;
     },
   },
-  watch: { id() { this.load(); } },
+  watch: {
+    id() { this.load(); },
+    query() { this.sel = 0; },   // a new filter starts at the top of the results
+  },
   mounted() { this.load(); },
   methods: {
     async load() {
@@ -57,6 +65,20 @@ window.LinkedItems = {
       }
     },
     async unlink(l) { if (await this.store.deleteLink(l.id)) await this.load(); },
+    // The candidate list used to be mouse-only: you could focus the picker and type a filter, but
+    // there was no way to CHOOSE a result without clicking. Same model as the `[[` menu in the
+    // notes editor: ↓/↑ move, Enter/Tab pick, Esc leaves. (n.13 follow-up)
+    onPickerKey(e) {
+      const n = this.candidates.length;
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.blur(); return; }
+      if (!n) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); this.sel = Math.min(n - 1, this.sel + 1); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); this.sel = Math.max(0, this.sel - 1); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault(); e.stopPropagation();   // .stop: don't let the host's KbForm also submit
+        this.pick(this.candidates[this.sel]);
+      }
+    },
     // public — a host's KbForm `i`/space on its "links" row lands here (mirrors md-field.focus())
     focus() { const el = this.$refs.add; if (el && el.focus) el.focus(); },
     // Esc out of the picker → back to the host's ladder. Must live on the field: the app's global
@@ -76,10 +98,11 @@ window.LinkedItems = {
       <span v-if="!links.length" class="mut lc-empty">none yet</span>
     </div>
     <div class="link-add">
-      <input ref="add" v-model="query" class="ti" @focus="ensureSources" @keydown.esc.stop.prevent="blur"
-             :placeholder="'＋ link a ' + pickTypes.join(' / ') + '…'">
+      <input ref="add" v-model="query" class="ti" :class="{ kfocus: addFocus }" @focus="ensureSources"
+             @keydown="onPickerKey" :placeholder="'＋ link a ' + pickTypes.join(' / ') + '…'">
       <div v-if="candidates.length" class="ev-link-menu">
-        <div v-for="c in candidates" :key="c.type + c.id" class="ev-link-opt" @click="pick(c)" :title="c.title"><span class="lc-type mut">{{ c.type }}</span>{{ c.title }}</div>
+        <div v-for="(c,i) in candidates" :key="c.type + c.id" class="ev-link-opt" :class="{ on: i === sel }"
+             @mousedown.prevent="pick(c)" :title="c.title"><span class="lc-type mut">{{ c.type }}</span>{{ c.title }}</div>
       </div>
     </div>
   </div>`,

@@ -943,6 +943,9 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .ev-link-menu { position: absolute; left: 0; right: 0; top: 100%; z-index: 5; margin-top: 2px; background: var(--bg-1); border: 1px solid var(--line-2); border-radius: var(--radius); box-shadow: 0 6px 24px rgba(0,0,0,.5); max-height: 180px; overflow-y: auto; }
 .ev-link-opt { padding: 4px 8px; font-size: 12px; color: var(--amber-dim); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ev-link-opt:hover { background: var(--bg-3); color: var(--amber-hi); }
+/* the keyboard-selected candidate (↓/↑ in the + link picker) — same look as :hover so the mouse
+   and the keyboard agree on what "the one you're about to pick" looks like */
+.ev-link-opt.on { background: var(--bg-3); color: var(--amber-hi); }
 
 /* notes screen (D2 2c) */
 .notes { display: flex; flex-direction: column; min-height: 0; flex: 1; overflow: hidden; }
@@ -1074,6 +1077,10 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .link-add { position: relative; }
 .link-add .ti { width: 100%; background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--radius); color: var(--amber-hi); font-family: var(--mono); font-size: 12px; padding: 4px 7px; outline: none; }
 .link-add .ti:focus { border-color: var(--amber-mut); }
+/* The ladder's cursor is parked on the 'addlink' row (i/space drops into the box). It IS a text
+   field in use, so it wears the FIELD cursor — the same inset amber-mut ring as the notes body,
+   subtask quick-add and the selects — not the button ring (n.13). */
+.link-add .ti.kfocus { box-shadow: inset 0 0 0 1px var(--amber-mut); border-radius: var(--radius); }
 .link-add .ev-link-opt .lc-type { font-size: 9px; text-transform: uppercase; margin-right: 4px; }
 
 /* ---- D2 2E: per-app category filters + readable ids ---- */

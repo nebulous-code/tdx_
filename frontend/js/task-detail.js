@@ -118,7 +118,7 @@ window.TaskDetail = {
       <!-- cross-links (D2 2d slice 5) — a KbForm grid row, like labels (audit n.13) -->
       <div class="field" v-if="task">
         <linked-items ref="links" :store="store" type="task" :id="task.id"
-                      :kb-focus="linkFocus" @links="linkList = $event" @pick="kbPick('links', $event)"></linked-items>
+                      :kb-focus="linkFocus" :add-focus="addLinkFocus" @links="linkList = $event" @pick="kbPick('links', $event)"></linked-items>
       </div>
     </div>
 
@@ -134,6 +134,7 @@ window.TaskDetail = {
   computed: {
     task(){ return this.store.taskById(this.store.selectedTaskId); },
     linkFocus(){ return this.kbCellOf('links'); },   // → <linked-items :kb-focus> (n.13)
+    addLinkFocus(){ return !!this.kbCls('addlink').kfocus; },
     projectOptions(){ return this.store.projectTree(); },   // tree-ordered for the project select
     parentTask(){ return this.task && this.task.parentId ? this.store.taskById(this.task.parentId) : null; },
     subs(){ return this.task ? this.store.subtasks(this.task.id) : []; },
@@ -198,6 +199,9 @@ window.TaskDetail = {
         // links behave exactly like the labels row: j/k skip it, h/l cross the chips, space opens
         { id:'links',     type:'grid',   items:this.linkList, cols:99,
           select:l=>this.$refs.links && this.$refs.links.open(l), when:()=>this.linkList.length>0 },
+        // NOT gated on linkList.length — with zero links the grid row above emits no nav rows at
+        // all, so this is the only way to reach the picker and add the first link (n.13 follow-up)
+        { id:'addlink',   type:'input',  ref:'links', when:()=>!!this.task },   // i/space → linked-items.focus()
         { id:'save',      type:'button', activate:()=>this.save() },
         { id:'duplicate', type:'button', activate:()=>this.duplicate() },
         { id:'delete',    type:'button', activate:()=>this.del() },

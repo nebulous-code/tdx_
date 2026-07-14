@@ -38,6 +38,7 @@ window.NoteDetail = {
   computed: {
     // which link chip the cursor is on → <linked-items :kb-focus> (the child renders the chips) — n.13
     linkFocus() { return this.kbCellOf('links'); },
+    addLinkFocus() { return !!this.kbCls('addlink').kfocus; },
   },
   methods: {
     async load() {
@@ -65,6 +66,8 @@ window.NoteDetail = {
         // links = a grid row, like labels: j/k skip it, h/l cross the chips, space opens (n.13)
         { id: 'links', type: 'grid', items: this.linkList, cols: 99,
           select: (l) => this.$refs.links && this.$refs.links.open(l), when: () => this.linkList.length > 0 },
+        // always available (the grid row disappears when there are no links) — n.13 follow-up
+        { id: 'addlink', type: 'input', ref: 'links', when: () => !!this.f.id },   // i/space → linked-items.focus()
         { id: 'openFull', type: 'button', activate: () => this.openFull() },
         { id: 'cancel', type: 'button', activate: () => this.kbAttemptClose() },
         { id: 'save', type: 'button', activate: () => this.save() },
@@ -105,7 +108,7 @@ window.NoteDetail = {
     </div>
 
     <div v-if="loaded" class="detail-body">
-      <input ref="title" class="d-title" :class="kbCls('title')" v-model="f.title" placeholder="note name" @focus="kbFocusRow('title')" @keydown.enter.prevent="save" @keydown.esc.stop.prevent="blurField">
+      <input ref="title" class="d-title" :class="kbCls('title')" v-model="f.title" placeholder="note name" @focus="kbFocusRow('title')" @keydown.enter.stop.prevent="save" @keydown.esc.stop.prevent="blurField">
 
       <div class="row2">
         <div v-if="store.folders.length" class="field">
@@ -117,7 +120,7 @@ window.NoteDetail = {
         </div>
         <div class="field" :class="kbCls('review')">
           <label>review date</label>
-          <input ref="review" class="input" type="date" v-model="f.reviewAt" @focus="kbFocusRow('review')" @keydown.enter="save" @keydown.esc.stop.prevent="blurField">
+          <input ref="review" class="input" type="date" v-model="f.reviewAt" @focus="kbFocusRow('review')" @keydown.enter.stop.prevent="save" @keydown.esc.stop.prevent="blurField">
         </div>
       </div>
 
@@ -135,7 +138,7 @@ window.NoteDetail = {
 
       <div class="field" v-if="f.id">
         <linked-items ref="links" :store="store" type="note" :id="f.id"
-                      :kb-focus="linkFocus" @links="linkList = $event" @pick="kbPick('links', $event)"></linked-items>
+                      :kb-focus="linkFocus" :add-focus="addLinkFocus" @links="linkList = $event" @pick="kbPick('links', $event)"></linked-items>
       </div>
     </div>
     <div v-else class="detail-body"><span class="mut">loading…</span></div>

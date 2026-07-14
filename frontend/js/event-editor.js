@@ -47,6 +47,7 @@ window.EventDetail = {
   computed: {
     // which link chip the cursor is on → <linked-items :kb-focus> (the child renders the chips) — n.13
     linkFocus() { return this.kbCellOf('links'); },
+    addLinkFocus() { return !!this.kbCls('addlink').kfocus; },
   },
   methods: {
     // the editable form for whatever event the store is pointing at (used by data() AND the
@@ -86,6 +87,8 @@ window.EventDetail = {
         // links = a grid row, like labels: j/k skip it, h/l cross the chips, space opens (n.13)
         { id: 'links', type: 'grid', items: this.linkList, cols: 99,
           select: (l) => this.$refs.links && this.$refs.links.open(l), when: () => this.linkList.length > 0 },
+        // always available (the grid row disappears when there are no links) — n.13 follow-up
+        { id: 'addlink', type: 'input', ref: 'links', when: () => !!this.f.id },   // i/space → linked-items.focus()
         { id: 'cancel', type: 'button', activate: () => this.kbAttemptClose() },
         { id: 'delete', type: 'button', activate: () => this.del(), when: () => !!this.f.id },
         { id: 'save', type: 'button', activate: () => this.save() },
@@ -108,6 +111,14 @@ window.EventDetail = {
     // ---- save / delete (close on success) ----
     async save() {
       if (!this.f.title.trim()) return;
+      // A create is a POST — firing it twice makes two events. Enter used to do exactly that (the
+      // field's inline handler AND KbForm's document listener both called save; the inline ones
+      // now .stop), and this guard closes the door on any other double-fire path too.
+      if (this._saving) return;
+      this._saving = true;
+      try { await this.doSave(); } finally { this._saving = false; }
+    },
+    async doSave() {
       const startAt = this.f.allDay ? this.f.date : this.f.date + 'T' + (this.f.time || '00:00');
       const endAt = !this.f.endDate
         ? null
@@ -139,7 +150,7 @@ window.EventDetail = {
     </div>
 
     <div class="detail-body">
-      <input ref="title" class="d-title" :class="kbCls('title')" v-model="f.title" placeholder="event title" @focus="kbFocusRow('title')" @keydown.enter.prevent="save" @keydown.esc.stop.prevent="blurField">
+      <input ref="title" class="d-title" :class="kbCls('title')" v-model="f.title" placeholder="event title" @focus="kbFocusRow('title')" @keydown.enter.stop.prevent="save" @keydown.esc.stop.prevent="blurField">
 
       <!-- calendar + all-day -->
       <div class="row2">
@@ -159,11 +170,11 @@ window.EventDetail = {
       <div class="row2">
         <div class="field" :class="kbCls('date')">
           <label>starts</label>
-          <input ref="date" class="input" type="date" v-model="f.date" @focus="kbFocusRow('date')" @keydown.enter="save" @keydown.esc.stop.prevent="blurField">
+          <input ref="date" class="input" type="date" v-model="f.date" @focus="kbFocusRow('date')" @keydown.enter.stop.prevent="save" @keydown.esc.stop.prevent="blurField">
         </div>
         <div v-if="!f.allDay" class="field" :class="kbCls('time')">
           <label>time</label>
-          <input ref="time" class="input" type="time" v-model="f.time" @focus="kbFocusRow('time')" @keydown.enter="save" @keydown.esc.stop.prevent="blurField">
+          <input ref="time" class="input" type="time" v-model="f.time" @focus="kbFocusRow('time')" @keydown.enter.stop.prevent="save" @keydown.esc.stop.prevent="blurField">
         </div>
       </div>
 
@@ -171,21 +182,21 @@ window.EventDetail = {
       <div class="row2">
         <div class="field" :class="kbCls('endDate')">
           <label>ends</label>
-          <input ref="endDate" class="input" type="date" v-model="f.endDate" @focus="kbFocusRow('endDate')" @keydown.enter="save" @keydown.esc.stop.prevent="blurField">
+          <input ref="endDate" class="input" type="date" v-model="f.endDate" @focus="kbFocusRow('endDate')" @keydown.enter.stop.prevent="save" @keydown.esc.stop.prevent="blurField">
         </div>
         <div v-if="!f.allDay" class="field" :class="kbCls('endTime')">
           <label>time</label>
-          <input ref="endTime" class="input" type="time" v-model="f.endTime" @focus="kbFocusRow('endTime')" @keydown.enter="save" @keydown.esc.stop.prevent="blurField">
+          <input ref="endTime" class="input" type="time" v-model="f.endTime" @focus="kbFocusRow('endTime')" @keydown.enter.stop.prevent="save" @keydown.esc.stop.prevent="blurField">
         </div>
       </div>
 
       <div class="field" :class="kbCls('location')">
         <label>location</label>
-        <input ref="location" class="input" v-model="f.location" placeholder="location" @focus="kbFocusRow('location')" @keydown.enter="save" @keydown.esc.stop.prevent="blurField">
+        <input ref="location" class="input" v-model="f.location" placeholder="location" @focus="kbFocusRow('location')" @keydown.enter.stop.prevent="save" @keydown.esc.stop.prevent="blurField">
       </div>
       <div class="field" :class="kbCls('recurrence')">
         <label>recurrence</label>
-        <input ref="recurrence" class="input" v-model="f.recurrence" placeholder="e.g. weekly on mon,wed,fri" @focus="kbFocusRow('recurrence')" @keydown.enter="save" @keydown.esc.stop.prevent="blurField">
+        <input ref="recurrence" class="input" v-model="f.recurrence" placeholder="e.g. weekly on mon,wed,fri" @focus="kbFocusRow('recurrence')" @keydown.enter.stop.prevent="save" @keydown.esc.stop.prevent="blurField">
       </div>
 
       <div class="field">
@@ -195,7 +206,7 @@ window.EventDetail = {
 
       <div class="field" v-if="f.id">
         <linked-items ref="links" :store="store" type="event" :id="f.id"
-                      :kb-focus="linkFocus" @links="linkList = $event" @pick="kbPick('links', $event)"></linked-items>
+                      :kb-focus="linkFocus" :add-focus="addLinkFocus" @links="linkList = $event" @pick="kbPick('links', $event)"></linked-items>
       </div>
     </div>
 

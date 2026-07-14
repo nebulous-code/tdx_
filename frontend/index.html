@@ -1161,8 +1161,11 @@ const app = createApp({
       }catch(e){ this.store.toast('offline — events not loaded'); }
     };
     this.store.saveEvent = async (ev) => {
+      // calendarId was missing here: the drawer's calendar picker sent it, the API accepts it
+      // (EventCreateSchema), but it never made it into the body — so choosing a calendar did nothing.
       const body = { title:ev.title, startAt:ev.startAt, endAt:ev.endAt||null, allDay:!!ev.allDay,
-        location:ev.location||null, recurrence:ev.recurrence||null, notes:ev.notes||'', reminder:ev.reminder||null };
+        location:ev.location||null, recurrence:ev.recurrence||null, notes:ev.notes||'', reminder:ev.reminder||null,
+        calendarId:ev.calendarId||null };
       const ok = await this.apiSend(ev.id?'PUT':'POST', ev.id?('/api/events/'+ev.id):'/api/events', body);
       if(ok && this.store.calFrom) await this.store.fetchEvents(this.store.calFrom, this.store.calTo);
       return ok;

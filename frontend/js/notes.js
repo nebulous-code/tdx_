@@ -52,6 +52,7 @@ window.NotesView = {
     },
     // which link chip the cursor is on; -1 while insert mode owns the keyboard (the navCls rule)
     linkFocus() { return this.mode === 'insert' ? -1 : this.kbCellOf('links'); },
+    addLinkFocus() { return this.mode !== 'insert' && !!this.kbCls('addlink').kfocus; },
     editing() { return !!this.sel || this.creating; },
     dirty() {
       if (!this.editing) return false;
@@ -173,6 +174,8 @@ window.NotesView = {
         { id: 'links', type: 'grid', items: this.linkList, cols: 99,
           select: (l) => this.$refs.links && this.$refs.links.open(l),
           when: () => !!this.sel && this.linkList.length > 0 },
+        // always available while the note exists (the grid row disappears when there are no links)
+        { id: 'addlink', type: 'input', ref: 'links', when: () => !!this.sel },   // i/space → linked-items.focus()
         // the action row, in the order it renders left→right (§6.2): back · edit/render · delete · save
         { id: 'back',   type: 'button', activate: () => this.closeEditor() },
         { id: 'mode',   type: 'button', activate: () => this.toggleMode() },
@@ -626,7 +629,7 @@ window.NotesView = {
       </div>
       <div v-if="sel" :class="navCls('links')" class="note-links-row">
         <linked-items ref="links" :store="store" type="note" :id="sel.id"
-                      :kb-focus="linkFocus" @links="linkList = $event" @pick="kbPick('links', $event)"></linked-items>
+                      :kb-focus="linkFocus" :add-focus="addLinkFocus" @links="linkList = $event" @pick="kbPick('links', $event)"></linked-items>
       </div>
       <div class="note-actions">
         <div class="na-left">
