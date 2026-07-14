@@ -13,8 +13,8 @@ Both pin `TZ=UTC`; the suite freezes the clock to **2026-06-18** (`support/clock
 
 ## What's covered
 
-- **Tier 1 — pure engines** (`rec.test.cjs`, `query.test.cjs`): `Rec` parse/stringify/summary/compact, `nextOccurrences`/`next`/`matches` with explicit from+anchor, date helpers; `Q` parse + build round-trip, `run` over the task corpus → matching ids, `dueDelta`/`slug`.
-- **Tier 2 — store smart rules** (`store.test.cjs`): completion-pill min-one rule, `viewDefaults`, `visibleRoots` (filter/sort/completion), `searchRoots` ranking, `toggleDone` recurrence spawn (due/reminder-gap/subtree clone), and the real `inferDueFromRecurrence` from `task-detail.js`.
+- **Tier 1 — pure engines** (`rec.test.cjs`, `query.test.cjs`, `create.test.cjs`): `Rec` parse/stringify/summary/compact, `nextOccurrences`/`next`/`matches` with explicit from+anchor, date helpers; `Q` parse + build round-trip, `run` over the task corpus → matching ids, `dueDelta`/`slug`; `CL` (the creation language) parse × apply across all three entity types, the human-date parser, and the rules that keep it honest — first-wins, the `$5` guard, and **parse must not create labels** (`store.addLabel` has a side effect and ghost-completion reparses every keystroke).
+- **Tier 2 — store smart rules** (`store.test.cjs`): completion-pill min-one rule, `viewDefaults`, `visibleRoots` (filter/sort/completion), `runSearch` (the text-only query it builds + its stale-response guard), `toggleDone` recurrence spawn (due/reminder-gap/subtree clone), and the real `inferDueFromRecurrence` from `task-detail.js`.
 - **Tier 3 — Playwright smokes:** deferred (need a browser + the running app); add ~5–10 later.
 
 ## Layout

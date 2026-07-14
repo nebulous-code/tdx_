@@ -511,9 +511,6 @@
   // 'type' field (a type: term would hit the text-match fallback and wrongly empty the list).
   // NOT applied to currentQuery() itself, which must keep type: for display + the mixed path.
   store.taskQuery = () => Q.build(Q.parse(store.currentQuery()).terms.filter(t => t.field!=='type'));
-  // vim '/' search: title+notes substring across ALL tasks (ignores the active
-  // view), respecting the completed toggle, including subtasks (surfacing parents),
-  // relevance-ordered. Drives both the render and j/k nav via visibleRoots.
   // The '/' find (2E §3.4): a throwaway, text-only live find across ALL types
   // (tasks + events + notes) — distinct from the categorical query system. Each
   // word is matched as a literal text term (quoted so a stray `due:`/`label:` in the

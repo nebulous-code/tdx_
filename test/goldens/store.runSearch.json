@@ -1,0 +1,22 @@
+[
+  {
+    "term": "review",
+    "query": "type:task,event,note \"review\""
+  },
+  {
+    "term": "ch.",
+    "query": "type:task,event,note \"ch.\""
+  },
+  {
+    "term": "rotate the keys",
+    "query": "type:task,event,note \"rotate\" \"the\" \"keys\""
+  },
+  {
+    "term": "due:today",
+    "query": "type:task,event,note \"due:today\""
+  },
+  {
+    "term": "say \"hi\"",
+    "query": "type:task,event,note \"say\" \"hi\""
+  }
+]
