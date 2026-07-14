@@ -34,6 +34,20 @@ window.AppSidebar = {
         <span class="add" :title="'New '+catKind" @click="$emit('new-'+catKind, null)">+</span>
       </div>
       <div v-show="!store.navSections[catKind]">
+        <!-- the vault's base directory (n.16): the top of the vault, shown as a folder. NOT a
+             <tree-row> — that carries the twist/✕/›/+ affordances, and this row has none of them:
+             it can't be renamed here (it's a preference), deleted (it's the vault), or nested
+             (every folder already lives inside it). The info icon is where that gets explained. -->
+        <div v-if="catKind==='folder' && baseFolder" class="tree-row">
+          <div class="nav-item base-row"
+               :class="{ active: store.catActive('folder', baseFolder), kfocus: store.focusPane==='side' && store.sideFocusId===baseFolder.id }"
+               style="padding-left:12px;" @click="store.openBaseFolder()">
+            <span class="twist"> </span>
+            <span class="glyph" :style="{ color: store.resolveColor(baseFolder.color) }">{{ baseFolder.glyph }}</span>
+            <span class="label">{{ baseFolder.name }}</span>
+            <span class="info-tip" :data-tip="baseTip" @click.stop>ⓘ</span>
+          </div>
+        </div>
         <template v-for="node in catRoots" :key="node.id">
           <tree-row :store="store" :node="node" :kind="catKind" :depth="0"
                     @new-sub="$emit('new-'+catKind, $event)"
@@ -66,7 +80,16 @@ window.AppSidebar = {
   computed: {
     catKind(){ return this.store.categoryKind(); },
     catLabel(){ return { project:'projects', calendar:'calendars', folder:'folders' }[this.catKind]; },
-    catRoots(){ return this.store.catRoots(this.catKind); }
+    catRoots(){ return this.store.catRoots(this.catKind); },
+    baseFolder(){ return this.store.rootFolder(); },   // null when the preference is blank → hidden
+    baseTip(){
+      const b = this.baseFolder;
+      if(!b) return '';
+      const tip = 'The top of your vault — notes that aren’t in any folder. Rename it (or blank it out to hide it) in preferences (@). It can’t hold folders: every folder already lives inside it.';
+      return b.clash
+        ? tip + ' A real folder shares this name, so folder:'+b.name.replace(/ \(base\)$/,'')+' finds THAT folder — rename one of them.'
+        : tip;
+    }
   },
   methods: {
     glyphColor(sv){ return sv.color ? this.store.resolveColor(sv.color) : (sv.system ? '' : 'var(--amber)'); },

@@ -15,7 +15,9 @@ window.NotesView = {
   mixins: [window.KbForm],
   emits: ['enter-nav'],
   data() {
-    return { list: [], q: '', hits: null, sel: null, creating: false, mode: 'normal',
+    // NOTE `draft` is the note EDITOR's object (bodyLines/dirty/payload all read it). The
+    // quick-add's title field is `qaDraft` — reusing `draft` would break the editor outright.
+    return { list: [], q: '', hits: null, sel: null, mode: 'normal', qaDraft: '',
       draft: newDraft(), saved: newDraft(), listSel: 0, eventList: [], linkMenu: null, matchIds: null, _fseq: 0,
       // §6.1 block cursor: the LINE lives in KbForm's kbRow (the body's lines are ladder rows —
       // see kbRows/curLine); we own only the character column + a remembered goal column.
@@ -38,22 +40,54 @@ window.NotesView = {
       get() { return Math.max(0, Math.min(this.bodyLines.length - 1, this.kbRow - this.bodyStart)); },
       set(v) { this.kbRow = this.bodyStart + Math.max(0, Math.min(this.bodyLines.length - 1, v)); },
     },
-    // when a folder is selected in the nav, narrow the (non-search) list to it
+    // when a folder is selected in the nav, narrow the (non-search) list to it. The vault's BASE
+    // directory is a folder too (n.16) — it just carries a sentinel id, because folderId:null is
+    // already taken by "all notes" (store.openNotes).
     folderFilter() { return this.store.view.folderId || null; },
-    activeFolder() { return this.folderFilter ? this.store.folderById(this.folderFilter) : null; },
+    onBase() { return this.folderFilter === this.store.BASE_FID; },
+    // the "no folder" option's label: the base directory's name when it has one, else the old copy
+    baseName() { const r = this.store.rootFolder(); return r ? r.glyph + ' ' + r.name : '— none (root) —'; },
+    activeFolder() {
+      if (this.onBase) return this.store.rootFolder();
+      return this.folderFilter ? this.store.folderById(this.folderFilter) : null;
+    },
     // the active query (type:note by default); a real predicate beyond type: narrows the list
     activeQuery() { return this.store.currentQuery(); },
     hasPredicate() { return Q.parse(this.activeQuery).terms.some((t) => t.field !== 'type'); },
+    // find (n.15) is scoped to WHAT YOU'RE LOOKING AT: the FTS hits are intersected with the
+    // folder + the active query, not returned raw. Vault-wide text search is the global `/`
+    // (a different engine — literal words across tasks/events/notes); this box is the notes
+    // FTS index narrowed to the current view, which is the one thing `/` can't do.
     rows() {
-      if (this.hits) return this.hits;   // search results ignore the folder + query filter
-      let r = this.folderFilter ? this.list.filter((n) => n.folderId === this.folderFilter) : this.list;
+      let r = this.onBase ? this.list.filter((n) => !n.folderId)              // the vault's top level
+        : this.folderFilter ? this.list.filter((n) => n.folderId === this.folderFilter)
+        : this.list;
       if (this.matchIds) r = r.filter((n) => this.matchIds.has(n.id));
+      if (this.hits) { const hit = new Set(this.hits.map((n) => n.id)); r = r.filter((n) => hit.has(n.id)); }
       return r;
     },
     // which link chip the cursor is on; -1 while insert mode owns the keyboard (the navCls rule)
     linkFocus() { return this.mode === 'insert' ? -1 : this.kbCellOf('links'); },
     addLinkFocus() { return this.mode !== 'insert' && !!this.kbCls('addlink').kfocus; },
-    editing() { return !!this.sel || this.creating; },
+    editing() { return !!this.sel; },   // the editor only ever opens on a note that EXISTS (n.14)
+    // mirrors the task quick-add's placeholder (tasklist.js): names the destination when you're
+    // standing in a folder, and shows an example so the syntax (today, just a title) is obvious
+    addPlaceholder() {
+      const f = this.activeFolder;
+      return (f ? 'add to ' + f.name : 'add note') + '…  (try: Thank You Letter)';
+    },
+    // ⚠ on the quick-add prompt when the active view filters on something a brand-new note
+    // won't have — it'll still be created, just hidden from this list. store.viewWarn() can't
+    // be reused: it's task-shaped (type:→'task', project/label/status/due).
+    warn() {
+      // a new note satisfies: type:note · folder: (it's filed here) · has:no-labels (it has
+      // none) · created:/edited: (both are now). Not: label:, due: (no review date), free text.
+      const ok = new Set(['type', 'folder', 'has', 'created', 'edited']);
+      return Q.parse(this.activeQuery).terms.some((t) => !ok.has(t.field));   // free text parses as field:'text'
+    },
+    warnTip() {
+      return this.warn ? 'This view filters on things a new note won’t have — it’ll be created, just hidden from this list.' : '';
+    },
     dirty() {
       if (!this.editing) return false;
       const d = this.draft, s = this.saved;
@@ -76,8 +110,18 @@ window.NotesView = {
     this.store.fetchEventList().then((e) => { this.eventList = e; }); // for the [[ picker
     this.store.dirtyCheck = () => this.dirty; // app-switch guard (store.setView) reads this
     if (this.store.pendingNoteId) { const id = this.store.pendingNoteId; this.store.pendingNoteId = null; this.open(id); }
+    // the shared list cursor (a.2): with this registered, J/K inside the open peek drawer walks
+    // THIS list and swaps what the drawer shows. Without it the drawer's J/K are dead keys.
+    this._unregCursor = this.store.registerListCursor({
+      rows: () => this.rows,
+      index: () => this.listSel,
+      go: (i) => { this.listSel = i; this.scrollListSel(); this.peek(this.rows[i]); },
+    });
   },
-  beforeUnmount() { this.store.dirtyCheck = null; },
+  beforeUnmount() {
+    this.store.dirtyCheck = null;
+    if (this._unregCursor) this._unregCursor();
+  },
   methods: {
     async load() { this.list = await this.store.fetchNotes(); this.listSel = 0; },
     // run the query through the unified engine and keep the set of matching note ids;
@@ -103,7 +147,6 @@ window.NotesView = {
       const n = await this.store.getNote(id);
       if (!n) return;
       this.sel = n;
-      this.creating = false;
       this.mode = 'normal';        // open into the rendered view
       this.draft = this.seed(n);
       this.saved = this.seed(n);
@@ -112,17 +155,50 @@ window.NotesView = {
       // text; k walks up into review date / labels / folder / title (n.3).
       this.$nextTick(() => { this.kbRow = this.bodyStart; this.kbCell = 0; this.kbGoalCol = 0; });
     },
-    // open a blank editor — NOTHING is written to the vault until the first save
-    newNote() {
-      this.sel = null;
-      this.creating = true;
-      // a note created while viewing a folder is filed there
-      this.draft = newDraft({ folderId: this.folderFilter || null });
-      this.saved = newDraft({ folderId: this.folderFilter || null });
-      this.resetCursor();
-      this.kbRow = 0;              // a new note starts at the title (it needs a name)
-      this.mode = 'insert';        // a fresh note starts in edit mode
-      this.$nextTick(() => { const el = this.$refs.titleInput; if (el) el.focus(); });
+    // peek in the right-hand drawer (§4.3) — the same surface a note link opens. `o` in the
+    // drawer promotes it to the full editor, J/K walk this list (the cursor registered above).
+    peek(n) { if (n) this.store.openNoteDrawer(n.id); },
+    // ---- quick-add: name it, then it exists (n.14) --------------------------------------
+    // The editor now only ever opens on a note the server has. `i` lands you here, not in a
+    // blank editor: a title is required, and Enter CREATES the note before opening it.
+    focusAdd() { const el = this.$refs.qa; if (el) el.focus(); },
+    async commitAdd() {
+      const title = this.qaDraft.trim();
+      if (!title) return;
+      // a note created while viewing a folder is filed there (same rule as tasks). The base
+      // directory's sentinel must NOT go over the wire — null IS the vault root to the server.
+      const n = await this.store.saveNote({ title, body: '',
+        folderId: this.onBase ? null : (this.folderFilter || null),
+        reviewAt: null, labels: [] });
+      if (!n) return;              // save failed → keep the text, don't strand the user
+      this.qaDraft = '';
+      // load() refreshes the note LIST; refilter() refreshes the query's match set (rows is the
+      // intersection of the two). Skip the refilter and the new note is invisible until the
+      // active query changes — which is why switching views and back "fixed" it.
+      await Promise.all([this.load(), this.refilter()]);
+      this.open(n.id);             // land exactly as if you'd opened it off the list
+    },
+    // Esc must be bound on the input: the app's global onKey bails at its typing gate, so the
+    // key would never reach us otherwise. Leaves the cursor on the list so j/k work at once.
+    escAdd() {
+      this.qaDraft = '';
+      const el = this.$refs.qa; if (el) el.blur();
+    },
+    // ---- find: text search inside the current view (n.15) --------------------------------
+    // Two-step Esc, mirroring the global `/` find (commitSearch → clearSearch in index.html):
+    //   1st Esc (in the box) → COMMIT: blur, keep the term and the filtered list, so j/k can
+    //      walk the hits. `f` comes back to the box with the term still in it.
+    //   2nd Esc (on the list) → CLEAR: forget the term and restore the underlying view.
+    // The old one-step Esc threw the results away the moment you tried to look at them.
+    focusFind() { const el = this.$refs.find; if (el) el.focus(); },
+    commitFind() {             // Esc/Enter in the box → hand the (still filtered) list to j/k
+      const el = this.$refs.find; if (el) el.blur();
+      this.listSel = 0;
+    },
+    async clearFind() {        // Esc on the list → drop the find entirely
+      this.q = '';
+      await this.runSearch();  // clears this.hits, so rows goes back to the unfiltered view
+      const el = this.$refs.find; if (el) el.blur();
     },
     resetCursor() { this.curCol = 0; this.goalCol = 0; this.pending = null; this.kbCell = 0; this.kbGoalCol = 0; },
     // Esc out of a focused field → back to the ladder. This MUST be wired on the field itself:
@@ -148,7 +224,7 @@ window.NotesView = {
     async commitAndNormal() {
       const ta = this.$refs.bodyArea;
       const caret = ta ? ta.selectionStart : null;
-      if (this.draft.title.trim() && this.dirty) { if (this.sel) await this.persist(); else await this.save(); }
+      if (this.draft.title.trim() && this.dirty) await this.persist();
       if (caret != null) this.setCursorFromOffset(caret);
       this.mode = 'normal';
     },
@@ -162,7 +238,8 @@ window.NotesView = {
       const labels = this.store.sortedLabels();
       return [
         { id: 'title',  type: 'input', ref: 'titleInput' },
-        { id: 'folder', type: 'input', ref: 'folderSel', when: () => this.store.folders.length > 0 },
+        // must track the row's v-if exactly, or the ladder points at a row that isn't there
+        { id: 'folder', type: 'input', ref: 'folderSel', when: () => this.store.folders.length > 0 || !!this.store.rootFolder() },
         { id: 'labels', type: 'grid', items: labels, cols: 99,
           isOn: (l) => this.draft.labels.includes(l.id), select: (l) => this.toggleLabel(l.id),
           when: () => labels.length > 0 },
@@ -173,13 +250,13 @@ window.NotesView = {
         // `+ link` picker stays mouse/click-driven (space on a chip is 'open', not 'add').
         { id: 'links', type: 'grid', items: this.linkList, cols: 99,
           select: (l) => this.$refs.links && this.$refs.links.open(l),
-          when: () => !!this.sel && this.linkList.length > 0 },
-        // always available while the note exists (the grid row disappears when there are no links)
-        { id: 'addlink', type: 'input', ref: 'links', when: () => !!this.sel },   // i/space → linked-items.focus()
+          when: () => this.linkList.length > 0 },
+        // always available (the grid row disappears when there are no links)
+        { id: 'addlink', type: 'input', ref: 'links' },   // i/space → linked-items.focus()
         // the action row, in the order it renders left→right (§6.2): back · edit/render · delete · save
         { id: 'back',   type: 'button', activate: () => this.closeEditor() },
         { id: 'mode',   type: 'button', activate: () => this.toggleMode() },
-        { id: 'delete', type: 'button', activate: () => this.del(), when: () => !!this.sel },
+        { id: 'delete', type: 'button', activate: () => this.del() },
         { id: 'save',   type: 'button', activate: () => this.save() },
       ];
     },
@@ -354,14 +431,24 @@ window.NotesView = {
       // ---- list mode ----
       // h leaves left into the notes nav, like the task list does (audit n.9)
       if (e.key === 'h' || e.key === 'ArrowLeft') { e.preventDefault(); this.$emit('enter-nav'); return; }
-      // i creates a note, like i creates a task on the tasks list (audit n.14). ABOVE the
+      // i drops into the quick-add bar, like i does on the tasks list (audit n.14). ABOVE the
       // empty-list guard — you must be able to make the FIRST note in an empty list.
-      if (e.key === 'i') { e.preventDefault(); this.newNote(); return; }
+      if (e.key === 'i') { e.preventDefault(); this.focusAdd(); return; }
+      // f = find text in THIS view (n.15); coming back to it keeps the last term. Both of these
+      // sit above the empty-list guard: a find that matched nothing is exactly when you need to
+      // get back into the box or clear it.
+      if (e.key === 'f') { e.preventDefault(); this.focusFind(); return; }
+      // the second Esc — the first one (in the box) only committed the find so j/k could walk
+      // the hits. This is the global find's clearSearch, scoped to the notes list.
+      if (e.key === 'Escape' && this.q) { e.preventDefault(); this.clearFind(); return; }
       const rows = this.rows;
       if (!rows.length) return;
       if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); this.listSel = Math.min(rows.length - 1, this.listSel + 1); this.scrollListSel(); }
       else if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); this.listSel = Math.max(0, this.listSel - 1); this.scrollListSel(); }
+      // ↵ / o = go IN (the full editor) · e = PEEK (the right-hand drawer, §4.3) — the same
+      // split the task list uses, and the drawer's own `o` promotes a peek to the full editor.
       else if (e.key === 'Enter' || e.key === 'o') { e.preventDefault(); const n = rows[this.listSel]; if (n) this.open(n.id); }
+      else if (e.key === 'e') { e.preventDefault(); this.peek(rows[this.listSel]); }
       // d deletes the highlighted note — the same one-key delete tasks get from their list
       else if (e.key === 'd') { e.preventDefault(); this.delRow(rows[this.listSel]); }
     },
@@ -465,8 +552,7 @@ window.NotesView = {
         e.preventDefault();
         const line = segBase + parseInt(cb.getAttribute('data-line'), 10);
         this.draft.body = window.MdRender.toggleCheckbox(this.draft.body, line);
-        if (this.sel) this.persist();   // existing note → quiet save
-        else this.save();               // unsaved note → create it (toasts to name it first if untitled)
+        this.persist();                 // quiet save — the note always exists by now
         return;
       }
       const wl = e.target.closest && e.target.closest('.wikilink');
@@ -516,14 +602,17 @@ window.NotesView = {
     },
     async save() {
       const title = this.draft.title.trim();
-      if (!title) { this.store.toast('name the note first'); return; }
+      // not a create guard any more (the quick-add takes the name up front) — this catches a
+      // rename to blank, which would otherwise hand the vault an empty filename
+      if (!title) { this.store.toast('a note needs a name'); return; }
       const n = await this.store.saveNote(this.payload(title));
       if (n) {
         this.sel = n;
-        this.creating = false;
         this.draft = this.seed(n);
         this.saved = this.seed(n);
-        await this.load();
+        // an edit can change whether the note still matches the view (labels, review date,
+        // folder, title text) — refresh the match set, not just the list
+        await Promise.all([this.load(), this.refilter()]);
         this.$nextTick(() => { if (this.$refs.links) this.$refs.links.load(); }); // saving can change content links
         this.store.toast('✓ saved');
       }
@@ -541,7 +630,7 @@ window.NotesView = {
       this.back();
     },
     back() {
-      this.sel = null; this.creating = false; this.mode = 'normal';
+      this.sel = null; this.mode = 'normal';
       this.draft = newDraft(); this.saved = newDraft();   // (the old reset dropped folderId — it lied about being clean)
       this.resetCursor();
       this.kbRow = 0;
@@ -554,19 +643,33 @@ window.NotesView = {
   },
   template: `
   <div class="notes">
-    <div class="notes-head">
-      <span class="hi notes-title">notes</span>
-      <span v-if="!editing && activeFolder" class="notes-folder" :style="{ color: store.resolveColor(activeFolder.color) }" title="filtered to this folder">{{ activeFolder.glyph }} {{ activeFolder.name }} <span class="notes-folder-x" @click="store.openNotes()" title="show all notes">✕</span></span>
-      <input v-if="!editing" class="ti notes-search" v-model="q" @input="runSearch" placeholder="search…">
-      <span class="grow"></span>
-      <span v-if="!editing" class="qbtn" @click="newNote">＋ new</span>
-      <span v-if="!editing" class="qbtn" @click="sync" title="reconcile external edits">sync</span>
-      <!-- §6.2: every editor control now lives in the bottom action row — the header's
-           back + edit/render moved there, and the redundant close is gone (back IS close) -->
+    <!-- The header is the LIST's chrome: the tasks quick-add bar, inline (n.14). A note is
+         CREATED here — title first — so the editor only ever opens on a note that exists. The
+         old "＋ new" opened the editor on a phantom note, which is what made Esc a dead key.
+         §6.2: the editor's own controls all live in its bottom action row, so it needs no head. -->
+    <div v-if="!editing" class="notes-head">
+      <span class="qbtn" @click="sync" title="reconcile external edits">sync</span>
+      <div class="quickadd qa-inline">
+        <span class="prompt" :class="{ warn }" :data-tip="warnTip">{{ warn ? '⚠' : '+' }}</span>
+        <span class="qa-caret">❯</span>
+        <span class="qa-input-wrap">
+          <input ref="qa" v-model="qaDraft" :placeholder="addPlaceholder"
+                 @keydown.enter.prevent="commitAdd" @keydown.esc.stop.prevent="escAdd" />
+        </span>
+        <span class="mut" style="font-size:11px;">↵ add</span>
+      </div>
+      <!-- find (n.15): scoped to the current folder/view. The "f" hint has to be an overlay —
+           a placeholder attribute can't carry markup, so it can't underline anything. Same
+           trick as the quick-add's tag ghost: a span painted over an empty, unfocused input. -->
+      <div class="notes-find">
+        <input ref="find" class="ti notes-search" v-model="q" @input="runSearch"
+               @keydown.enter.stop.prevent="commitFind" @keydown.esc.stop.prevent="commitFind">
+        <span v-if="!q" class="notes-find-ph"><u>f</u>ind text…</span>
+      </div>
     </div>
 
     <div v-if="!editing" class="notes-list">
-      <div v-if="!rows.length" class="mut notes-empty">no notes yet — ＋ new, or drop .md files in the vault and hit sync</div>
+      <div v-if="!rows.length" class="mut notes-empty">no notes yet — press <span class="kbd">i</span> to name one, or drop .md files in the vault and hit sync</div>
       <div v-for="(n, i) in rows" :key="n.id" class="notes-row" :class="{ on: i===listSel }" @click="listSel=i; open(n.id)">
         <div class="nr-main">
           <div class="nr-title-line">
@@ -589,11 +692,12 @@ window.NotesView = {
       <input ref="titleInput" class="ti note-title" :class="navCls('title')" v-model="draft.title"
              placeholder="note name (this is the filename)" @focus="kbFocusRow('title')"
              @keydown.enter="save" @keydown.esc.stop.prevent="blurField">
-      <div v-if="store.folders.length" class="note-folder-row" :class="navCls('folder')">
+      <div v-if="store.folders.length || store.rootFolder()" class="note-folder-row" :class="navCls('folder')">
         <span class="ev-rl">folder</span>
         <select ref="folderSel" class="ti" v-model="draft.folderId"
                 @focus="kbFocusRow('folder')" @keydown.esc.stop.prevent="blurField">
-          <option :value="null">— none (root) —</option>
+          <!-- null IS the vault root on the wire; the base directory just gives it a name (n.16) -->
+          <option :value="null">{{ baseName }}</option>
           <option v-for="f in store.folders" :key="f.id" :value="f.id">{{ f.glyph }} {{ f.name }}</option>
         </select>
       </div>

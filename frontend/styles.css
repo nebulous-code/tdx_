@@ -302,6 +302,14 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .nav-item.active .add { display: inline; }
 .nav-item .add:hover { color: var(--amber-hi); text-shadow: var(--glow); }
 
+/* the vault's base directory row (n.16): a folder row with no verbs — its ⓘ replaces the
+   rename/delete/add affordances, and it's always visible (there's nothing else to reveal).
+   The tooltip is left-anchored here: the sidebar is narrow, and .info-tip's default right:0
+   would hang its 240px bubble off the left edge of the screen. */
+.nav-item.base-row .info-tip { flex: 0 0 auto; padding: 0 2px; }
+.nav-item.base-row .info-tip:hover::after { right: auto; left: 0; }
+.nav-item.base-row .info-tip:hover::before { right: auto; left: 6px; }
+
 /* project tree depth */
 .tree-row { position: relative; }
 .tree-children { /* indentation handled inline by depth */ }
@@ -950,10 +958,20 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 /* notes screen (D2 2c) */
 .notes { display: flex; flex-direction: column; min-height: 0; flex: 1; overflow: hidden; }
 .notes-head { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--bg); }
-.notes-title { font-family: var(--crt); font-size: 18px; line-height: 1; }
+/* the tasks quick-add, inline in the notes header (n.14): keep the prompt/caret/input,
+   drop the bar chrome — the header already draws the row's padding and bottom rule */
+.notes-head .quickadd.qa-inline { flex: 1; padding: 0; border-bottom: none; background: transparent; }
 .notes-head .grow { flex: 1; }
 .notes-search { width: 220px; max-width: 40vw; background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--radius); color: var(--amber-hi); font-family: var(--mono); font-size: 12px; padding: 4px 7px; outline: none; }
 .notes-search:focus { border-color: var(--amber-mut); }
+/* the find box's own placeholder, painted over the empty input so the `f` hint can be
+   underlined (n.15) — a placeholder attribute is plain text and can't be. Metrics match
+   because the span inherits the input's font; pointer-events stay on the input. */
+.notes-find { position: relative; display: flex; }
+.notes-find-ph {
+  position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+  color: var(--amber-mut); font-family: var(--mono); font-size: 12px; pointer-events: none;
+}
 .notes-list { overflow-y: auto; padding: 4px 0; }
 .notes-empty { padding: 16px 12px; font-size: 12px; }
 /* §6.5 — laid out like task rows: title + labels beneath (left), created/edited dates (right) */

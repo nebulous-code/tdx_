@@ -94,6 +94,9 @@ function resolveProjects(value: string, ctx: Ctx): Set<string> {
   );
   return new Set(match.map((p) => p.id));
 }
+// already exported (see the export list at the bottom) — callers can ask the SAME question the
+// matcher asks ("do these two names collide?") instead of re-deriving it; the base-directory
+// name check (n.16) relies on that. Parity-locked with frontend/js/query.js.
 function slug(s: string | null | undefined): string {
   return String(s || '')
     .toLowerCase()

@@ -39,6 +39,8 @@ window.NoteDetail = {
     // which link chip the cursor is on → <linked-items :kb-focus> (the child renders the chips) — n.13
     linkFocus() { return this.kbCellOf('links'); },
     addLinkFocus() { return !!this.kbCls('addlink').kfocus; },
+    // the "no folder" option's label: the base directory's name when it has one (n.16)
+    baseName() { const r = this.store.rootFolder(); return r ? r.glyph + ' ' + r.name : '— none (root) —'; },
   },
   methods: {
     async load() {
@@ -58,7 +60,8 @@ window.NoteDetail = {
       const labels = this.store.sortedLabels();
       return [
         { id: 'title', type: 'input', ref: 'title' },
-        { id: 'folder', type: 'input', ref: 'folder', when: () => this.store.folders.length > 0 },
+        // must track the row's v-if exactly, or the ladder points at a row that isn't there
+        { id: 'folder', type: 'input', ref: 'folder', when: () => this.store.folders.length > 0 || !!this.store.rootFolder() },
         { id: 'review', type: 'input', ref: 'review' },
         { id: 'labels', type: 'grid', items: labels, cols: 99,
           isOn: l => this.f.labels.includes(l.id), select: l => this.toggleLabel(l.id), when: () => labels.length > 0 },
@@ -111,10 +114,11 @@ window.NoteDetail = {
       <input ref="title" class="d-title" :class="kbCls('title')" v-model="f.title" placeholder="note name" @focus="kbFocusRow('title')" @keydown.enter.stop.prevent="save" @keydown.esc.stop.prevent="blurField">
 
       <div class="row2">
-        <div v-if="store.folders.length" class="field">
+        <div v-if="store.folders.length || store.rootFolder()" class="field">
           <label>folder</label>
           <select ref="folder" class="input" :class="kbCls('folder')" v-model="f.folderId" @focus="kbFocusRow('folder')" @keydown.esc.stop.prevent="blurField">
-            <option :value="null">— none (root) —</option>
+            <!-- null IS the vault root on the wire; the base directory just gives it a name (n.16) -->
+            <option :value="null">{{ baseName }}</option>
             <option v-for="fd in store.folders" :key="fd.id" :value="fd.id">{{ fd.glyph }} {{ fd.name }}</option>
           </select>
         </div>

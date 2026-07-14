@@ -292,7 +292,7 @@ test('merge dedupes when the target already carries the label on a task', async 
   const boot = await (
     await app.inject({ method: 'GET', url: '/api/bootstrap', headers: { cookie } })
   ).json();
-  const inboxId = boot.projects.find((p: { name: string }) => p.name === 'inbox').id;
+  const inboxId = boot.projects.find((p: { name: string }) => p.name === 'Inbox').id;
   const t = (
     await j('POST', '/api/tasks', {
       title: 'has both',
@@ -316,7 +316,7 @@ test('merge re-points a task that only had the source label', async () => {
   const boot = await (
     await app.inject({ method: 'GET', url: '/api/bootstrap', headers: { cookie } })
   ).json();
-  const inboxId = boot.projects.find((p: { name: string }) => p.name === 'inbox').id;
+  const inboxId = boot.projects.find((p: { name: string }) => p.name === 'Inbox').id;
   const t = (
     await j('POST', '/api/tasks', { title: 'has a only', projectId: inboxId, labels: [a.id] })
   ).json();

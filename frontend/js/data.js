@@ -225,6 +225,24 @@
     return out;
   };
   store.reparentFolder = (f, parentId) => { f.parentId = parentId || null; };
+  // ---- the vault's BASE DIRECTORY, as a folder (audit n.16) ------------------------------
+  // A note at the top of the vault has folderId === null. That's not "unassigned": folders are
+  // derived from the vault's DIRECTORIES, so null IS the root directory — already a real, writable
+  // destination. It didn't need creating, it needed a NAME. The user supplies one in preferences
+  // (default 'Inbox'; blank = hidden, which is exactly how notes behaved before this existed).
+  //
+  // It is SYNTHETIC and must never enter store.folders: the diff-sync watcher snapshots that array
+  // and would try to POST it as a real folder. It's also flat by nature — no children, no parent —
+  // because on disk every top-level folder ALREADY lives inside it.
+  store.BASE_FID = '__base__';   // a sentinel VIEW id; it never goes over the wire
+  store.rootFolder = () => {
+    const raw = ((store.currentUser && store.currentUser.notes_root_name) || '').trim();
+    if(!raw) return null;                                       // unnamed → the row is hidden
+    // a real folder by the same name makes `folder:<name>` ambiguous — the server resolves that
+    // in the data's favor, so say so here: the row is tagged, and the user can rename either one
+    const clash = store.folders.some(f => Q.slug(f.name) === Q.slug(raw));
+    return { id: store.BASE_FID, name: clash ? raw+' (base)' : raw, glyph:'⌂', color:'system', synthetic:true, clash };
+  };
   // generic category accessors so the sidebar + keyboard nav can treat
   // project/calendar/folder uniformly (calendars are flat → no children).
   store.catChildren = (kind, id) =>
@@ -244,7 +262,7 @@
     const v = store.view;
     if(kind==='project') return v.kind==='project' && v.id===node.id;
     if(kind==='calendar') return v.kind==='calendar' && v.calendarId===node.id;
-    return v.kind==='notes' && v.folderId===node.id;
+    return v.kind==='notes' && v.folderId===node.id;   // the base row uses BASE_FID, so this covers it too
   };
   store.openCatView = (kind, node) =>
     kind==='project' ? store.openProjectView(node) :
@@ -728,6 +746,12 @@
   store.openNotes = () => store.setView({ kind:'notes', id:'notes', title:'Notes', query:'type:note', folderId:null });
   store.openCalendarView = (c) => store.setView({ kind:'calendar', id:c.id, title:c.name, query:'type:event', calendarId:c.id });
   store.openFolderView = (f) => store.setView({ kind:'notes', id:f.id, title:f.name, query:'type:note', folderId:f.id });
+  // the base directory needs its OWN view id: folderId:null is already "all notes" (openNotes),
+  // so the root can't be addressed by null — it would be indistinguishable from the Notes home.
+  store.openBaseFolder = () => {
+    const r = store.rootFolder();
+    if(r) store.setView({ kind:'notes', id:store.BASE_FID, title:r.name, query:'type:note', folderId:store.BASE_FID });
+  };
   // the three right-hand detail drawers (task / event / note) share the right edge —
   // only one open at a time. Each opener closes the others first via closeDrawers().
   store.closeDrawers = () => { store.detailOpen = false; store.eventDetailOpen = false; store.noteDetailOpen = false; };
@@ -754,6 +778,10 @@
     // the category section swaps by app; calendars are flat, projects/folders nest
     items.push({ kind:'head', section:kind, id:'head_'+kind });
     if(!ns[kind]){
+      // the base directory sits ABOVE the real folders (n.16). Its own kind, deliberately: the
+      // sidebar's rename/delete/add-child/move verbs all fire on kind==='folder', so a distinct
+      // kind makes them inert here by construction rather than by a guard someone can forget.
+      if(kind==='folder'){ const r = store.rootFolder(); if(r) items.push({ kind:'baseFolder', id:r.id, ref:r }); }
       const walk = (node) => {
         items.push({ kind, id:node.id, ref:node });
         if(!node.collapsed) store.catChildren(kind, node.id).forEach(walk);
@@ -793,6 +821,7 @@
     if(!it) return;
     if(it.kind==='query') store.openQueryView(it.ref);
     else if(it.kind==='project'||it.kind==='calendar'||it.kind==='folder') store.openCatView(it.kind, it.ref);
+    else if(it.kind==='baseFolder') store.openBaseFolder();
     else if(it.kind==='label') store.openLabelView(it.ref);
   };
 

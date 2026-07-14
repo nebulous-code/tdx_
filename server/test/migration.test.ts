@@ -159,6 +159,14 @@ test('migration: legacy prefixed ids -> UUIDs, survival + ref integrity', () => 
   assert.equal(u.is_admin, 1);
   assert.equal(u.fib_sizing, 1);
   assert.equal(u.sort_prefs, '{"order":["due"]}');
+  // 008: a legacy row predates the column, so the DEFAULT is what it gets — the base directory
+  // shows up named for everyone who migrates, rather than silently staying hidden (n.16)
+  assert.equal(u.notes_root_name, 'Inbox');
+  // 009: the legacy fixture seeds a lowercase 'inbox' project (that's what the old app wrote);
+  // migrating capitalizes it, so the app-chosen name matches every user-chosen one around it
+  const projNames = rows(target, 'SELECT * FROM projects').map((p) => p.name);
+  assert.ok(projNames.includes('Inbox'));
+  assert.ok(!projNames.includes('inbox'));
 });
 
 function count2(db: Database.Database, taskId: string): number {

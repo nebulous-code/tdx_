@@ -55,6 +55,22 @@ window.CalendarView = {
       }
       return out;
     },
+    // What the CURRENT view puts on the focused day — the same filtered sets the grid paints, so
+    // it honors the query, the type: rule and the selected calendar. E opens the FIRST of these
+    // (e.7), and "first" is the agenda's own reading order, so the two surfaces never disagree:
+    // all-day events → dated tasks → timed events by start. Untimed things (all-day, tasks) have
+    // no clock to sort by, so they fall back to title, alphabetical.
+    cursorItems() {
+      const c = this.cells.find((x) => x.ymd === this.cursor);
+      if (!c) return [];
+      const isAllDay = (e) => e.allDay || (e.startAt || '').length <= 10;
+      const byTitle = (a, b) => (a.item.title || '').localeCompare(b.item.title || '');
+      const alldayEvents = c.events.filter(isAllDay).map((e) => ({ type: 'event', item: e })).sort(byTitle);
+      const tasks = c.tasks.map((t) => ({ type: 'task', item: t })).sort(byTitle);
+      const timed = c.events.filter((e) => !isAllDay(e)).map((e) => ({ type: 'event', item: e }))
+        .sort((a, b) => (a.item.startAt || '').localeCompare(b.item.startAt || '') || byTitle(a, b));
+      return [...alldayEvents, ...tasks, ...timed];
+    },
     // depends only on the month (NOT on cells/events) so loading doesn't loop
     range() {
       const first = new Date(this.year, this.month, 1);
@@ -173,8 +189,20 @@ window.CalendarView = {
       const { date, ...ev } = occ;
       this.store.editEvent({ ...ev });
     },
-    // E: open the hour-by-hour day schedule (§4.2) for the focused day
+    // e: open the hour-by-hour day schedule (§4.2) for the focused day
     openDay() { this.store.dayDetailYmd = this.cursor; this.store.dayDetailOpen = true; },
+    // E: the agenda AND the day's FIRST item in the view you're looking at, opened beside it
+    // (e.7). "In the view you're looking at" is the filtered grid — on a birthdays calendar the
+    // 4th's items are its birthdays, even if the day is otherwise packed — while the agenda still
+    // shows the whole day (e.6: it's context, not a query result). Only an EMPTY day falls back
+    // to the agenda alone: a rule that opened a detail on one-item days and not on two-item days
+    // is unpredictable from the keyboard, which is the whole complaint it's fixing.
+    openDayItem() {
+      this.openDay();                       // agenda first, so the detail stacks to its right
+      const it = this.cursorItems[0];
+      if (!it) return;
+      if (it.type === 'event') this.openEvent(it.item); else this.openTask(it.item);
+    },
     onCell(ymd) { this.cursor = ymd; this.newEvent(ymd); },
     newEvent(ymd) { this.store.editEvent({ startAt: ymd, allDay: true, title: '', calendarId: this.calFilter || null }); },
     openTask(t) { this.store.selectedTaskId = t.id; this.store.detailOpen = true; },

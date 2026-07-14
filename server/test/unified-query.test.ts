@@ -155,3 +155,59 @@ test('note due: maps to the review date', async () => {
   assert.ok(set.items.some((i: Item) => i.title === 'ReviewMe'));
   assert.ok(!set.items.some((i: Item) => i.title === 'Beta'));
 });
+
+// ---------------------------------------------------------------------------
+// folder: — the vault's base directory as a named folder (n.16). These are the FIRST tests of
+// the folder: join key; it had no coverage. The user's notes_root_name defaults to 'inbox'.
+// ---------------------------------------------------------------------------
+
+const setRootName = (name: string) =>
+  j('PUT', '/api/auth/account', { notes_root_name: name }).then((r) => r.statusCode);
+
+test('folder: bare token means UNFILED — root notes, never foldered ones', async () => {
+  const f = await j('POST', '/api/folders', { name: 'Work' }).then((r) => r.json());
+  await j('POST', '/api/notes', { title: 'Filed', folderId: f.id });
+
+  const root = await query('type:note folder:');
+  assert.ok(root.items.some((i: Item) => i.title === 'Beta')); // created at the vault root
+  assert.ok(!root.items.some((i: Item) => i.title === 'Filed'));
+  // and the named folder still resolves normally
+  const work = await query('type:note folder:work');
+  assert.ok(work.items.some((i: Item) => i.title === 'Filed'));
+  assert.ok(!work.items.some((i: Item) => i.title === 'Beta'));
+});
+
+test('folder:<base name> is an ALIAS for the root notes', async () => {
+  assert.equal(await setRootName('inbox'), 200);
+  const res = await query('type:note folder:inbox');
+  assert.ok(res.items.some((i: Item) => i.title === 'Beta'));
+  assert.ok(!res.items.some((i: Item) => i.title === 'Filed'));
+});
+
+test('folder:<base name> finds nothing when the base directory is unnamed (hidden)', async () => {
+  assert.equal(await setRootName(''), 200);
+  const named = await query('type:note folder:inbox');
+  assert.equal(named.items.length, 0); // no name → no alias → today's pre-feature behavior
+  // the bare token is unaffected: it's rename-proof, and it never depended on the name
+  const bare = await query('type:note folder:');
+  assert.ok(bare.items.some((i: Item) => i.title === 'Beta'));
+  assert.equal(await setRootName('inbox'), 200);
+});
+
+// The collision the save-time validation cannot prevent: the folder appears LATER (a dir dropped
+// in the vault, then synced). Data beats label — the alias switches off and `folder:inbox` means
+// the real ./inbox directory. A suffixed alias could not fix this: catNameMatch is substring-based,
+// so anything containing "inbox" would match `folder:inbox` anyway.
+test('a real folder with the base name WINS — the alias switches off', async () => {
+  const f = await j('POST', '/api/folders', { name: 'inbox' }).then((r) => r.json());
+  await j('POST', '/api/notes', { title: 'InTheRealInbox', folderId: f.id });
+
+  const res = await query('type:note folder:inbox');
+  assert.ok(res.items.some((i: Item) => i.title === 'InTheRealInbox'));
+  assert.ok(!res.items.some((i: Item) => i.title === 'Beta')); // the root note is NOT claimed
+
+  // root notes are still reachable — the bare token never goes ambiguous
+  const bare = await query('type:note folder:');
+  assert.ok(bare.items.some((i: Item) => i.title === 'Beta'));
+  assert.ok(!bare.items.some((i: Item) => i.title === 'InTheRealInbox'));
+});

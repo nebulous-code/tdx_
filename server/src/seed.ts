@@ -39,6 +39,7 @@ export async function createUser(
       week_start: 1,
       sort_prefs: null,
       fib_sizing: 0,
+      notes_root_name: 'Inbox', // the vault's base directory shows as a folder by this name (n.16)
       is_admin: isAdmin ? 1 : 0,
       created_at: now,
       updated_at: now,
@@ -58,7 +59,7 @@ export async function seedUserDefaults(db: DB, ownerId: string): Promise<void> {
       id: newId(),
       owner_id: ownerId,
       parent_id: null,
-      name: 'inbox',
+      name: 'Inbox',
       color: '#ffb000',
       glyph: '⌂',
       collapsed: 0,

@@ -22,6 +22,7 @@ import {
   validateUsername,
   verifyPassword,
 } from '../auth.js';
+import { slug } from '../query.js'; // the same name-matcher the query engine uses (n.16)
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -104,6 +105,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
     let weekStart = current.week_start ?? 1;
     let sortPrefs = current.sort_prefs ?? null; // JSON string or null
     let fibSizing = current.fib_sizing ?? 0;
+    let rootName = current.notes_root_name ?? 'Inbox'; // '' = the base directory is hidden (n.16)
 
     if (body.theme !== undefined) {
       if (!ALLOWED_THEMES.includes(body.theme as string))
@@ -126,6 +128,27 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
       if (![0, 1].includes(v))
         return reply.code(400).send({ error: 'invalid fib_sizing', field: 'fib_sizing' });
       fibSizing = v;
+    }
+    // the vault's base directory name (n.16). '' is VALID — it hides the row, which is exactly
+    // how notes behaved before the feature. A name that collides with a real folder is not: the
+    // query language matches folders by NAME, at any depth, so `folder:x` would be ambiguous.
+    if (body.notes_root_name !== undefined) {
+      const v = String(body.notes_root_name ?? '').trim();
+      if (v.length > 60)
+        return reply.code(400).send({ error: 'name too long', field: 'notes_root_name' });
+      if (v) {
+        const folders = await app.db
+          .selectFrom('folders')
+          .select('name')
+          .where('owner_id', '=', userId)
+          .where('archived', '=', 0)
+          .execute();
+        if (folders.some((f) => slug(f.name) === slug(v)))
+          return reply
+            .code(400)
+            .send({ error: 'a folder is already called that', field: 'notes_root_name' });
+      }
+      rootName = v;
     }
     if (body.username !== undefined) {
       const v = validateUsername(body.username);
@@ -183,6 +206,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
           week_start: weekStart,
           sort_prefs: sortPrefs,
           fib_sizing: fibSizing,
+          notes_root_name: rootName,
           updated_at: now,
         })
         .where('id', '=', userId)
@@ -199,6 +223,8 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
       await revokeUserSessions(app.db, userId, unsigned?.valid ? unsigned.value : null);
     }
 
+    // NOTE this response is hand-built — the row is NOT re-read. A field persisted above but
+    // omitted here updates the DB while the client keeps showing the old value.
     const result: PublicUser = publicUser({
       id: userId,
       username,
@@ -207,6 +233,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
       week_start: weekStart,
       sort_prefs: sortPrefs,
       fib_sizing: fibSizing,
+      notes_root_name: rootName,
       is_admin: current.is_admin,
     });
     return result;

@@ -67,7 +67,7 @@ async function main() {
     .selectFrom('projects')
     .select('id')
     .where('owner_id', '=', owner)
-    .where('name', '=', 'inbox')
+    .where('name', '=', 'Inbox')
     .executeTakeFirst())!.id;
 
   // ---- labels (one pinned) — shared across tasks, events, and notes ----

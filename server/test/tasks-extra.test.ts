@@ -57,7 +57,7 @@ before(async () => {
   );
   bobCookie = bob.cookie;
   bobId = bob.user.id;
-  inboxId = (await bootstrap()).projects.find((p: { name: string }) => p.name === 'inbox').id;
+  inboxId = (await bootstrap()).projects.find((p: { name: string }) => p.name === 'Inbox').id;
 });
 after(async () => {
   await app.close();

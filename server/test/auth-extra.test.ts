@@ -196,6 +196,84 @@ test('account: fib_sizing accepted then rejected when not 0/1', async () => {
   assert.equal(bad.json().field, 'fib_sizing');
 });
 
+// ---- notes_root_name: the vault's base directory (n.16) --------------------
+
+test('account: notes_root_name accepted, echoed, and survives a round-trip to /me', async () => {
+  const ok = await app.inject({
+    method: 'PUT',
+    url: '/api/auth/account',
+    headers: { cookie },
+    payload: { notes_root_name: 'Unfiled' },
+  });
+  assert.equal(ok.statusCode, 200);
+  // the response is hand-built, NOT re-read from the row — this asserts it was not forgotten
+  assert.equal(ok.json().notes_root_name, 'Unfiled');
+
+  const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie } });
+  assert.equal(me.json().notes_root_name, 'Unfiled');
+
+  await app.inject({
+    method: 'PUT',
+    url: '/api/auth/account',
+    headers: { cookie },
+    payload: { notes_root_name: 'inbox' }, // back to the default for the tests that follow
+  });
+});
+
+test('account: a blank notes_root_name is VALID — it hides the base directory', async () => {
+  const res = await app.inject({
+    method: 'PUT',
+    url: '/api/auth/account',
+    headers: { cookie },
+    payload: { notes_root_name: '' },
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.json().notes_root_name, ''); // not coerced back to 'inbox'
+
+  const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie } });
+  assert.equal(me.json().notes_root_name, '');
+
+  await app.inject({
+    method: 'PUT',
+    url: '/api/auth/account',
+    headers: { cookie },
+    payload: { notes_root_name: 'inbox' },
+  });
+});
+
+test('account: notes_root_name over 60 chars → 400', async () => {
+  const res = await app.inject({
+    method: 'PUT',
+    url: '/api/auth/account',
+    headers: { cookie },
+    payload: { notes_root_name: 'x'.repeat(61) },
+  });
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.json().field, 'notes_root_name');
+});
+
+// `folder:` matches by NAME, so a base directory sharing a real folder's name makes the token
+// ambiguous. Reject it at the door — the collision can still arise later via a vault sync, and
+// that case degrades at query time (the alias switches off; the real directory wins).
+test('account: notes_root_name colliding with a real folder → 400', async () => {
+  const mk = await app.inject({
+    method: 'POST',
+    url: '/api/folders',
+    headers: { cookie },
+    payload: { name: 'Archive' },
+  });
+  assert.equal(mk.statusCode, 201);
+
+  const res = await app.inject({
+    method: 'PUT',
+    url: '/api/auth/account',
+    headers: { cookie },
+    payload: { notes_root_name: 'archive' }, // slug-equal → collides
+  });
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.json().field, 'notes_root_name');
+});
+
 test('account: username invalid → 400; valid + no clash → 200', async () => {
   const bad = await app.inject({
     method: 'PUT',

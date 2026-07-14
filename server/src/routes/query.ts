@@ -30,7 +30,7 @@ export default async function queryRoutes(app: FastifyInstance): Promise<void> {
       const user = request.user!;
       let all: Awaited<ReturnType<typeof runUnifiedQuery>>;
       try {
-        all = await runUnifiedQuery(app.db, user.id, user.week_start, query);
+        all = await runUnifiedQuery(app.db, user.id, user.week_start, query, user.notes_root_name);
       } catch (err) {
         if (err instanceof UnknownTypeError) return reply.code(400).send({ error: err.message });
         throw err;

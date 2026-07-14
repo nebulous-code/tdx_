@@ -29,6 +29,7 @@ export interface UsersTable {
   week_start: number;
   sort_prefs: string | null;
   fib_sizing: number;
+  notes_root_name: string; // the user's name for the vault's base directory ('' = hidden) — n.16
   is_admin: number;
   created_at: string;
   updated_at: string;

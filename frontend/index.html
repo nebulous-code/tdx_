@@ -649,7 +649,10 @@ const app = createApp({
           };
           const map={ h:()=>cal.moveCursor(-1), l:()=>cal.moveCursor(1), k:()=>cal.moveCursor(-7), j:()=>cal.moveCursor(7),
             H:()=>cal.moveMonth(-1), L:()=>cal.moveMonth(1), K:()=>cal.moveMonthKeepCell(-1), J:()=>cal.moveMonthKeepCell(1),
-            i:create, E:()=>cal.openDay(), t:()=>cal.today() };   // t = jump to today (audit e.4)
+            // e = the day's agenda · E = the agenda PLUS the day's item, when the view you're
+            // looking at has exactly one on that day (e.7). `e` used to be dead here: it was
+            // reserved for "this item's detail" (§4.2), but the grid's cursor is a DAY, not an item.
+            i:create, e:()=>cal.openDay(), E:()=>cal.openDayItem(), t:()=>cal.today() };   // t = jump to today (audit e.4)
           const fn=map[e.key]; if(fn){ e.preventDefault(); fn(); }
         }
         return;
@@ -749,7 +752,9 @@ const app = createApp({
         const onCategory=(v.kind==='project') || (v.kind==='calendar'&&v.calendarId) || (v.kind==='notes'&&v.folderId);
         const catId=v.calendarId ?? v.folderId ?? v.id;
         const cur=items.find(i =>
-          (onCategory && i.kind===ck && i.id===catId) ||
+          // the base-directory row carries its own kind (n.16), so match it by id as well —
+          // otherwise `h` out of the base view lands on the first query row instead of on it
+          (onCategory && (i.kind===ck || i.kind==='baseFolder') && i.id===catId) ||
           (!onCategory && i.kind==='query' && i.id===v.id));   // a saved view (any app) by id
         id=cur ? cur.id : (items.find(i=>i.kind!=='head') || items[0]).id;
       }
@@ -839,11 +844,17 @@ const app = createApp({
       // the per-app "category" kind (project / calendar / folder) + a test for it
       const cat = this.store.categoryKind();
       const isCat = (k)=> k==='project' || k==='calendar' || k==='folder';
+      // The vault's base directory (n.16) is NOT a folder row: it can't be renamed here (it's a
+      // preference), deleted (it's the vault), given children (every folder is already inside it),
+      // or reordered (it's pinned on top). Its verbs point at preferences instead of dying silent.
+      const isBase = (it)=> !!it && it.kind==='baseFolder';
+      const baseToast = ()=> this.store.toast('base directory — rename or hide it in preferences (@)');
       // which section the focused row belongs to — drives a/A "add the right kind"
       const sectionOf=(it)=> !it ? cat
         : it.kind==='head'  ? it.section
         : it.kind==='query' ? 'query'
         : it.kind==='label' ? 'label'
+        : it.kind==='baseFolder' ? 'folder'   // it lives in the folders section (a/A make a real folder)
         : it.kind;   // a category row → its own section name
       const addLabelPrompt=()=> this.store.askPrompt('New label name').then(nm=>{ if(nm && nm.trim()) this.store.addLabel(nm.trim()); });
       // open the new/edit modal for whichever category kind is given
@@ -901,7 +912,8 @@ const app = createApp({
         case 'e': {
           e.preventDefault();
           const it=items[idx];
-          if(isCat(it.kind)) editCat(it.kind, it.ref);
+          if(isBase(it)) baseToast();                      // renamed in preferences, not here
+          else if(isCat(it.kind)) editCat(it.kind, it.ref);
           else if(it.kind==='query') this.openViewEdit(it.ref);
           else if(it.kind==='label') this.openLabelEdit(it.ref);
           break;
@@ -909,7 +921,8 @@ const app = createApp({
         case 'x': {   // delete the focused view / label / project
           e.preventDefault();
           const it=items[idx];
-          if(it.kind==='query') this.deleteView(it.ref);
+          if(isBase(it)) baseToast();                      // you can't delete the vault
+          else if(it.kind==='query') this.deleteView(it.ref);
           else if(it.kind==='label') this.deleteLabel(it.ref);
           else if(isCat(it.kind)) deleteCat(it.kind, it.ref);
           break;
@@ -935,6 +948,9 @@ const app = createApp({
           const sect=sectionOf(it);
           if(sect==='query') this.openSave('');
           else if(sect==='label') addLabelPrompt();
+          // `a` = "add a child HERE", and the base directory can't have children — every folder is
+          // already inside it, so a child of the root just IS a top-level folder. Say so; `A` does it.
+          else if(isBase(it)) this.store.toast('the base directory can’t hold folders — A adds a top-level one');
           // a nestable category row → add a child under it; else top-level of the section kind
           else if(it && (it.kind==='project'||it.kind==='folder')) newCat(it.kind, it.ref.id);
           else newCat(sect, null);

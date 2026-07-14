@@ -55,7 +55,7 @@ before(async () => {
   cookie = li.cookie;
   alice = li.user;
   const boot = await app.inject({ method: 'GET', url: '/api/bootstrap', headers: { cookie } });
-  inboxId = boot.json().projects.find((p: { name: string }) => p.name === 'inbox').id;
+  inboxId = boot.json().projects.find((p: { name: string }) => p.name === 'Inbox').id;
 });
 after(async () => {
   await app.close();
@@ -65,7 +65,7 @@ test('bootstrap returns the seeded inbox + system views (task + per-app), no tas
   const res = await app.inject({ method: 'GET', url: '/api/bootstrap', headers: { cookie } });
   assert.equal(res.statusCode, 200);
   const body = res.json();
-  assert.ok(body.projects.some((p: { name: string }) => p.name === 'inbox'));
+  assert.ok(body.projects.some((p: { name: string }) => p.name === 'Inbox'));
   // 6 task views + 3 events views + 4 notes views (§2.4 per-app seed views)
   assert.equal(body.savedQueries.length, 13);
   assert.equal(

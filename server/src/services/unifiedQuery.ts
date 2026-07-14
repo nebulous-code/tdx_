@@ -10,7 +10,7 @@
 // pushing predicates down to SQL/FTS is a later optimization.
 
 import type { DB } from '../db.js';
-import { type Ctx, Q, type Task } from '../query.js';
+import { type Ctx, Q, type Task, slug } from '../query.js';
 import { Rec } from '../rec.js';
 import { type EventJson, type TaskJson, rowToEvent } from '../schemas.js';
 import { readBootstrap } from './bootstrap.js';
@@ -83,6 +83,10 @@ export async function runUnifiedQuery(
   owner: string,
   weekStart: number,
   queryStr: string,
+  // the user's name for the vault's base directory ('' = unnamed/hidden). It's what makes
+  // `folder:inbox` find root notes — see rootCat below. Optional so callers that don't care
+  // (and the tests that predate it) keep working with today's behavior.
+  rootName = '',
 ): Promise<QueryItem[]> {
   const parsed = Q.parse(queryStr);
   // Collect type selectors. `type:` includes, `-type:` excludes; every token must be a
@@ -106,14 +110,37 @@ export async function runUnifiedQuery(
   // a tasks-only fallback). Then drop excluded types (so `-type:note` alone = all but note).
   const base: EntityType[] = positives.size > 0 ? [...positives] : [...ENTITY_TYPES];
   const types = base.filter((t) => !negatives.has(t));
-  // everything except the type selector is the actual predicate set, shared across types
-  const pq = { terms: parsed.terms.filter((t) => t.field !== 'type'), ok: true };
-
   const { tasks, projects, labels, calendars, folders } = await readBootstrap(db, owner);
   const ctx = { tasks, projects, labels, weekStart } as unknown as Ctx;
   // categorizer-id → name maps for the cross-app category:/calendar:/folder: join
   const calName = new Map(calendars.map((c) => [c.id, c.name]));
   const folderName = new Map(folders.map((f) => [f.id, f.name]));
+  // A root note (folder_id NULL) gets the base directory's NAME as its category, so `folder:` and
+  // `category:` can address it like any other folder (n.16). Two cases send it back to null —
+  // i.e. exactly the behavior before this feature:
+  //   • the name is blank      → the base directory is hidden; it has no name to match
+  //   • a real folder shares it → AMBIGUOUS, so data beats label: `folder:inbox` belongs to the
+  //     real ./inbox directory, not to the root. (A suffixed alias can't fix this — catNameMatch
+  //     matches on SUBSTRING, so anything containing "inbox" would still match `folder:inbox`.)
+  const rootCat =
+    rootName && !folders.some((f) => slug(f.name) === slug(rootName)) ? rootName : null;
+
+  // everything except the type selector is the actual predicate set, shared across types
+  const pq = {
+    terms: parsed.terms
+      .filter((t) => t.field !== 'type')
+      // A bare `folder:` means UNFILED, and it used to work only by accident of the empty slug:
+      // slug(null) === '' === slug(''), so it matched root notes because their category was null.
+      // Naming the base directory gives them a category — which would silently BREAK the bare
+      // token. So when the alias is live, `folder:` is rewritten to `folder:<base name>`: both
+      // spellings keep meaning "the root", and `folder:` stays the rename-proof one. With no
+      // alias (blank name, or a collision) the category is null again and the bare token matches
+      // on its own, exactly as before. Only `folder:` is rewritten — never `category:`, whose
+      // empty-value arm falls through to resolveProjects and would match EVERY project.
+      .map((t) => (rootCat && t.field === 'folder' && !t.value ? { ...t, value: rootCat } : t)),
+    ok: true,
+  };
+
   const todayD = Rec.startOfDay(new Date());
   const todayYMD = Rec.ymd(todayD);
   const out: QueryItem[] = [];
@@ -172,7 +199,7 @@ export async function runUnifiedQuery(
   if (types.includes('note')) {
     // Evaluate against the FTS-indexed title+body (in memory); only hit disk for matches.
     for (const row of await notesForQuery(db, owner)) {
-      const fn = row.folderId ? (folderName.get(row.folderId) ?? null) : null;
+      const fn = row.folderId ? (folderName.get(row.folderId) ?? null) : rootCat;
       if (!Q.evaluate(noteAsTask(row, fn), pq, ctx)) continue;
       const n = await getNote(db, owner, row.id); // full entity (path/frontmatter/timestamps)
       if (n) out.push({ type: 'note', ...n });

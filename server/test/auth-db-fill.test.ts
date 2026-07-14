@@ -94,13 +94,32 @@ test('publicUser: defaults applied when columns are empty/null', () => {
     week_start: null as unknown as number, // nullish → 1
     sort_prefs: null, // null → null (no JSON.parse)
     fib_sizing: 0,
+    notes_root_name: null as unknown as string, // nullish → 'Inbox'
     is_admin: 0,
   });
   assert.equal(u.theme, 'amber');
   assert.equal(u.week_start, 1);
   assert.equal(u.sort_prefs, null);
   assert.equal(u.fib_sizing, false);
+  assert.equal(u.notes_root_name, 'Inbox');
   assert.equal(u.is_admin, false);
+});
+
+// '' means "the base directory is HIDDEN" — a real choice, not an absent value. publicUser must
+// use `??` and not `||`, or hiding the row would silently snap back to the default (n.16).
+test('publicUser: an empty notes_root_name survives (hidden, not defaulted)', () => {
+  const u = publicUser({
+    id: 'u3',
+    username: 'z',
+    email: 'z@example.com',
+    theme: 'amber',
+    week_start: 1,
+    sort_prefs: null,
+    fib_sizing: 0,
+    notes_root_name: '',
+    is_admin: 0,
+  });
+  assert.equal(u.notes_root_name, '');
 });
 
 test('publicUser: present columns pass through (JSON.parse of sort_prefs)', () => {
@@ -112,12 +131,14 @@ test('publicUser: present columns pass through (JSON.parse of sort_prefs)', () =
     week_start: 3, // present → kept
     sort_prefs: JSON.stringify({ order: ['due'], enabled: { due: true }, dirs: { due: 'asc' } }),
     fib_sizing: 1,
+    notes_root_name: 'Unfiled',
     is_admin: 1,
   });
   assert.equal(u.theme, 'matrix');
   assert.equal(u.week_start, 3);
   assert.deepEqual(u.sort_prefs?.order, ['due']);
   assert.equal(u.fib_sizing, true);
+  assert.equal(u.notes_root_name, 'Unfiled');
   assert.equal(u.is_admin, true);
 });
 
