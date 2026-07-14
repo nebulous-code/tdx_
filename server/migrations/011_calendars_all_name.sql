@@ -1,0 +1,17 @@
+-- 011: the NAME the user gives the "all calendars" nav row (audit e.10).
+--
+-- Every way into the events app applies a filter: each saved event view carries a query (the
+-- seeds are all date-filtered), and each calendar in the nav IS a filter. There was no entry
+-- meaning "show me everything". The unfiltered state already existed (store.openCalendar →
+-- calendarId: null) but had NO nav row and NO keyboard path — its only caller was the ✕ on the
+-- filter chip, so a keyboard user who picked a calendar could not get back to unfiltered at all.
+--
+-- The row is SYNTHETIC (client-side, never a calendars row) — it means "no calendar filter",
+-- which is NOT the same as "events with no calendar". Contrast notes' base directory (008),
+-- which really is a filter (folder_id IS NULL). So this column names a row; it does not name a
+-- thing the query language can address.
+--
+--   'Everything' (default) — lands on existing rows, so the row is ON after this migration.
+--   ''                     — HIDDEN: the row disappears and the events app behaves exactly as
+--                            it did before this feature. The off-switch is the status quo.
+ALTER TABLE users ADD COLUMN calendars_all_name TEXT NOT NULL DEFAULT 'Everything';

@@ -139,14 +139,14 @@ test('saved-query update can set every patch field', async () => {
   const upd = await updateSavedQuery(ctx.db, sv.id, {
     name: 'all2',
     query: 'q2',
-    glyph: '♥',
+    glyph: '★', // a.9: ♥ is no longer a legal glyph — the picker is the source of truth
     color: '#123',
     pinned: true,
     position: 7,
   });
   assert.equal(upd?.name, 'all2');
   assert.equal(upd?.query, 'q2');
-  assert.equal(upd?.glyph, '♥');
+  assert.equal(upd?.glyph, '★');
   assert.equal(upd?.color, '#123');
   assert.equal(upd?.pinned, true);
   assert.equal(upd?.position, 7);

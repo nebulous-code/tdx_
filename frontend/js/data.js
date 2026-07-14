@@ -31,8 +31,10 @@
     '#b6c948', // lime
     '#8a93a6', // slate
   ];
-  // ASCII / unicode glyph icons (monospace-safe)
-  const GLYPHS = ['❯','◆','▲','●','★','■','◈','⌘','⚙','§','¶','λ','Σ','∆','▒','☰','⎔','⊞','✦','⛁','♜','⌬','∴','▚','◇','✧','⊹','⌗','⟁','❖'];
+  // ASCII / unicode glyph icons (monospace-safe). The list lives in glyphs.js — it's the SOURCE
+  // OF TRUTH the server validates against (an off-list glyph is a 400), and a parity test keeps
+  // the two in step. Don't inline a literal here again.
+  const GLYPHS = window.GLYPHS;
 
   const labels = [
     { id:'l_urgent',  name:'urgent' },
@@ -49,7 +51,7 @@
     { id:'p_dev',    parentId:null,    name:'dev',          color:'#46d369', glyph:'λ',  collapsed:false },
     { id:'p_tdx',    parentId:'p_dev', name:'tdx-app',      color:'#3fd7d7', glyph:'◈',  collapsed:false },
     { id:'p_infra',  parentId:'p_dev', name:'infra',        color:'#5b8cff', glyph:'⊞',  collapsed:false },
-    { id:'p_home',   parentId:null,    name:'home',         color:'#ff9f43', glyph:'⌂',  collapsed:false },
+    { id:'p_home',   parentId:null,    name:'home',         color:'#ff9f43', glyph:'❯',  collapsed:false },
     { id:'p_house',  parentId:'p_home',name:'house-upkeep', color:'#ff6fae', glyph:'⚙',  collapsed:false },
     { id:'p_money',  parentId:'p_home',name:'finance',      color:'#b6c948', glyph:'§',  collapsed:false },
     { id:'p_health', parentId:null,    name:'health',       color:'#c78bff', glyph:'✦',  collapsed:false },
@@ -123,7 +125,7 @@
     { id:'sv_rec',     name:'Recurring', glyph:'↻', query:'recurring:true status:open',system:true,  pinned:false },
     { id:'sv_nodate',  name:'No date',   glyph:'∅', query:'due:none status:open',      system:true,  pinned:false },
     { id:'sv_urgent',  name:'Urgent',    glyph:'★', query:'label:urgent status:open',  system:false, pinned:false },
-    { id:'sv_quick',   name:'Quick wins',glyph:'⚡', query:'label:quick status:open',   system:false, pinned:false },
+    { id:'sv_quick',   name:'Quick wins',glyph:'✦', query:'label:quick status:open',   system:false, pinned:false },
   ];
 
   const store = reactive({
@@ -241,7 +243,23 @@
     // a real folder by the same name makes `folder:<name>` ambiguous — the server resolves that
     // in the data's favor, so say so here: the row is tagged, and the user can rename either one
     const clash = store.folders.some(f => Q.slug(f.name) === Q.slug(raw));
-    return { id: store.BASE_FID, name: clash ? raw+' (base)' : raw, glyph:'⌂', color:'system', synthetic:true, clash };
+    return { id: store.BASE_FID, name: clash ? raw+' (base)' : raw, glyph:'❯', color:'system', synthetic:true, clash };
+  };
+  // ---- "all calendars": the unfiltered events view, as a nav row (audit e.10) --------------
+  // Every way into the events app applied a FILTER — each saved view carries a query, each
+  // calendar in the nav is a filter — so there was no entry meaning "show me everything". The
+  // unfiltered state already existed (store.openCalendar → calendarId:null); it just had no row
+  // and NO KEYBOARD PATH: the only caller was the ✕ on the filter chip, so a keyboard user who
+  // picked a calendar could never get back.
+  //
+  // NOT the notes base directory's twin. That row is a FILTER (notes with folderId === null);
+  // this one is the ABSENCE of a filter. So it needs no sentinel: openCalendar()'s view id IS
+  // 'calendar', and reusing it as the row id makes the sidebar's cursor-restore match for free.
+  store.ALL_CID = 'calendar';
+  store.allCalendars = () => {
+    const raw = ((store.currentUser && store.currentUser.calendars_all_name) || '').trim();
+    if(!raw) return null;                                       // unnamed → the row is hidden
+    return { id: store.ALL_CID, name: raw, glyph:'❖', color:'system', synthetic:true };
   };
   // generic category accessors so the sidebar + keyboard nav can treat
   // project/calendar/folder uniformly (calendars are flat → no children).
@@ -799,7 +817,12 @@
   // each app's query defaults to its own type: (so the builder reflects it and broadening
   // beyond that type trips the mixed-list); the calendar/folder narrowing rides on the
   // view's calendarId/folderId, separate from the query text.
-  store.openCalendar = () => store.setView({ kind:'calendar', id:'calendar', title:'Calendar', query:'type:event', calendarId:null });
+  // the unfiltered events view. Its TITLE is the "all calendars" row's name when there is one
+  // (e.10) — one line, and all 7 callers (the ✕ chip, deep-nav, switchApp, …) inherit it.
+  store.openCalendar = () => {
+    const all = store.allCalendars();
+    store.setView({ kind:'calendar', id:'calendar', title:(all ? all.name : 'Calendar'), query:'type:event', calendarId:null });
+  };
   store.openNotes = () => store.setView({ kind:'notes', id:'notes', title:'Notes', query:'type:note', folderId:null });
   store.openCalendarView = (c) => store.setView({ kind:'calendar', id:c.id, title:c.name, query:'type:event', calendarId:c.id });
   store.openFolderView = (f) => store.setView({ kind:'notes', id:f.id, title:f.name, query:'type:note', folderId:f.id });
@@ -839,6 +862,8 @@
       // sidebar's rename/delete/add-child/move verbs all fire on kind==='folder', so a distinct
       // kind makes them inert here by construction rather than by a guard someone can forget.
       if(kind==='folder'){ const r = store.rootFolder(); if(r) items.push({ kind:'baseFolder', id:r.id, ref:r }); }
+      // the same shape for "all calendars" (e.10) — and the same reason for its own kind
+      if(kind==='calendar'){ const a = store.allCalendars(); if(a) items.push({ kind:'allCalendars', id:a.id, ref:a }); }
       const walk = (node) => {
         items.push({ kind, id:node.id, ref:node });
         if(!node.collapsed) store.catChildren(kind, node.id).forEach(walk);
@@ -879,6 +904,7 @@
     if(it.kind==='query') store.openQueryView(it.ref);
     else if(it.kind==='project'||it.kind==='calendar'||it.kind==='folder') store.openCatView(it.kind, it.ref);
     else if(it.kind==='baseFolder') store.openBaseFolder();
+    else if(it.kind==='allCalendars') store.openCalendar();   // clears the calendar filter (e.10)
     else if(it.kind==='label') store.openLabelView(it.ref);
   };
 

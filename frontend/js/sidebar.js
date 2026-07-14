@@ -48,6 +48,20 @@ window.AppSidebar = {
             <span class="info-tip" :data-tip="baseTip" @click.stop>ⓘ</span>
           </div>
         </div>
+        <!-- "all calendars" (e.10): the same shape, one section up. It isn't a calendar — it's
+             the ABSENCE of a calendar filter — so it has no verbs either, and clearing the
+             filter from the keyboard was impossible before this row existed (the ✕ on the
+             filter chip was the only way back). -->
+        <div v-if="catKind==='calendar' && allCalendars" class="tree-row">
+          <div class="nav-item base-row"
+               :class="{ active: allCalActive, kfocus: store.focusPane==='side' && store.sideFocusId===allCalendars.id }"
+               style="padding-left:12px;" @click="store.openCalendar()">
+            <span class="twist"> </span>
+            <span class="glyph" :style="{ color: store.resolveColor(allCalendars.color) }">{{ allCalendars.glyph }}</span>
+            <span class="label">{{ allCalendars.name }}</span>
+            <span class="info-tip" :data-tip="allCalTip" @click.stop>ⓘ</span>
+          </div>
+        </div>
         <template v-for="node in catRoots" :key="node.id">
           <tree-row :store="store" :node="node" :kind="catKind" :depth="0"
                     @new-sub="$emit('new-'+catKind, $event)"
@@ -82,6 +96,13 @@ window.AppSidebar = {
     catLabel(){ return { project:'projects', calendar:'calendars', folder:'folders' }[this.catKind]; },
     catRoots(){ return this.store.catRoots(this.catKind); },
     baseFolder(){ return this.store.rootFolder(); },   // null when the preference is blank → hidden
+    allCalendars(){ return this.store.allCalendars(); },  // ditto (e.10)
+    // "all calendars" is active when the events view carries NO calendar filter — it can't use
+    // store.catActive, which matches a row id against view.calendarId (null here, by definition)
+    allCalActive(){ const v = this.store.view; return v.kind==='calendar' && !v.calendarId; },
+    allCalTip(){
+      return 'Every calendar at once — the events app with no filter. Rename it (or blank it out to hide it) in preferences (@). It isn’t a calendar, so it can’t be renamed, deleted or reordered here.';
+    },
     baseTip(){
       const b = this.baseFolder;
       if(!b) return '';

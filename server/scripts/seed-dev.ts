@@ -250,7 +250,7 @@ async function main() {
   const calPersonal = await createCalendar(db, owner, {
     name: 'Personal',
     color: '#c78bff',
-    glyph: '♥',
+    glyph: '★', // a.9: the ♥ that started this — it was never selectable in the picker
   });
   const calBirthdays = await createCalendar(db, owner, {
     name: 'Birthdays',

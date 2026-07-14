@@ -317,3 +317,43 @@ test('folder metadata update with the same name is a no-op rename', async () => 
   assert.equal(upd.json().color, '#ff5c5c');
   assert.ok(fs.existsSync(vp('Same')));
 });
+
+// ---------------------------------------------------------------------------
+// a.9 — the glyph picker is the SOURCE OF TRUTH. `glyph` used to be an unvalidated
+// string, so the UI's list and the database never had to agree (that's how a ♥ nobody
+// could select ended up on a seeded calendar). The REQUEST schemas now reject anything
+// outside frontend/js/glyphs.js — see also test/glyphs.test.ts, which parity-locks the
+// two lists so the server can't start refusing glyphs the picker still offers.
+// ---------------------------------------------------------------------------
+
+test('glyph lock: an off-list glyph is a 400 on every entity that has one', async () => {
+  const calls: [string, string, object][] = [
+    ['POST', '/api/calendars', { name: 'Nope', glyph: '♥' }],
+    ['POST', '/api/folders', { name: 'Nope', glyph: '♥' }],
+    ['POST', '/api/projects', { name: 'Nope', glyph: '♥' }],
+    ['POST', '/api/saved-queries', { name: 'Nope', query: 'x', glyph: '♥' }],
+  ];
+  for (const [m, url, payload] of calls) {
+    const res = await j(m, url, payload);
+    assert.equal(res.statusCode, 400, `${url} accepted an off-list glyph`);
+  }
+  // ⌂ left the picker with a.9 too (the Inbox project moved to ❯)
+  const oldInbox = await j('POST', '/api/projects', { name: 'Nope', glyph: '⌂' });
+  assert.equal(oldInbox.statusCode, 400);
+});
+
+test('glyph lock: the glyphs the app itself ships are all accepted', async () => {
+  // the whole point of growing the list to 40: every icon the app already shipped —
+  // the system views' ☉ ○ ! and ▸, the folder default — must be selectable AND storable.
+  const cal = await j('POST', '/api/calendars', { name: 'Sys', glyph: '☉' });
+  assert.equal(cal.statusCode, 201);
+  assert.equal(cal.json().glyph, '☉');
+
+  const fol = await j('POST', '/api/folders', { name: 'SysFolder', glyph: '▸' });
+  assert.equal(fol.statusCode, 201);
+  assert.equal(fol.json().glyph, '▸');
+
+  // and an update is guarded too, not just a create
+  const bad = await j('PUT', `/api/calendars/${cal.json().id}`, { glyph: '♥' });
+  assert.equal(bad.statusCode, 400);
+});

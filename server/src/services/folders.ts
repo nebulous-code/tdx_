@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Updateable } from 'kysely';
 import type { DB, FoldersTable } from '../db.js';
+import { DEFAULT_GLYPH, coerceGlyph } from '../glyphs.js'; // a.9 — the picker is the source of truth
 import { allocateReadableId, newId } from '../ids.js';
 import { rowToFolder } from '../schemas.js';
 import { abs, vaultRoot } from '../vault.js';
@@ -86,7 +87,7 @@ export async function createFolder(db: DB, owner: string, input: FolderCreateInp
   const id = input.id ?? newId();
   const now = new Date().toISOString();
   const color = input.color ?? '#ffb000';
-  const glyph = input.glyph ?? '▸';
+  const glyph = input.glyph ?? DEFAULT_GLYPH.folder; // schema-validated on the way in (a.9)
   let baseRel = '';
   if (input.parentId) {
     const parent = await db
@@ -288,7 +289,10 @@ export async function reconcileFolders(db: DB, owner: string): Promise<void> {
     const marker = readMarker(owner, relDir);
     const id = marker?.id ?? newId();
     const color = marker?.color ?? '#ffb000';
-    const glyph = marker?.glyph ?? '▸';
+    // COERCE, don't trust: .tdx-folder.json lives in the user's own vault, so its glyph never
+    // passed through a request schema. Anything not in the picker's list becomes the default,
+    // or a hand-edited marker could smuggle a glyph past the a.9 lock.
+    const glyph = coerceGlyph(marker?.glyph, DEFAULT_GLYPH.folder);
     if (!marker) writeMarker(owner, relDir, { id, color, glyph });
     const parentRel = path.dirname(relDir);
     const parentId = parentRel === '.' ? null : (byPath.get(parentRel) ?? null);

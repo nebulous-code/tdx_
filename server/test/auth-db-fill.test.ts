@@ -95,6 +95,7 @@ test('publicUser: defaults applied when columns are empty/null', () => {
     sort_prefs: null, // null → null (no JSON.parse)
     fib_sizing: 0,
     notes_root_name: null as unknown as string, // nullish → 'Inbox'
+    calendars_all_name: null as unknown as string, // nullish → 'Everything'
     is_admin: 0,
   });
   assert.equal(u.theme, 'amber');
@@ -117,6 +118,7 @@ test('publicUser: an empty notes_root_name survives (hidden, not defaulted)', ()
     sort_prefs: null,
     fib_sizing: 0,
     notes_root_name: '',
+    calendars_all_name: '',
     is_admin: 0,
   });
   assert.equal(u.notes_root_name, '');
@@ -132,6 +134,7 @@ test('publicUser: present columns pass through (JSON.parse of sort_prefs)', () =
     sort_prefs: JSON.stringify({ order: ['due'], enabled: { due: true }, dirs: { due: 'asc' } }),
     fib_sizing: 1,
     notes_root_name: 'Unfiled',
+    calendars_all_name: 'All events',
     is_admin: 1,
   });
   assert.equal(u.theme, 'matrix');

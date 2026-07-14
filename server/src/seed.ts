@@ -40,6 +40,7 @@ export async function createUser(
       sort_prefs: null,
       fib_sizing: 0,
       notes_root_name: 'Inbox', // the vault's base directory shows as a folder by this name (n.16)
+      calendars_all_name: 'Everything', // the "all calendars" nav row shows by this name (e.10)
       is_admin: isAdmin ? 1 : 0,
       created_at: now,
       updated_at: now,
@@ -61,7 +62,7 @@ export async function seedUserDefaults(db: DB, ownerId: string): Promise<void> {
       parent_id: null,
       name: 'Inbox',
       color: '#ffb000',
-      glyph: '⌂',
+      glyph: '❯', // a.9: ⌂ left the picker, so the app can't use it either
       collapsed: 0,
       position: 0,
       archived: 0,

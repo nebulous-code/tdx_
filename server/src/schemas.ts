@@ -4,6 +4,7 @@
 // so a raw int / unparsed JSON never leaks to a client.
 
 import { Type } from '@fastify/type-provider-typebox';
+import { GLYPHS } from './glyphs.js';
 import type {
   CalendarsTable,
   EventsTable,
@@ -17,6 +18,16 @@ import type {
 
 const Nullable = <T extends ReturnType<typeof Type.Unsafe>>(t: T) => Type.Union([t, Type.Null()]);
 const NStr = () => Nullable(Type.String());
+
+// The glyph picker is the SOURCE OF TRUTH (a.9): a glyph the UI can't offer can't be stored, so
+// an off-list one is a 400 rather than a silent surprise (that's how a ♥ nobody could select
+// ended up on a seeded calendar). frontend/js/glyphs.js ≡ src/glyphs.ts, parity-tested.
+//
+// REQUESTS ONLY. The four *response* schemas keep a plain Type.String() on purpose: Fastify
+// SERIALIZES through them and BootstrapSchema reuses them, so tightening those would make a
+// single stray legacy row break GET /api/bootstrap for the whole account. Validate what comes
+// in; never gag what goes out.
+const GlyphSchema = Type.Union(GLYPHS.map((g) => Type.Literal(g)));
 
 // defensive parse of the projects.health JSON-TEXT column → string[] (legacy parseHealth)
 export function parseHealth(s: string | null): string[] {
@@ -149,7 +160,7 @@ export const ProjectCreateSchema = Type.Object({
   name: Type.String(),
   parentId: Type.Optional(NStr()),
   color: Type.Optional(Type.String()),
-  glyph: Type.Optional(Type.String()),
+  glyph: Type.Optional(GlyphSchema),
   collapsed: Type.Optional(Type.Boolean()),
   health: Type.Optional(Type.Array(Type.String())),
   position: Type.Optional(Type.Integer()),
@@ -159,7 +170,7 @@ export const ProjectUpdateSchema = Type.Partial(
     name: Type.String(),
     parentId: NStr(),
     color: Type.String(),
-    glyph: Type.String(),
+    glyph: GlyphSchema,
     collapsed: Type.Boolean(),
     position: Type.Integer(),
     health: Type.Array(Type.String()),
@@ -169,14 +180,14 @@ export const CalendarCreateSchema = Type.Object({
   id: Type.Optional(Type.String()),
   name: Type.String(),
   color: Type.Optional(Type.String()),
-  glyph: Type.Optional(Type.String()),
+  glyph: Type.Optional(GlyphSchema),
   position: Type.Optional(Type.Integer()),
 });
 export const CalendarUpdateSchema = Type.Partial(
   Type.Object({
     name: Type.String(),
     color: Type.String(),
-    glyph: Type.String(),
+    glyph: GlyphSchema,
     position: Type.Integer(),
   }),
 );
@@ -185,7 +196,7 @@ export const FolderCreateSchema = Type.Object({
   name: Type.String(),
   parentId: Type.Optional(NStr()),
   color: Type.Optional(Type.String()),
-  glyph: Type.Optional(Type.String()),
+  glyph: Type.Optional(GlyphSchema),
   collapsed: Type.Optional(Type.Boolean()),
   position: Type.Optional(Type.Integer()),
 });
@@ -194,7 +205,7 @@ export const FolderUpdateSchema = Type.Partial(
     name: Type.String(),
     parentId: NStr(),
     color: Type.String(),
-    glyph: Type.String(),
+    glyph: GlyphSchema,
     collapsed: Type.Boolean(),
     position: Type.Integer(),
   }),
@@ -212,7 +223,7 @@ export const SavedQueryCreateSchema = Type.Object({
   id: Type.Optional(Type.String()),
   name: Type.String(),
   query: Type.String(),
-  glyph: Type.Optional(Type.String()),
+  glyph: Type.Optional(GlyphSchema),
   color: Type.Optional(NStr()),
   pinned: Type.Optional(Type.Boolean()),
   position: Type.Optional(Type.Integer()),
@@ -222,7 +233,7 @@ export const SavedQueryUpdateSchema = Type.Partial(
   Type.Object({
     name: Type.String(),
     query: Type.String(),
-    glyph: Type.String(),
+    glyph: GlyphSchema,
     color: NStr(),
     pinned: Type.Boolean(),
     position: Type.Integer(),

@@ -360,6 +360,7 @@ async function seedUser(id: string): Promise<void> {
       sort_prefs: null,
       fib_sizing: 0,
       notes_root_name: 'Inbox',
+      calendars_all_name: 'Everything',
       is_admin: 0,
       created_at: now,
       updated_at: now,

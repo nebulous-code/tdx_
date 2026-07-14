@@ -235,6 +235,7 @@
 </div>
 
 <script src="js/vue.global.prod.js"></script>
+<script src="js/glyphs.js"></script>
 <script src="js/recurrence.js"></script>
 <script src="js/query.js"></script>
 <script src="js/create.js"></script>
@@ -761,11 +762,15 @@ const app = createApp({
         // are we on a category view (a project / a specific calendar / a specific folder)?
         const onCategory=(v.kind==='project') || (v.kind==='calendar'&&v.calendarId) || (v.kind==='notes'&&v.folderId);
         const catId=v.calendarId ?? v.folderId ?? v.id;
+        // the UNFILTERED events view (calendarId null) is the "all calendars" row (e.10) — it's
+        // not a category view, so match it explicitly or `h` lands on a query row instead
+        const onAllCalendars = v.kind==='calendar' && !v.calendarId;
         const cur=items.find(i =>
-          // the base-directory row carries its own kind (n.16), so match it by id as well —
-          // otherwise `h` out of the base view lands on the first query row instead of on it
+          // the synthetic rows carry their own kind (n.16 / e.10), so match them by id as well —
+          // otherwise `h` out of one lands on the first query row instead of on the row itself
           (onCategory && (i.kind===ck || i.kind==='baseFolder') && i.id===catId) ||
-          (!onCategory && i.kind==='query' && i.id===v.id));   // a saved view (any app) by id
+          (onAllCalendars && i.kind==='allCalendars') ||
+          (!onCategory && !onAllCalendars && i.kind==='query' && i.id===v.id));   // a saved view (any app) by id
         id=cur ? cur.id : (items.find(i=>i.kind!=='head') || items[0]).id;
       }
       this.store.sideFocusId=id;
@@ -854,18 +859,22 @@ const app = createApp({
       // the per-app "category" kind (project / calendar / folder) + a test for it
       const cat = this.store.categoryKind();
       const isCat = (k)=> k==='project' || k==='calendar' || k==='folder';
-      // The vault's base directory (n.16) is NOT a folder row: it can't be renamed here (it's a
-      // preference), deleted (it's the vault), given children (every folder is already inside it),
-      // or reordered (it's pinned on top). Its verbs point at preferences instead of dying silent.
-      const isBase = (it)=> !!it && it.kind==='baseFolder';
-      const baseToast = ()=> this.store.toast('base directory — rename or hide it in preferences (@)');
+      // The two SYNTHETIC rows — the vault's base directory (n.16) and "all calendars" (e.10) —
+      // are not category rows: they can't be renamed here (each is a preference), deleted (one is
+      // the vault, the other is the absence of a filter), given children, or reordered. Their
+      // verbs point at preferences instead of dying silently. Their own `kind` is what makes the
+      // category verbs inert by construction rather than by a guard someone can forget.
+      const SYNTH = { baseFolder:'folder', allCalendars:'calendar' };
+      const isBase = (it)=> !!it && !!SYNTH[it.kind];
+      const baseToast = (it)=> this.store.toast(
+        (it && it.kind==='allCalendars' ? 'all calendars' : 'base directory')
+        + ' — rename or hide it in preferences (@)');
       // which section the focused row belongs to — drives a/A "add the right kind"
       const sectionOf=(it)=> !it ? cat
         : it.kind==='head'  ? it.section
         : it.kind==='query' ? 'query'
         : it.kind==='label' ? 'label'
-        : it.kind==='baseFolder' ? 'folder'   // it lives in the folders section (a/A make a real folder)
-        : it.kind;   // a category row → its own section name
+        : SYNTH[it.kind] || it.kind;   // a synthetic row lives in its category's section; a/A make a REAL one
       const addLabelPrompt=()=> this.store.askPrompt('New label name').then(nm=>{ if(nm && nm.trim()) this.store.addLabel(nm.trim()); });
       // open the new/edit modal for whichever category kind is given
       const newCat=(kind, parentId)=> kind==='calendar' ? this.openCalendarModal('new')
@@ -922,7 +931,7 @@ const app = createApp({
         case 'e': {
           e.preventDefault();
           const it=items[idx];
-          if(isBase(it)) baseToast();                      // renamed in preferences, not here
+          if(isBase(it)) baseToast(it);                      // renamed in preferences, not here
           else if(isCat(it.kind)) editCat(it.kind, it.ref);
           else if(it.kind==='query') this.openViewEdit(it.ref);
           else if(it.kind==='label') this.openLabelEdit(it.ref);
@@ -931,7 +940,7 @@ const app = createApp({
         case 'x': {   // delete the focused view / label / project
           e.preventDefault();
           const it=items[idx];
-          if(isBase(it)) baseToast();                      // you can't delete the vault
+          if(isBase(it)) baseToast(it);                      // you can't delete the vault
           else if(it.kind==='query') this.deleteView(it.ref);
           else if(it.kind==='label') this.deleteLabel(it.ref);
           else if(isCat(it.kind)) deleteCat(it.kind, it.ref);
@@ -960,7 +969,9 @@ const app = createApp({
           else if(sect==='label') addLabelPrompt();
           // `a` = "add a child HERE", and the base directory can't have children — every folder is
           // already inside it, so a child of the root just IS a top-level folder. Say so; `A` does it.
-          else if(isBase(it)) this.store.toast('the base directory can’t hold folders — A adds a top-level one');
+          else if(isBase(it)) this.store.toast(it.kind==='allCalendars'
+            ? 'all calendars isn’t a calendar — A adds a real one'
+            : 'the base directory can’t hold folders — A adds a top-level one');
           // a nestable category row → add a child under it; else top-level of the section kind
           else if(it && (it.kind==='project'||it.kind==='folder')) newCat(it.kind, it.ref.id);
           else newCat(sect, null);
@@ -986,7 +997,7 @@ const app = createApp({
         case 'Tab': {  // collapse / expand the focused item's section
           e.preventDefault();
           const it=items[idx];
-          if(it) this.toggleSection(it.kind==='head' ? it.section : it.kind);
+          if(it) this.toggleSection(sectionOf(it));   // a synthetic row belongs to its category's section, not a section of its own
           break;
         }
         case 'h': case 'ArrowLeft': {
@@ -1007,6 +1018,9 @@ const app = createApp({
             this.store.sideFocusId = it.ref.parentId || ('head_'+it.kind);   // up: parent, else the section header
             this.scrollSideIntoView(); break;
           }
+          // a SYNTHETIC row (base directory · all calendars) belongs to its category's section —
+          // it used to fall through to head_query, sending the cursor to the wrong header entirely
+          if(isBase(it)){ this.store.sideFocusId = 'head_'+sectionOf(it); this.scrollSideIntoView(); break; }
           this.store.sideFocusId = (it.kind==='label') ? 'head_label' : 'head_query';   // view/label → its section header
           this.scrollSideIntoView(); break;
         }

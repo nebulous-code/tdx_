@@ -357,6 +357,7 @@ async function seedOwner(): Promise<string> {
       sort_prefs: null,
       fib_sizing: 0,
       notes_root_name: 'inbox',
+      calendars_all_name: 'Everything',
       is_admin: 0,
       created_at: now,
       updated_at: now,

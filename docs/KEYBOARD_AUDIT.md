@@ -6,7 +6,7 @@ Some notes about keyboard accessiblity for section 6. (2E §6.4 — the final ke
 > Claude's assessment + the order of attack live at the bottom under **Triage**.
 
 ## Status
-**33 of 34 resolved.** Every original audit item (n.1–n.15 · e.1–e.6 · a.1–a.8) is closed; what's left was all spun out during testing. **n.16** is done and user-tested — the vault's base directory is now a folder you can **name** (a user preference, default `Inbox`; blank hides it), which is the last structural gap in notes. **n.17** shipped as something bigger than planned: **one creation engine for all three apps** (`CL`, `docs/CREATION_LANGUAGE.md`) — tasks got their first **typed due date** (`$friday`), notes got the whole grammar. **n.11 is closed as a non-issue** — n.13 made the link chips keyboard-navigable, so every link is already reachable without a mouse. **The notes app has nothing open.** One item left: **e.9**.
+**33 of 36 resolved.**  ⏳ **a.9 + e.10 are BUILT and awaiting your test** (not counted until you've run them). Every original audit item (n.1–n.15 · e.1–e.6 · a.1–a.8) is closed; what's left was all spun out during testing. **n.16** is done and user-tested — the vault's base directory is now a folder you can **name** (a user preference, default `Inbox`; blank hides it), which is the last structural gap in notes. **n.17** shipped as something bigger than planned: **one creation engine for all three apps** (`CL`, `docs/CREATION_LANGUAGE.md`) — tasks got their first **typed due date** (`$friday`), notes got the whole grammar. **n.11 is closed as a non-issue** — n.13 made the link chips keyboard-navigable, so every link is already reachable without a mouse. **The notes app has nothing open.** **e.10** (the "all calendars" nav row + its preference) and **a.9** (the glyph list is now the enforced source of truth — 40 glyphs, an off-list one is a 400) are **built, ready to test**. **e.9** (no creation-language caller on the calendar) remains captured, not scheduled.
 
 | batch | items |
 |---|---|
@@ -18,10 +18,11 @@ Some notes about keyboard accessiblity for section 6. (2E §6.4 — the final ke
 | 6 | ✅ n.13 re-fix (`+ link` as its own ladder rung, entered with `i` **or** space) · ✅ n.14 **redo** (the notes quick-add bar — the phantom "unsaved note" state is gone) · ✅ n.15 (`f` = find text **in this view**; the box was silently searching the whole vault) · ✅ n.18 (`e` peeks a note in the right-hand drawer) · ✅ e.7 (`e` = the day's agenda · `E` = agenda + the day's first item) |
 | 7 | ✅ **e.7** (`e` = the day’s agenda · `E` = agenda + the day’s first item) · ✅ **n.16** — the vault's base directory as a folder you can name (`users.notes_root_name`, default `Inbox`, blank = hidden) · `folder:<name>` addresses the vault root · the verbs on that row are inert by construction |
 | 8 | ✅ **n.17** — the **creation language**: one engine (`CL`), `#` `$` `/` `{…}` on tasks **and** notes; tasks gain a typed due date · **n.11** closed as a non-issue (the link chips are navigable — n.13) · **e.8** (`J`/`K` jump event-to-event in the agenda) |
+| 9 | ⏳ **a.9** — the glyph picker is the source of truth (40 glyphs; parity-locked frontend≡server; an off-list glyph is a **400**) · ⏳ **e.10** — the "all calendars" nav row + its preference (and the keyboard could not clear a calendar filter at all before it) |
 
 **Behavior changes now live:** **`e` on the calendar** opens the day's agenda (that was `E`); **`E`** now opens the agenda *and* the day's first item in your current view. **`f` on the notes list** finds text *within the current folder/view* (it used to search the whole vault, ignoring both). **`d` in the note body** is vim's operator prefix (`dd`/`dw`), not delete-note (that's on the field rows + the notes list). **`n`** enters the app nav rather than just toggling it. **`c`** clears the query (was `x`). **Notes are created from a quick-add bar** (`i`, then a name, then `↵`) — the `＋ new` button and the unsaved-note editor state are gone.
 
-**Outstanding:** **e.9** — the calendar has no creation-language caller (captured, not scheduled). That's the whole list.
+**Outstanding:** **e.10** + **a.9** — ⏳ **built, awaiting your smoke test** · **e.9** (the calendar has no creation-language caller) — captured, not scheduled.
 
 ## notes
 
@@ -214,6 +215,29 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 
 ### Open
 
+**e.10 — Design: there's no "all calendars" — every way into the events app applies a filter.** Every saved event view carries a query (the seeds are all date-filtered: *This week* · *This month* · *Next month*), and every calendar in the nav is itself a filter. There's no entry that means **"show me everything, unfiltered."** *(User: same spirit as the notes base directory — "just a way to see an unfiltered calendar view." No code yet; hashing out the details.)*
+>
+> **The good news: the unfiltered state already EXISTS.** `store.openCalendar()` (`data.js:802`) sets exactly it — `{ kind:'calendar', query:'type:event', calendarId:null }`. So nothing needs inventing. **What's missing is a way to GET there:**
+> - **No nav row.** The calendars section lists real calendars, and picking one *filters*. Nothing in the nav means "all of them", so `j`/`k` can never land on it.
+> - **The only exit is mouse-only.** The lone caller of `openCalendar()` is the **✕ on the filter chip** (`calendar.js:219`). A keyboard user who selects a calendar **cannot get back to the unfiltered view at all** — that part is a straight bug, not a design question.
+> - **No seeded "all events" view** to fall back on (`seed.ts:86-88` are all date-filtered).
+>
+> *This is n.16's shape almost exactly: the state is real and writable, it just has no row and no key. **Recommended: a synthetic "all calendars" row pinned above the calendar list**, calling `openCalendar()` — the same pattern the base-directory row uses (its own `kind` in `sideItems()`, so the folder/calendar verbs are inert on it by construction; `catActive` highlights it when `view.calendarId === null`). That fixes the keyboard hole and the missing entry point in one move, and it costs no data model.*
+>
+> **DECIDED (user): a NAV ROW under Calendars, named by a PREFERENCE — the n.16 pattern, reused.**
+> - **A synthetic nav row**, pinned above the calendar list, calling `openCalendar()`. Not a seeded saved view: a view is user-deletable, lives in the query section rather than beside the calendars it's clearing, and can't be the thing you always fall back to. (A saved view remains a fine *addition* later, not a substitute.)
+> - **Named in preferences**, in the account screen, **above the notes base-directory field** — because the calendar app sits above notes in the rail, and the two settings are the same idea (*"what do we call the unfiltered thing?"*). Same semantics as n.16: **blank hides the row**.
+> - **Default name: `Everything`** (user's pick). ⚠ *Noted collision:* the app already says "Everything" for a **multi-type** view (tasks + events + notes — **a.7**), whereas this means "all event **calendars**". Context disambiguates (it renders inside the events nav's calendar section) and the preference lets any user rename it — but the word now carries two scopes, deliberately.
+> - **Events-only.** On a **tasks** calendar (e.5) the grid shows tasks, which have their own unfiltered path. This row is a *calendar* filter-clearer; it must not try to be cross-app.
+>
+> *The **keyboard hole is the real payoff**: with a nav row, `j`/`k` land on it and `Enter` clears the calendar filter. Today that filter can only be cleared with a mouse.*
+> **✅ READY TO TEST**
+> **How to test:** the calendars nav shows **Everything** on top. Pick a calendar → the grid filters to it. Now the whole point: **`j`/`k` onto the Everything row + `Enter` clears the filter** — before this, the ✕ on the filter chip was the only way back, so a keyboard user was stuck. `h` out of the unfiltered view lands **on the row**, not on a query. `e`/`x`/`a` toast toward preferences (it isn't a calendar — it's the *absence* of a calendar filter, so it has no verbs). Account (`@`) → the **all calendars** field sits **above** the base-directory one → rename it and the nav row **and the view title** change live; blank it and the row disappears and the title falls back to *Calendar*; name it after an existing calendar → **400**.
+>
+> *Built on the n.16 shape, with one thing deliberately simpler: **no sentinel id**. The notes base row is a FILTER (`folderId === null`) and needed one; this row is the ABSENCE of a filter, and `openCalendar()`'s view id is already `'calendar'` — reusing it as the row id makes the sidebar's cursor-restore match for free. `openCalendar()` gained one line (its title follows the preference), which covers all **7** callers at once.*
+>
+> *Two latent bugs in the base-directory row surfaced while generalizing its guards, and are fixed for both synthetic rows: `Tab` called `toggleSection('baseFolder')` — a section that doesn't exist — and `h` sent the cursor to `head_query` instead of the row's own section header.*
+
 **e.9 — Gap: the calendar has no caller for the creation language.** The creation-language engine (`CL`, `docs/CREATION_LANGUAGE.md`) ships knowing how to build an **event** — `date → startAt`, `category → calendarId`, `body → notes` — and it's golden-tested. **Nothing calls it**, because the calendar has no text-entry creation surface at all: `i` on a day opens the event **drawer**, and there is nowhere to type `Retro /Work $friday`. Tasks and notes both got the grammar; events are the odd one out. *(Filed as a deliverable of the creation-language build; **no code** — this is a design call.)*
 > *The engine half is **done and free**: `CL.apply('event', …)` is implemented and pinned by a golden, so this item is a **UI** question, not an engine one. What needs deciding:*
 > - **Where does the bar live?** The calendar's main surface is a **grid**, not a list — there's no natural strip above a list of rows the way there is on tasks/notes. Candidates: a bar in the calendar header · a bar inside the **day-agenda drawer** (`e`), which *is* a list and already has an `i` that creates at the focused hour.
@@ -364,6 +388,31 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 *(none yet)*
 
 ## all
+
+### Open
+
+**a.9 — Design: the glyph picker isn't the source of truth — the server accepts ANY string.** Spotted by the user: *"I see a heart icon on the Personal calendar and that doesn't look like an icon that I can select on the edit."* Correct — it can't be. `glyph` is `Type.String()` in **every** schema (`schemas.ts` — projects · calendars · folders · saved queries), so nothing is validated against the 30-glyph list the UI offers (`data.js:35`).
+> *It came from the seeds, not from a user: `seed-dev.ts:253` hardcodes `glyph: '♥'`. And it's **not just the heart** — the seeds ship **four** unpickable glyphs: **`⌂`** (the Inbox project) · **`♥`** (the Personal calendar) · **`◫`** and **`»`** (the *This month* / *Next month* saved views). So "what the picker offers" and "what's storable" have always disagreed.*
+>
+> **DECIDED (user): the 30-glyph list becomes the source of truth, and the server enforces it.**
+> - **Parity-locked twin, exactly like the query engine.** `frontend/js/glyphs.js` (`window.GLYPHS`) is canonical; `server/src/glyphs.ts` carries the same array; a **test reads the frontend file and asserts the two are identical**, so they cannot drift. No build step, no generated files, no new directories — and CI now runs both suites, so it can't rot. *(The rejected alternatives: a generated file from a shared JSON — first generated artifact in a deliberately build-free frontend; or the server parsing the frontend's JS at boot — breaks under `serveFrontend:false` and a relocated `FRONTEND_DIR`, both of which exist.)*
+> - **Validate with a TypeBox literal union** on every glyph-bearing create/update → an unknown glyph is a **400**, not a silently-stored surprise.
+> - **Keep the list at 30 and FIX THE SEEDS** (user's call — the picker stays the source of truth rather than growing to excuse what shipped). ⚠ **This needs a migration**, and it's the same trap the Inbox capitalization hit: existing rows in a live DB hold `⌂ ♥ ◫ »`, so switching validation on without rewriting them means **the first edit of a seeded project/calendar/view 400s**. The migration must rewrite those four to legal glyphs, and `migrate-from-legacy` must do the same for a cutover import (migrations run against the **empty** target before the import inserts anything).
+> - *The synthetic nav rows (the notes base directory, and now the calendars row) aren't DB rows and so aren't validated — but their glyphs must come from the list too, or the source of truth is a lie the app itself tells.*
+
+> **⚠ The scope was bigger than the heart, and the count decided the design.** Once measured, the app ships **~12** off-list glyphs — not one. Nine of them are the **system views' icons** (Today `☉` · Open `○` · Overdue `!` · Recurring `↻` · No date `∅` · `◫` · `»` · `✎` · `◉`), plus the Inbox `⌂` and **`▸`, the default glyph of every folder adopted from the vault**. "Keep 30 and rewrite the seeds" would therefore have **changed the icon on every existing user's Today/Open/Overdue** — a visible regression to live data, to defend a round number.
+>
+> **DECIDED (user): grow the list to cover what the app already ships, then lock it — landing on an even 40 by trimming `⌂` and `♥`.** `30 + [☉ ○ ! ↻ ∅ ◫ » ✎ ◉ ▸] = 40`. Nothing a user sees changes appearance; the only data change is the Inbox project's `⌂` → **`❯`** (the user's pick — already glyph #1).
+>
+> *Built as a **parity-locked twin**, the same idiom as the query engine: `frontend/js/glyphs.js` (`window.GLYPHS`) is the source of truth, `server/src/glyphs.ts` mirrors it, and `server/test/glyphs.test.ts` **loads the real frontend file in a `vm`** and fails if they drift. The request schemas validate against it (a `Type.Literal` union) — an off-list glyph is now a **400**.*
+>
+> **Three things the build had to get right, and one it nearly got wrong:**
+> 1. **RESPONSE schemas stay `Type.String()`.** Fastify *serializes* through them and `BootstrapSchema` reuses them — tightening those would make one stray legacy glyph break `GET /api/bootstrap` for the **entire account**. Validate what comes in; never gag what goes out.
+> 2. **`migrate-from-legacy` cannot rely on migration 010** — migrations run against the **empty** target *before* the importer inserts a row. The exact trap the `Inbox` capitalization hit. The importer normalizes glyphs itself, with the same `⌂ → ❯` rule; a legacy cutover is the path prod actually takes, and the migration test now pins both halves (`⌂` gets mapped, `☉` is **left alone** — a shipped icon must not be normalized away).
+> 3. **The `▸` folder default arrives from `.tdx-folder.json` on the user's own filesystem**, never through a request schema. It's coerced now — the vault is theirs to hand-edit, so trusting it would have left a hole straight past the lock.
+> 4. *Nearly missed: the **app itself** was violating its own rule — the frontend's demo data and the notes base-directory row used `⌂`/`⚡`. A source of truth the app breaks is not one.*
+> **✅ READY TO TEST**
+> **How to test:** the edit modal now offers **40** glyphs — including `☉ ○ ! ▸`, the ones the system views were already wearing. Every seeded view keeps its icon. The **Inbox project shows `❯`** (and so does the notes base-directory row, which is named after it). Over the wire, a `♥` or `⌂` on a project/calendar/folder/view is a **400**; a `☉` or `▸` is a 201. Verified against the dev DB: **zero illegal glyphs** after migration.
 
 ### Resolved issues
 

@@ -106,6 +106,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
     let sortPrefs = current.sort_prefs ?? null; // JSON string or null
     let fibSizing = current.fib_sizing ?? 0;
     let rootName = current.notes_root_name ?? 'Inbox'; // '' = the base directory is hidden (n.16)
+    let allCalName = current.calendars_all_name ?? 'Everything'; // '' = the row is hidden (e.10)
 
     if (body.theme !== undefined) {
       if (!ALLOWED_THEMES.includes(body.theme as string))
@@ -149,6 +150,29 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
             .send({ error: 'a folder is already called that', field: 'notes_root_name' });
       }
       rootName = v;
+    }
+    // the "all calendars" nav row's name (e.10). '' is VALID — it hides the row, which is exactly
+    // how the events app behaved before the feature. Unlike the base directory this name is NOT
+    // query-addressable (the row means "no calendar filter", not "events with no calendar"), so
+    // the collision check is about the NAV, not the query language: two rows in the same section
+    // reading the same word is just confusing.
+    if (body.calendars_all_name !== undefined) {
+      const v = String(body.calendars_all_name ?? '').trim();
+      if (v.length > 60)
+        return reply.code(400).send({ error: 'name too long', field: 'calendars_all_name' });
+      if (v) {
+        const calendars = await app.db
+          .selectFrom('calendars')
+          .select('name')
+          .where('owner_id', '=', userId)
+          .where('archived', '=', 0)
+          .execute();
+        if (calendars.some((c) => slug(c.name) === slug(v)))
+          return reply
+            .code(400)
+            .send({ error: 'a calendar is already called that', field: 'calendars_all_name' });
+      }
+      allCalName = v;
     }
     if (body.username !== undefined) {
       const v = validateUsername(body.username);
@@ -207,6 +231,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
           sort_prefs: sortPrefs,
           fib_sizing: fibSizing,
           notes_root_name: rootName,
+          calendars_all_name: allCalName,
           updated_at: now,
         })
         .where('id', '=', userId)
@@ -234,6 +259,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
       sort_prefs: sortPrefs,
       fib_sizing: fibSizing,
       notes_root_name: rootName,
+      calendars_all_name: allCalName,
       is_admin: current.is_admin,
     });
     return result;

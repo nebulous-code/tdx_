@@ -44,6 +44,7 @@ export interface SessionUser {
   sort_prefs: string | null;
   fib_sizing: number;
   notes_root_name: string;
+  calendars_all_name: string;
   is_admin: number;
 }
 
@@ -98,6 +99,7 @@ export async function resolveSession(db: DB, rawToken: string): Promise<SessionU
       'sort_prefs',
       'fib_sizing',
       'notes_root_name',
+      'calendars_all_name',
       'is_admin',
     ])
     .where('id', '=', sess.user_id)
@@ -182,6 +184,7 @@ export interface PublicUser {
   sort_prefs: SortPrefs | null;
   fib_sizing: boolean;
   notes_root_name: string;
+  calendars_all_name: string;
   is_admin: boolean;
 }
 export function publicUser(u: SessionUser): PublicUser {
@@ -196,6 +199,7 @@ export function publicUser(u: SessionUser): PublicUser {
     // `??`, NOT `||`: '' is a MEANINGFUL value (the base directory is hidden) and must
     // survive — `||` would silently resurrect the default every time the user hides it.
     notes_root_name: u.notes_root_name ?? 'Inbox',
+    calendars_all_name: u.calendars_all_name ?? 'Everything', // `??` for the same reason: '' = hidden
     is_admin: !!u.is_admin,
   };
 }

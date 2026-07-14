@@ -274,6 +274,80 @@ test('account: notes_root_name colliding with a real folder → 400', async () =
   assert.equal(res.json().field, 'notes_root_name');
 });
 
+// ---- calendars_all_name: the "all calendars" nav row (e.10) ----------------
+
+test('account: calendars_all_name accepted, echoed, and survives a round-trip to /me', async () => {
+  const ok = await app.inject({
+    method: 'PUT',
+    url: '/api/auth/account',
+    headers: { cookie },
+    payload: { calendars_all_name: 'All events' },
+  });
+  assert.equal(ok.statusCode, 200);
+  // the response is hand-built, NOT re-read from the row — this asserts it wasn't forgotten
+  assert.equal(ok.json().calendars_all_name, 'All events');
+
+  const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie } });
+  assert.equal(me.json().calendars_all_name, 'All events');
+
+  await app.inject({
+    method: 'PUT',
+    url: '/api/auth/account',
+    headers: { cookie },
+    payload: { calendars_all_name: 'Everything' },
+  });
+});
+
+test('account: a blank calendars_all_name is VALID — it hides the row', async () => {
+  const res = await app.inject({
+    method: 'PUT',
+    url: '/api/auth/account',
+    headers: { cookie },
+    payload: { calendars_all_name: '' },
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.json().calendars_all_name, ''); // not coerced back to 'Everything'
+
+  await app.inject({
+    method: 'PUT',
+    url: '/api/auth/account',
+    headers: { cookie },
+    payload: { calendars_all_name: 'Everything' },
+  });
+});
+
+test('account: calendars_all_name over 60 chars → 400', async () => {
+  const res = await app.inject({
+    method: 'PUT',
+    url: '/api/auth/account',
+    headers: { cookie },
+    payload: { calendars_all_name: 'x'.repeat(61) },
+  });
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.json().field, 'calendars_all_name');
+});
+
+// Not a query-language collision (unlike the notes base directory, this name isn't addressable
+// by `calendar:`) — it's a NAV collision: two rows in the same section reading the same word.
+test('account: calendars_all_name colliding with a real calendar → 400', async () => {
+  const mk = await app.inject({
+    method: 'POST',
+    url: '/api/calendars',
+    headers: { cookie },
+    payload: { name: 'Personal' },
+  });
+  assert.equal(mk.statusCode, 201);
+
+  const res = await app.inject({
+    method: 'PUT',
+    url: '/api/auth/account',
+    headers: { cookie },
+    payload: { calendars_all_name: 'personal' }, // slug-equal → collides
+  });
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.json().field, 'calendars_all_name');
+});
+
 test('account: username invalid → 400; valid + no clash → 200', async () => {
   const bad = await app.inject({
     method: 'PUT',

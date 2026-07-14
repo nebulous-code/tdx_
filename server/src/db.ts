@@ -30,6 +30,7 @@ export interface UsersTable {
   sort_prefs: string | null;
   fib_sizing: number;
   notes_root_name: string; // the user's name for the vault's base directory ('' = hidden) — n.16
+  calendars_all_name: string; // the user's name for the "all calendars" nav row ('' = hidden) — e.10
   is_admin: number;
   created_at: string;
   updated_at: string;

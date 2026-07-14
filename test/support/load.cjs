@@ -39,10 +39,11 @@ function loadEngines() {
 function loadStore() {
   ensureWindow();
   execFile('vue.global.prod.js'); // -> global Vue (reactive is pure/Proxy, no DOM)
+  execFile('glyphs.js');          // -> window.GLYPHS (data.js reads it at load time)
   execFile('recurrence.js');
   execFile('query.js');
   execFile('create.js');          // -> window.CL (data.js's clCtx/clGhost need it)
-  execFile('data.js');            // -> window.store; uses Vue/Rec/Q/CL
+  execFile('data.js');            // -> window.store; uses Vue/Rec/Q/CL/GLYPHS
   return {
     store: globalThis.store,
     Rec: globalThis.Rec,
