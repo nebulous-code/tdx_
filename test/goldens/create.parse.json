@@ -1,0 +1,1067 @@
+[
+  {
+    "type": "task",
+    "text": "Ship the recurrence builder",
+    "title": "Ship the recurrence builder",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "#label — a tag, anywhere in the line",
+    "title": "— a tag, anywhere in the line",
+    "fields": {
+      "labels": [
+        "label"
+      ]
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Call mom #fun",
+    "title": "Call mom",
+    "fields": {
+      "labels": [
+        "fun"
+      ]
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Call #fun mom #errand",
+    "title": "Call mom",
+    "fields": {
+      "labels": [
+        "fun",
+        "errand"
+      ]
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "#fun",
+    "title": "#fun",
+    "fields": {
+      "labels": [
+        "fun"
+      ]
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "!N — priority, TASKS ONLY (a note has no such field)",
+    "title": "!N — priority, TASKS ONLY (a note has no such field)",
+    "fields": {},
+    "literal": [
+      "!N"
+    ]
+  },
+  {
+    "type": "task",
+    "text": "Fix the build !2",
+    "title": "Fix the build",
+    "fields": {
+      "priority": 2
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Ship it !!!",
+    "title": "Ship it !!!",
+    "fields": {},
+    "literal": [
+      "!!!"
+    ]
+  },
+  {
+    "type": "task",
+    "text": "Ten bangs !10",
+    "title": "Ten bangs !10",
+    "fields": {},
+    "literal": [
+      "!10"
+    ]
+  },
+  {
+    "type": "task",
+    "text": "Priority zero !0 and five !5",
+    "title": "Priority zero and five !5",
+    "fields": {
+      "priority": 0
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "$ — the date",
+    "title": "$ — the date",
+    "fields": {},
+    "literal": [
+      "$"
+    ]
+  },
+  {
+    "type": "task",
+    "text": "Pay rent $today",
+    "title": "Pay rent",
+    "fields": {
+      "date": "2026-06-18"
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Pay rent $tomorrow",
+    "title": "Pay rent",
+    "fields": {
+      "date": "2026-06-19"
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Standup $friday",
+    "title": "Standup",
+    "fields": {
+      "date": "2026-06-19"
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Standup $fri",
+    "title": "Standup",
+    "fields": {
+      "date": "2026-06-19"
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Retro $next friday",
+    "title": "Retro",
+    "fields": {
+      "date": "2026-06-26"
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Retro $next fri",
+    "title": "Retro",
+    "fields": {
+      "date": "2026-06-26"
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Board meeting $2026-07-13",
+    "title": "Board meeting",
+    "fields": {
+      "date": "2026-07-13"
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "American first $6/7/2026",
+    "title": "American first",
+    "fields": {
+      "date": "2026-06-07"
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Only one reading $13/7/2026",
+    "title": "Only one reading",
+    "fields": {
+      "date": "2026-07-13"
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Two-digit year $6/7/26",
+    "title": "Two-digit year",
+    "fields": {
+      "date": "2026-06-07"
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "No year $12/25",
+    "title": "No year",
+    "fields": {
+      "date": "2026-12-25"
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Dots $6.7.2026",
+    "title": "Dots",
+    "fields": {
+      "date": "2026-06-07"
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Dashes $6-7-2026",
+    "title": "Dashes",
+    "fields": {
+      "date": "2026-06-07"
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Not a date: pay Bob $5",
+    "title": "Not a date: pay Bob $5",
+    "fields": {},
+    "literal": [
+      "$5"
+    ]
+  },
+  {
+    "type": "task",
+    "text": "Not a date $notaday",
+    "title": "Not a date $notaday",
+    "fields": {},
+    "literal": [
+      "$notaday"
+    ]
+  },
+  {
+    "type": "task",
+    "text": "Never rolls over $2/31/2026",
+    "title": "Never rolls over $2/31/2026",
+    "fields": {},
+    "literal": [
+      "$2/31/2026"
+    ]
+  },
+  {
+    "type": "task",
+    "text": "/ — the categorizer (project · folder · calendar)",
+    "title": "/ — the categorizer (project · folder · calendar)",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Fix the flicker /tdx-app",
+    "title": "Fix the flicker",
+    "fields": {
+      "category": "tdx-app"
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Slug match /tdx",
+    "title": "Slug match",
+    "fields": {
+      "category": "tdx"
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Unknown stays literal /nosuchthing",
+    "title": "Unknown stays literal /nosuchthing",
+    "fields": {},
+    "literal": [
+      "/nosuchthing"
+    ]
+  },
+  {
+    "type": "task",
+    "text": "Bare slash / stays",
+    "title": "Bare slash / stays",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "{} — the body",
+    "title": "— the body",
+    "fields": {
+      "body": ""
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Call the plumber {ask about the leak under the sink}",
+    "title": "Call the plumber",
+    "fields": {
+      "body": "ask about the leak under the sink"
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Unterminated {stays literal",
+    "title": "Unterminated {stays literal",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Empty {}",
+    "title": "Empty",
+    "fields": {
+      "body": ""
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "everything at once",
+    "title": "everything at once",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Call plumber /home #errand !2 $friday {ask about the leak}",
+    "title": "Call plumber",
+    "fields": {
+      "body": "ask about the leak",
+      "category": "home",
+      "labels": [
+        "errand"
+      ],
+      "priority": 2,
+      "date": "2026-06-19"
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Standup /home #fun $tomorrow {agenda: ship it}",
+    "title": "Standup",
+    "fields": {
+      "body": "agenda: ship it",
+      "category": "home",
+      "labels": [
+        "fun"
+      ],
+      "date": "2026-06-19"
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Ship the recurrence builder",
+    "title": "Ship the recurrence builder",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "#label — a tag, anywhere in the line",
+    "title": "— a tag, anywhere in the line",
+    "fields": {
+      "labels": [
+        "label"
+      ]
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Call mom #fun",
+    "title": "Call mom",
+    "fields": {
+      "labels": [
+        "fun"
+      ]
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Call #fun mom #errand",
+    "title": "Call mom",
+    "fields": {
+      "labels": [
+        "fun",
+        "errand"
+      ]
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "#fun",
+    "title": "#fun",
+    "fields": {
+      "labels": [
+        "fun"
+      ]
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "!N — priority, TASKS ONLY (a note has no such field)",
+    "title": "!N — priority, TASKS ONLY (a note has no such field)",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Fix the build !2",
+    "title": "Fix the build !2",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Ship it !!!",
+    "title": "Ship it !!!",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Ten bangs !10",
+    "title": "Ten bangs !10",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Priority zero !0 and five !5",
+    "title": "Priority zero !0 and five !5",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "$ — the date",
+    "title": "$ — the date",
+    "fields": {},
+    "literal": [
+      "$"
+    ]
+  },
+  {
+    "type": "note",
+    "text": "Pay rent $today",
+    "title": "Pay rent",
+    "fields": {
+      "date": "2026-06-18"
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Pay rent $tomorrow",
+    "title": "Pay rent",
+    "fields": {
+      "date": "2026-06-19"
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Standup $friday",
+    "title": "Standup",
+    "fields": {
+      "date": "2026-06-19"
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Standup $fri",
+    "title": "Standup",
+    "fields": {
+      "date": "2026-06-19"
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Retro $next friday",
+    "title": "Retro",
+    "fields": {
+      "date": "2026-06-26"
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Retro $next fri",
+    "title": "Retro",
+    "fields": {
+      "date": "2026-06-26"
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Board meeting $2026-07-13",
+    "title": "Board meeting",
+    "fields": {
+      "date": "2026-07-13"
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "American first $6/7/2026",
+    "title": "American first",
+    "fields": {
+      "date": "2026-06-07"
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Only one reading $13/7/2026",
+    "title": "Only one reading",
+    "fields": {
+      "date": "2026-07-13"
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Two-digit year $6/7/26",
+    "title": "Two-digit year",
+    "fields": {
+      "date": "2026-06-07"
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "No year $12/25",
+    "title": "No year",
+    "fields": {
+      "date": "2026-12-25"
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Dots $6.7.2026",
+    "title": "Dots",
+    "fields": {
+      "date": "2026-06-07"
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Dashes $6-7-2026",
+    "title": "Dashes",
+    "fields": {
+      "date": "2026-06-07"
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Not a date: pay Bob $5",
+    "title": "Not a date: pay Bob $5",
+    "fields": {},
+    "literal": [
+      "$5"
+    ]
+  },
+  {
+    "type": "note",
+    "text": "Not a date $notaday",
+    "title": "Not a date $notaday",
+    "fields": {},
+    "literal": [
+      "$notaday"
+    ]
+  },
+  {
+    "type": "note",
+    "text": "Never rolls over $2/31/2026",
+    "title": "Never rolls over $2/31/2026",
+    "fields": {},
+    "literal": [
+      "$2/31/2026"
+    ]
+  },
+  {
+    "type": "note",
+    "text": "/ — the categorizer (project · folder · calendar)",
+    "title": "/ — the categorizer (project · folder · calendar)",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Fix the flicker /tdx-app",
+    "title": "Fix the flicker /tdx-app",
+    "fields": {},
+    "literal": [
+      "/tdx-app"
+    ]
+  },
+  {
+    "type": "note",
+    "text": "Slug match /tdx",
+    "title": "Slug match /tdx",
+    "fields": {},
+    "literal": [
+      "/tdx"
+    ]
+  },
+  {
+    "type": "note",
+    "text": "Unknown stays literal /nosuchthing",
+    "title": "Unknown stays literal /nosuchthing",
+    "fields": {},
+    "literal": [
+      "/nosuchthing"
+    ]
+  },
+  {
+    "type": "note",
+    "text": "Bare slash / stays",
+    "title": "Bare slash / stays",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "{} — the body",
+    "title": "— the body",
+    "fields": {
+      "body": ""
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Call the plumber {ask about the leak under the sink}",
+    "title": "Call the plumber",
+    "fields": {
+      "body": "ask about the leak under the sink"
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Unterminated {stays literal",
+    "title": "Unterminated {stays literal",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Empty {}",
+    "title": "Empty",
+    "fields": {
+      "body": ""
+    },
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "everything at once",
+    "title": "everything at once",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "note",
+    "text": "Call plumber /home #errand !2 $friday {ask about the leak}",
+    "title": "Call plumber /home !2",
+    "fields": {
+      "body": "ask about the leak",
+      "labels": [
+        "errand"
+      ],
+      "date": "2026-06-19"
+    },
+    "literal": [
+      "/home"
+    ]
+  },
+  {
+    "type": "note",
+    "text": "Standup /home #fun $tomorrow {agenda: ship it}",
+    "title": "Standup /home",
+    "fields": {
+      "body": "agenda: ship it",
+      "labels": [
+        "fun"
+      ],
+      "date": "2026-06-19"
+    },
+    "literal": [
+      "/home"
+    ]
+  },
+  {
+    "type": "event",
+    "text": "Ship the recurrence builder",
+    "title": "Ship the recurrence builder",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "#label — a tag, anywhere in the line",
+    "title": "— a tag, anywhere in the line",
+    "fields": {
+      "labels": [
+        "label"
+      ]
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Call mom #fun",
+    "title": "Call mom",
+    "fields": {
+      "labels": [
+        "fun"
+      ]
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Call #fun mom #errand",
+    "title": "Call mom",
+    "fields": {
+      "labels": [
+        "fun",
+        "errand"
+      ]
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "#fun",
+    "title": "#fun",
+    "fields": {
+      "labels": [
+        "fun"
+      ]
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "!N — priority, TASKS ONLY (a note has no such field)",
+    "title": "!N — priority, TASKS ONLY (a note has no such field)",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Fix the build !2",
+    "title": "Fix the build !2",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Ship it !!!",
+    "title": "Ship it !!!",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Ten bangs !10",
+    "title": "Ten bangs !10",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Priority zero !0 and five !5",
+    "title": "Priority zero !0 and five !5",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "$ — the date",
+    "title": "$ — the date",
+    "fields": {},
+    "literal": [
+      "$"
+    ]
+  },
+  {
+    "type": "event",
+    "text": "Pay rent $today",
+    "title": "Pay rent",
+    "fields": {
+      "date": "2026-06-18"
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Pay rent $tomorrow",
+    "title": "Pay rent",
+    "fields": {
+      "date": "2026-06-19"
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Standup $friday",
+    "title": "Standup",
+    "fields": {
+      "date": "2026-06-19"
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Standup $fri",
+    "title": "Standup",
+    "fields": {
+      "date": "2026-06-19"
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Retro $next friday",
+    "title": "Retro",
+    "fields": {
+      "date": "2026-06-26"
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Retro $next fri",
+    "title": "Retro",
+    "fields": {
+      "date": "2026-06-26"
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Board meeting $2026-07-13",
+    "title": "Board meeting",
+    "fields": {
+      "date": "2026-07-13"
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "American first $6/7/2026",
+    "title": "American first",
+    "fields": {
+      "date": "2026-06-07"
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Only one reading $13/7/2026",
+    "title": "Only one reading",
+    "fields": {
+      "date": "2026-07-13"
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Two-digit year $6/7/26",
+    "title": "Two-digit year",
+    "fields": {
+      "date": "2026-06-07"
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "No year $12/25",
+    "title": "No year",
+    "fields": {
+      "date": "2026-12-25"
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Dots $6.7.2026",
+    "title": "Dots",
+    "fields": {
+      "date": "2026-06-07"
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Dashes $6-7-2026",
+    "title": "Dashes",
+    "fields": {
+      "date": "2026-06-07"
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Not a date: pay Bob $5",
+    "title": "Not a date: pay Bob $5",
+    "fields": {},
+    "literal": [
+      "$5"
+    ]
+  },
+  {
+    "type": "event",
+    "text": "Not a date $notaday",
+    "title": "Not a date $notaday",
+    "fields": {},
+    "literal": [
+      "$notaday"
+    ]
+  },
+  {
+    "type": "event",
+    "text": "Never rolls over $2/31/2026",
+    "title": "Never rolls over $2/31/2026",
+    "fields": {},
+    "literal": [
+      "$2/31/2026"
+    ]
+  },
+  {
+    "type": "event",
+    "text": "/ — the categorizer (project · folder · calendar)",
+    "title": "/ — the categorizer (project · folder · calendar)",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Fix the flicker /tdx-app",
+    "title": "Fix the flicker /tdx-app",
+    "fields": {},
+    "literal": [
+      "/tdx-app"
+    ]
+  },
+  {
+    "type": "event",
+    "text": "Slug match /tdx",
+    "title": "Slug match /tdx",
+    "fields": {},
+    "literal": [
+      "/tdx"
+    ]
+  },
+  {
+    "type": "event",
+    "text": "Unknown stays literal /nosuchthing",
+    "title": "Unknown stays literal /nosuchthing",
+    "fields": {},
+    "literal": [
+      "/nosuchthing"
+    ]
+  },
+  {
+    "type": "event",
+    "text": "Bare slash / stays",
+    "title": "Bare slash / stays",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "{} — the body",
+    "title": "— the body",
+    "fields": {
+      "body": ""
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Call the plumber {ask about the leak under the sink}",
+    "title": "Call the plumber",
+    "fields": {
+      "body": "ask about the leak under the sink"
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Unterminated {stays literal",
+    "title": "Unterminated {stays literal",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Empty {}",
+    "title": "Empty",
+    "fields": {
+      "body": ""
+    },
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "everything at once",
+    "title": "everything at once",
+    "fields": {},
+    "literal": []
+  },
+  {
+    "type": "event",
+    "text": "Call plumber /home #errand !2 $friday {ask about the leak}",
+    "title": "Call plumber /home !2",
+    "fields": {
+      "body": "ask about the leak",
+      "labels": [
+        "errand"
+      ],
+      "date": "2026-06-19"
+    },
+    "literal": [
+      "/home"
+    ]
+  },
+  {
+    "type": "event",
+    "text": "Standup /home #fun $tomorrow {agenda: ship it}",
+    "title": "Standup /home",
+    "fields": {
+      "body": "agenda: ship it",
+      "labels": [
+        "fun"
+      ],
+      "date": "2026-06-19"
+    },
+    "literal": [
+      "/home"
+    ]
+  }
+]

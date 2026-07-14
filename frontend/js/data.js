@@ -582,17 +582,30 @@
   // Project deterministically; Flags (recurring/reminder/is/has) and free text
   // are ignored (see store.viewWarn). For dates we pick the day closest to today
   // that satisfies the view's due/status terms — reusing the query engine itself.
-  const APPLIED_FIELDS = new Set(['project','label','status','due']);
-  store.viewDefaults = () => {
+  const APPLIED_FIELDS = new Set(['project','label','status','due','folder','calendar','category']);
+  // The view's implied fields, in the creation engine's ABSTRACT vocabulary
+  // ({labels, category, date, done}) — CL.apply maps them onto each type's own columns
+  // (category → projectId / folderId / calendarId; date → due / reviewAt / startAt),
+  // exactly as the query engine already maps `due:` and `category:` per type.
+  //
+  // This is what lets a note created in a `label:work` view actually STAY in that view
+  // — and it's why the quick-add's ⚠ shrinks instead of getting louder: the fields it
+  // used to warn about are now applied.
+  const CAT_FIELD = { task:'project', note:'folder', event:'calendar' };
+  const CAT_LIST  = { task:'projects', note:'folders', event:'calendars' };
+  store.defaultsFor = (type) => {
     const out = { labels: [] };
     const terms = Q.parse(store.currentQuery()).terms;
     const ctx = store.ctx();
 
-    // project: assign the first matching project (id or name slug)
-    const pt = terms.find(t => t.field==='project' && !t.neg);
-    if(pt){
-      const p = store.projects.find(p => p.id===pt.value || Q.slug(p.name)===Q.slug(pt.value));
-      if(p) out.projectId = p.id;
+    // category: the first matching project / folder / calendar (by id or name slug).
+    // `category:` is the cross-app spelling of the same idea, so it counts too.
+    const catField = CAT_FIELD[type] || 'project';
+    const ct = terms.find(t => (t.field===catField || t.field==='category') && !t.neg);
+    if(ct){
+      const list = store[CAT_LIST[type] || 'projects'] || [];
+      const hit = list.find(c => c.id===ct.value || Q.slug(c.name)===Q.slug(ct.value));
+      if(hit) out.category = hit.id;
     }
 
     // labels: every non-negated label term, comma-lists expanded (OR -> apply all)
@@ -603,13 +616,16 @@
       });
     });
 
-    // create the task already done when the view filters to completed — either a
-    // status:done query term, or the completion pills set to completed-only (open off).
-    if(terms.some(t => t.field==='status' && t.value==='done' && !t.neg) ||
-       (store.completion.done && !store.completion.open)) out.done = true;
+    // create it already done when the view filters to completed — either a status:done
+    // query term, or the completion pills set to completed-only (open off). Tasks only:
+    // notes and events have no done state.
+    if(type==='task' && (terms.some(t => t.field==='status' && t.value==='done' && !t.neg) ||
+       (store.completion.done && !store.completion.open))) out.done = true;
 
-    // due: closest-to-today date satisfying every due/status term. due:none means
-    // "no due date", which an undated task already satisfies, so leave due unset.
+    // date: closest-to-today date satisfying every due/status term. due:none means "no
+    // date", which a new item already satisfies, so leave it unset. The probe is
+    // type-agnostic: it asks the QUERY ENGINE which day passes, and the engine already
+    // reads a note's `due:` as its review date.
     const dateTerms = terms.filter(t => t.field==='due' || t.field==='status');
     const hasDateConstraint = dateTerms.some(t =>
       t.field==='due' || t.value==='today' || t.value==='overdue');
@@ -617,7 +633,7 @@
     if(hasDateConstraint && !wantsNoDue){
       const base = Rec.startOfDay(new Date());
       // future-first: closest date that satisfies the due/status terms, preferring
-      // today/upcoming over past (so a due:<weekdays> view lands a new task on the
+      // today/upcoming over past (so a due:<weekdays> view lands a new item on the
       // next selected weekday). Regression-free for the other due filters.
       const offsets = [0];
       for(let i=1; i<=400; i++){ offsets.push(i); }
@@ -626,10 +642,20 @@
         const cand = { due: Rec.ymd(Rec.addDays(base, delta)), done: !!out.done,
           parentId:null, recurrence:null, labels:[], title:'', notes:'' };
         if(dateTerms.every(t => Q.evaluate(cand, { terms:[t], ok:true }, ctx))){
-          out.due = cand.due; break;
+          out.date = cand.due; break;
         }
       }
     }
+    return out;
+  };
+  // the task-shaped view of the same thing (projectId/due), kept because it's the shape
+  // the store's own golden pins. Key order matches the original build order.
+  store.viewDefaults = () => {
+    const d = store.defaultsFor('task');
+    const out = { labels: d.labels };
+    if(d.category !== undefined) out.projectId = d.category;
+    if(d.done !== undefined) out.done = d.done;
+    if(d.date !== undefined) out.due = d.date;
     return out;
   };
 
@@ -648,6 +674,40 @@
   store.viewWarn = () =>
     Q.parse(store.currentQuery()).terms.some(t =>
       !APPLIED_FIELDS.has(t.field) && !satisfiedByNewTask(t));
+
+  // ---- the creation language's context (CL.apply) -------------------------------------
+  // CL.parse is PURE — it hands back label NAMES and a category NAME. Every side effect
+  // (creating a label) and every lookup lives here, on the store.
+  //   known()        gates `/`: a label auto-creates, but a project/folder/calendar can't,
+  //                  so an unknown `/xyz` stays visible in the title instead of vanishing.
+  //   findCategory() resolves it, using the QUERY ENGINE'S OWN name rule (CL.nameMatch =
+  //                  catNameMatch), so `/tdx` finds `tdx-app` exactly as `project:tdx` does.
+  const catList = (kind) => kind==='folder' ? store.folders
+    : kind==='calendar' ? store.calendars : store.projects;
+  store.clCtx = (type) => ({
+    defaults: store.defaultsFor(type),
+    addLabel: (name) => store.addLabel(name),          // creates on demand — apply-time only
+    findCategory: (kind, name) => catList(kind).find(c => CL.nameMatch(c.name, name)) || null,
+  });
+  store.clKnown = (kind, name) => catList(kind).some(c => CL.nameMatch(c.name, name));
+  // Ghost-completion, shared by every quick-add: the grey suffix of the first candidate
+  // whose name extends the trailing token. Candidates depend on the SIGIL, not the app —
+  // labels for `#`, the type's categorizer for `/`, and a fixed vocabulary for `$` (the
+  // date words are the only ones a user can't discover from their own data).
+  const DATE_WORDS = ['today','tomorrow', ...CL.WD_FULL];
+  store.clCandidates = (type, sigil) =>
+    sigil==='#' ? store.sortedLabels().map(l => l.name)
+    : sigil==='/' ? catList(CL.CATEGORY_OF[type] || 'project').map(c => c.name)
+    : sigil==='$' ? DATE_WORDS
+    : [];
+  store.clGhost = (text, type) => {
+    const f = CL.fragment(text, type);
+    if(!f || !f.fragment) return '';
+    const frag = f.fragment.toLowerCase();
+    const hit = store.clCandidates(type, f.sigil)
+      .find(n => n.toLowerCase() !== frag && n.toLowerCase().startsWith(frag));
+    return hit ? hit.slice(f.fragment.length) : '';
+  };
 
   // ---- mutations ----
   store.toast = (msg) => {

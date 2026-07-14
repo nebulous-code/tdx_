@@ -98,12 +98,20 @@ window.HelpModal = {
         { k:'c',             d:'clear the query' },
         { k:'esc',           d:'back to the task list' },
       ]},
-      { name:'new task', code:'amber', items:[
-        { k:'#label',     d:'add or create a label on the task (forced lowercase)' },
-        { k:'!3',         d:'set priority 1–5 (very low → very high); !0 clears · other values stay text' },
-        { k:'enter',      d:'add the task' },
-        { k:'esc',        d:'leave the box, back to the list' },
-        { k:'in a view',  d:'new tasks inherit the view’s query: status · due · labels · project' },
+      // ONE grammar for every quick-add: a symbol means the same IDEA everywhere, and each
+      // app maps it to its own field ($ = the date → a task's due date, a note's review date).
+      // A symbol an app doesn't have isn't a dead key there — it's just text.
+      { name:'creation language (quick-add)', code:'amber', items:[
+        { k:'#label',       d:'add or create a label (forced lowercase) · tasks + notes' },
+        { k:'$friday',      d:'THE DATE — a task’s due date, a note’s review date. today · tomorrow · friday · next friday · 2026-07-13 · 6/7/2026 (month first) · 13/7 (only one reading)' },
+        { k:'/project',     d:'WHERE IT LIVES — a task’s project, a note’s folder. Matches like the query does, so /tdx finds tdx-app. An unknown one stays in the title' },
+        { k:'{…}',          d:'the body — a task’s notes, a note’s text' },
+        { k:'!3',           d:'priority 1–5 (!0 clears) · TASKS ONLY — on a note it’s just text' },
+        { k:'tab  /  →',    d:'accept the grey completion of the token you’re typing' },
+        { k:'not a token',  d:'anything that doesn’t parse stays in the title — “pay Bob $5” keeps its $5' },
+        { k:'enter',        d:'create it' },
+        { k:'esc',          d:'leave the box, back to the list' },
+        { k:'in a view',    d:'you inherit the view’s query (labels · date · project/folder) — what you TYPE wins over what the view implies' },
       ]},
       { name:'query syntax', code:'amber', items:[
         { k:'project:home',     d:'in a project (and its subprojects)' },

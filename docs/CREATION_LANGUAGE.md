@@ -1,8 +1,15 @@
 # Creation language — one grammar, one engine, three apps
 
-> **Status: REFERENCE / DESIGN.** The user's design intent, captured in the repo rather than only in
-> the prod tdx tracker. **Not scheduled on this branch.** The notes slice is tracked as **n.17** in
-> `KEYBOARD_AUDIT.md`; the task tokens are tracked in prod.
+> **Status: SLICE 1 SHIPPED** — `#` `$` `/` `{…}` on tasks **and** notes, through one engine
+> (`frontend/js/create.js` → `window.CL`, golden-tested in `test/create.test.cjs`). Tracked as
+> **n.17** in `KEYBOARD_AUDIT.md`. **Deferred:** `%` `*` `^` (the multi-word values) and `@`
+> (needs multi-user). **Events are engine-only** — `CL.apply('event', …)` works and is tested, but
+> the calendar has no text-entry surface to type into: **e.9**.
+>
+> **What the build changed in this doc** — three rules the design didn't have, all forced by tests:
+> **first-wins** for single-valued fields · **`CL.nameMatch`** (the query engine's own slug-or-substring
+> rule) for `/` · and **`parse` must be pure** (`store.addLabel` *creates*; ghost-completion reparses
+> every keystroke). Each is written up where it belongs below.
 
 ## The idea
 
@@ -123,6 +130,20 @@ by the same `slug()` match the query engine uses, so `/tdx` finds `tdx-app` exac
 **Everything unrecognized is title text.** The grammar must never eat what it doesn't understand.
 The fallback is always "this was part of the name" — and `CL.parse` returns a `literal[]` of spans it
 deliberately left alone, so the UI can show what it did and didn't claim.
+
+**FIRST WINS for every single-valued field.** A second `!N` / `$date` / `/category` is **literal**, not
+an overwrite: `Priority zero !0 and five !5` → priority **0**, and the `!5` stays in the title. (Labels
+are the only repeatable field.) This is what the original `parseQuickAdd` did — its `!` replace was
+non-*global* — and it's the only rule that stays predictable while you're editing a half-typed line.
+
+**A `/` matches names exactly as the query engine does** — `CL.nameMatch` is `catNameMatch`: slug
+equality **or substring**. So `/tdx` finds `tdx-app` precisely the way `project:tdx` does. Typing a
+categorizer and querying one must never disagree about what a name is.
+
+**`parse` is pure; `apply` owns every side effect.** `store.addLabel()` **creates** the label it looks
+up, and ghost-completion re-parses on **every keystroke** — a parser that resolved labels would litter
+the label list with `#b`, `#br`, `#bra`… So `parse` returns label **names** and `apply` resolves them.
+A test asserts the label list doesn't grow during a parse.
 
 **Dates (`$`, `*`).** Parse as many human formats as we reasonably can:
 

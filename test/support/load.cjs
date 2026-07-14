@@ -31,7 +31,8 @@ function loadEngines() {
   ensureWindow();
   execFile('recurrence.js'); // -> window.Rec
   execFile('query.js');      // -> window.Q (uses global Rec)
-  return { Rec: globalThis.Rec, Q: globalThis.Q };
+  execFile('create.js');     // -> window.CL (the creation language; pure, clock injected)
+  return { Rec: globalThis.Rec, Q: globalThis.Q, CL: globalThis.CL };
 }
 
 // Tier 2 — the reactive store and its smart rules.
@@ -40,11 +41,13 @@ function loadStore() {
   execFile('vue.global.prod.js'); // -> global Vue (reactive is pure/Proxy, no DOM)
   execFile('recurrence.js');
   execFile('query.js');
-  execFile('data.js');            // -> window.store; uses Vue/Rec/Q
+  execFile('create.js');          // -> window.CL (data.js's clCtx/clGhost need it)
+  execFile('data.js');            // -> window.store; uses Vue/Rec/Q/CL
   return {
     store: globalThis.store,
     Rec: globalThis.Rec,
     Q: globalThis.Q,
+    CL: globalThis.CL,
     Vue: globalThis.Vue,
   };
 }

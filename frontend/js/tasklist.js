@@ -157,16 +157,10 @@ window.TaskList = {
     },
     sortFieldLabel(){ const o=SORTS.find(o=>o.key===this.store.sortField); return o ? o.label : this.store.sortField; },
     sortDirSymbol(){ return this.store.sortDirs[this.store.sortField]==='desc' ? 'v' : '^'; },
-    // tag autofill: the trailing `#fragment` being typed (null if the draft doesn't end in one)
-    tagFragment(){ const m=/#([^\s#]*)$/.exec(this.draft); return m ? m[1] : null; },
-    // the grey completion of the first existing label whose name extends the fragment
-    tagGhost(){
-      const f=this.tagFragment;
-      if(f===null || f==='') return '';
-      const fl=f.toLowerCase();
-      const hit=this.store.sortedLabels().find(l=> l.name.toLowerCase()!==fl && l.name.toLowerCase().startsWith(fl));
-      return hit ? hit.name.slice(f.length) : '';
-    }
+    // autofill: the grey completion of the trailing token being typed — now ANY sigil the
+    // type accepts (`#tag`, `/project`, `$friday`), not just `#`. Without completion half
+    // the grammar is invisible.
+    tagGhost(){ return this.store.clGhost(this.draft, 'task'); }
   },
   methods: {
     cycleSort(){
@@ -187,15 +181,12 @@ window.TaskList = {
     addFromDraft(){
       const text = this.draft.trim();
       if(!text) return null;
-      const { title, labels, priority } = this.parseQuickAdd(text);
-      // inherit the current view's filters (status/due/labels/project) so the new
-      // task stays visible; merge any #tags typed in the box with the view's labels
-      const def = this.store.viewDefaults();
-      const merged = [...new Set([...(def.labels||[]), ...labels])];
-      const t = this.store.addTask({
-        title, labels: merged, priority,
-        projectId: def.projectId, due: def.due, done: def.done,
-      });
+      // The creation language (docs/CREATION_LANGUAGE.md): parse is pure and type-aware,
+      // apply resolves names → ids (creating labels) and merges the view's implied fields.
+      // TYPED BEATS IMPLIED — `$today` in a due:friday view means today; the view only
+      // fills what you left blank.
+      const parsed = CL.parse(text, { type:'task', known: this.store.clKnown });
+      const t = this.store.addTask(CL.apply('task', parsed, this.store.clCtx('task')));
       this.draft = '';
       this.store.selectedTaskId = t.id;
       return t;
@@ -210,18 +201,7 @@ window.TaskList = {
       this.store.pendingNotesFocus = true;
       this.store.detailOpen = true;
     },
-    parseQuickAdd(text){
-      const labels=[];
-      let priority=0;
-      let t = text;
-      // !N priority — single digit 0-5 not followed by another digit; otherwise left as text
-      t = t.replace(/(^|\s)!([0-5])(?!\d)/, (_,pre,n)=>{ priority=+n; return pre; });
-      // #label
-      t = t.replace(/#(\S+)/g, (_,n)=>{ const l=this.store.addLabel(n); labels.push(l.id); return ''; });
-      const title = t.replace(/\s+/g,' ').trim();
-      return { title: title||text, labels, priority };
-    },
-    // Tab / → completes the trailing #fragment with the grey ghost suggestion.
+    // Tab / → completes the trailing token with the grey ghost suggestion (#tag · /project · $date).
     // For → only when the caret is at the very end (don't hijack cursor movement);
     // when there's no ghost, fall through so Tab/→ keep their normal behavior.
     acceptTag(e){

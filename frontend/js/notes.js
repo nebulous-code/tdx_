@@ -71,19 +71,23 @@ window.NotesView = {
     addLinkFocus() { return this.mode !== 'insert' && !!this.kbCls('addlink').kfocus; },
     editing() { return !!this.sel; },   // the editor only ever opens on a note that EXISTS (n.14)
     // mirrors the task quick-add's placeholder (tasklist.js): names the destination when you're
-    // standing in a folder, and shows an example so the syntax (today, just a title) is obvious
+    // standing in a folder, and shows an example of the creation language
     addPlaceholder() {
       const f = this.activeFolder;
-      return (f ? 'add to ' + f.name : 'add note') + '…  (try: Thank You Letter)';
+      return (f ? 'add to ' + f.name : 'add note') + '…  (try: Thank You Letter #family $friday)';
     },
+    // the grey completion of the trailing token being typed (#tag · /folder · $date)
+    tagGhost() { return this.store.clGhost(this.qaDraft, 'note'); },
     // ⚠ on the quick-add prompt when the active view filters on something a brand-new note
     // won't have — it'll still be created, just hidden from this list. store.viewWarn() can't
     // be reused: it's task-shaped (type:→'task', project/label/status/due).
     warn() {
-      // a new note satisfies: type:note · folder: (it's filed here) · has:no-labels (it has
-      // none) · created:/edited: (both are now). Not: label:, due: (no review date), free text.
-      const ok = new Set(['type', 'folder', 'has', 'created', 'edited']);
-      return Q.parse(this.activeQuery).terms.some((t) => !ok.has(t.field));   // free text parses as field:'text'
+      // The set GREW when the creation language landed: a new note now INHERITS the view's
+      // `label:` and `due:` (→ its review date) via store.defaultsFor('note'), so those fields
+      // are satisfied and warning about them would be a lie. What's left is what can't be
+      // inherited: free text (parsed as field 'text'), and flags like is:/recurring:.
+      const ok = new Set(['type', 'folder', 'category', 'label', 'due', 'has', 'created', 'edited']);
+      return Q.parse(this.activeQuery).terms.some((t) => !ok.has(t.field));
     },
     warnTip() {
       return this.warn ? 'This view filters on things a new note won’t have — it’ll be created, just hidden from this list.' : '';
@@ -162,14 +166,28 @@ window.NotesView = {
     // The editor now only ever opens on a note the server has. `i` lands you here, not in a
     // blank editor: a title is required, and Enter CREATES the note before opening it.
     focusAdd() { const el = this.$refs.qa; if (el) el.focus(); },
+    // Tab / → accepts the ghost. → only at the very end of the line, so it doesn't hijack
+    // cursor movement; with no ghost, both keys fall through to their normal behavior.
+    acceptTag(e) {
+      if (!this.tagGhost) return;
+      if (e.key === 'ArrowRight') { const el = this.$refs.qa; if (el && el.selectionStart !== el.value.length) return; }
+      e.preventDefault();
+      this.qaDraft += this.tagGhost;
+    },
     async commitAdd() {
-      const title = this.qaDraft.trim();
-      if (!title) return;
-      // a note created while viewing a folder is filed there (same rule as tasks). The base
-      // directory's sentinel must NOT go over the wire — null IS the vault root to the server.
-      const n = await this.store.saveNote({ title, body: '',
-        folderId: this.onBase ? null : (this.folderFilter || null),
-        reviewAt: null, labels: [] });
+      const text = this.qaDraft.trim();
+      if (!text) return;
+      // The creation language (docs/CREATION_LANGUAGE.md) — the SAME engine tasks use.
+      // `$` is the note's review date, `/` its folder, `{…}` its body; `!` is not a symbol
+      // here at all (a note has no priority), so "Ship v2 !2" keeps its title intact.
+      const parsed = CL.parse(text, { type: 'note', known: this.store.clKnown });
+      const payload = CL.apply('note', parsed, this.store.clCtx('note'));
+      // a note created while viewing a folder is filed there (same rule as tasks) — unless
+      // you typed one. The base directory's sentinel must NOT go over the wire: null IS the
+      // vault root to the server (n.16).
+      if (payload.folderId === undefined) payload.folderId = this.onBase ? null : (this.folderFilter || null);
+      if (payload.folderId === this.store.BASE_FID) payload.folderId = null;
+      const n = await this.store.saveNote({ body: '', reviewAt: null, ...payload });
       if (!n) return;              // save failed → keep the text, don't strand the user
       this.qaDraft = '';
       // load() refreshes the note LIST; refilter() refreshes the query's match set (rows is the
@@ -654,7 +672,12 @@ window.NotesView = {
         <span class="qa-caret">❯</span>
         <span class="qa-input-wrap">
           <input ref="qa" v-model="qaDraft" :placeholder="addPlaceholder"
-                 @keydown.enter.prevent="commitAdd" @keydown.esc.stop.prevent="escAdd" />
+                 @keydown.enter.prevent="commitAdd" @keydown.esc.stop.prevent="escAdd"
+                 @keydown.tab="acceptTag" @keydown.right="acceptTag" />
+          <!-- ghost-completion for the trailing token (#tag · /folder · $date) — the same
+               overlay tasks use: a transparent copy of the draft pushes the grey suffix to
+               the caret, so no measurement code is needed (both layers are mono). -->
+          <span v-if="tagGhost" class="qa-ghost" aria-hidden="true"><span class="qa-ghost-pre">{{ qaDraft }}</span>{{ tagGhost }}<span class="qa-ghost-hint"> →</span></span>
         </span>
         <span class="mut" style="font-size:11px;">↵ add</span>
       </div>
