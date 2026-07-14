@@ -75,7 +75,8 @@
     <div class="scrim" :class="{ show: store.sidebarOpen }" @click="store.sidebarOpen=false"></div>
 
     <!-- main -->
-    <main class="main">
+    <!-- day-open: the day agenda holds the right edge, so the item drawers shift inboard (e.6) -->
+    <main class="main" :class="{ 'day-open': store.dayDetailOpen }">
       <!-- the '/' cross-type find takes over the main area in any app (2E §3.4) -->
       <template v-if="store.searchActive">
         <search-list ref="searchList" :store="store"></search-list>
@@ -126,13 +127,21 @@
         <task-list v-else-if="!store.isMixedView()" ref="list" :store="store"></task-list>
         <mixed-list v-else ref="mixed" :store="store"></mixed-list>
       </template>
+      <!-- The task drawer is always mounted and slides via .detail/.detail.hidden. The other three
+           are v-if, so they'd pop in with no animation — <Transition name="drawer"> gives them the
+           same slide, driven by the same .detail transform+transition. Each drawer now RE-SEEDS
+           itself on a store change (watchers) instead of being :key-remounted: a remount reads as
+           leave+enter, which would flicker the drawer on every J/K swap. -->
       <task-detail ref="detail" :store="store"></task-detail>
-      <!-- :key = the event id — the drawer snapshots the event in data(), which Vue won't re-run
-           while it stays open, so clicking a SECOND event must remount it (audit e.2) -->
-      <event-detail v-if="store.eventDetailOpen" :key="store.editingEvent && store.editingEvent.id"
-                    :store="store" @close="store.eventDetailOpen=false"></event-detail>
-      <note-detail v-if="store.noteDetailOpen" :key="store.selectedNoteId" :store="store" @close="store.noteDetailOpen=false"></note-detail>
-      <day-detail v-if="store.dayDetailOpen" ref="dayDetail" :store="store"></day-detail>
+      <transition name="drawer">
+        <event-detail v-if="store.eventDetailOpen" :store="store" @close="store.eventDetailOpen=false"></event-detail>
+      </transition>
+      <transition name="drawer">
+        <note-detail v-if="store.noteDetailOpen" :store="store" @close="store.noteDetailOpen=false"></note-detail>
+      </transition>
+      <transition name="drawer">
+        <day-detail v-if="store.dayDetailOpen" ref="dayDetail" :store="store"></day-detail>
+      </transition>
     </main>
 
     <!-- status bar -->
@@ -295,6 +304,8 @@ const app = createApp({
     loaded: false,   // true once we've successfully loaded server state; gates writes
   }; },
   computed: {
+    // is the calendar grid the surface on screen? (watched above to close the day drawer with it)
+    gridShowing(){ return this.store.showsGrid(); },
     today(){ return new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'2-digit'}); },
     // project health bar (t_867) — rendered on the view-title row in project views
     healthProject(){ return (!this.store.searchActive && this.store.view.kind==='project') ? this.store.projectById(this.store.view.id) : null; },
@@ -304,12 +315,20 @@ const app = createApp({
     currentApp(){ const k=this.store.view.kind; return k==='calendar'?'events':k==='notes'?'notes':'tasks'; }
   },
   watch: {
+    // The day drawer belongs to the CALENDAR GRID. If the grid stops being the surface on screen
+    // (the display flips to the agenda list, the query broadens to a mixed list, the app changes),
+    // the drawer must go with it — otherwise it hangs around over a list it has nothing to do with,
+    // and its keys are unreachable because they're gated on showsGrid() (audit e.6).
+    gridShowing(v){ if(!v && this.store.dayDetailOpen) this.store.dayDetailOpen = false; },
     // the detail drawer is its own captured pane while open; restore the list when it closes
     'store.detailOpen'(v){
       // the task drawer shares the right edge with the event/note drawers — opening it
       // closes those (single-open invariant; the openers do the same in reverse).
       if(v){ this.store.eventDetailOpen=false; this.store.noteDetailOpen=false; this.store.focusPane='detail'; }
       else if(this.store.focusPane==='detail'){ this.store.focusPane='list'; }
+      // closing the drawer on an unnamed DRAFT throws it away — a stray `i` must not leave an
+      // 'untitled' task behind (e.6). save() commits it first, so this is a no-op on a real save.
+      if(!v) this.store.discardDraftTask();
     },
     // the shell (with its bars) only exists once logged in — (re)attach the bar-height
     // observer when it mounts so the mobile overlays track the live bar sizes
@@ -321,7 +340,7 @@ const app = createApp({
     toggleHealth(key){ this.store.healthFilter = this.store.healthFilter===key ? null : key; },
     // switch between the calendar screen and the last task view (or the top saved view)
     toggleCalendar(){
-      if(this.store.view.kind==='calendar'){ const top=this.store.savedQueries[0]; if(top) this.store.openQueryView(top); }
+      if(this.store.view.kind==='calendar'){ const top=this.store.savedQueries[0]; if(top) this.store.openQueryView(top, 'tasks'); }
       else this.store.openCalendar();
     },
     // ---- app router (hash ↔ active app). app-level only: #/tasks #/events #/notes,
@@ -333,7 +352,7 @@ const app = createApp({
       if(app===this.currentApp) return;                 // already there → no-op (also breaks the loop)
       if(app==='events') this.store.openCalendar();
       else if(app==='notes') this.store.openNotes();
-      else { const top=this.store.savedQueries[0]; if(top) this.store.openQueryView(top); }
+      else { const top=this.store.savedQueries[0]; if(top) this.store.openQueryView(top, 'tasks'); }
       // setView's dirty-guard may defer/cancel the switch (async confirm); re-assert the
       // hash to whatever the view actually is now, so Back+cancel doesn't desync the URL.
       this.syncHash(this.currentApp);
@@ -362,7 +381,7 @@ const app = createApp({
     exitDeepNav(){ this.store.focusPane='list'; },   // Esc: drop focus, leave the rail visible
     switchApp(app){
       if(app===this.currentApp) return;   // already here → Enter just dives into the nav (no view reset)
-      if(app==='tasks'){ const top=this.store.savedQueries[0]; if(top) this.store.openQueryView(top); }
+      if(app==='tasks'){ const top=this.store.savedQueries[0]; if(top) this.store.openQueryView(top, 'tasks'); }
       else if(app==='events') this.store.openCalendar();
       else if(app==='notes') this.store.openNotes();
     },
@@ -529,6 +548,10 @@ const app = createApp({
           if(this.$refs.detail && (this.$refs.detail.recurActive || this.$refs.detail.subMoveId)){ this.$refs.detail.kbKey(e); return; }
           const a=document.activeElement; if(a && a.blur) a.blur(); this.store.detailOpen=false; return;
         }
+        // the day-schedule drawer is closable from ANY state (audit e.6). It used to be reachable
+        // only through dayKey, which is gated on showsGrid() — so if the grid stopped being the
+        // active surface, Esc could never close it and the ✕ was the only way out.
+        if(this.store.dayDetailOpen){ e.preventDefault(); this.store.dayDetailOpen=false; return; }
         // a task detail opened from search closes first (above); a second Esc clears the search
         if(this.store.searchActive){ e.preventDefault(); this.clearSearch(); return; }
         // clear an active project health-bar filter (list-level transient, like search)
@@ -550,8 +573,10 @@ const app = createApp({
         const inRecur = this.$refs.detail && this.$refs.detail.recurActive;
         const inSubMove = this.$refs.detail && this.$refs.detail.subMoveId;
         if(!inRecur && !inSubMove){
-          if(e.key==='J'){ e.preventDefault(); this.detailSwap(1); return; }
-          if(e.key==='K'){ e.preventDefault(); this.detailSwap(-1); return; }
+          // J/K walk the list UNDER the drawer via the shared cursor (a.2) — so a task shown from
+          // a MIXED list swaps through that list, not through the task tree behind it
+          if(e.key==='J'){ e.preventDefault(); this.store.listSwap(1); return; }
+          if(e.key==='K'){ e.preventDefault(); this.store.listSwap(-1); return; }
           if(e.key==='u'){ e.preventDefault(); this.$refs.detail && this.$refs.detail.duplicate(); return; }
           if(e.key==='d'){ e.preventDefault(); this.$refs.detail && this.$refs.detail.del(); return; }
         }
@@ -613,13 +638,18 @@ const app = createApp({
         const cal=this.$refs.cal;
         if(cal){
           // `i` creates the thing the app you're IN is about: an event on Events, a task due that
-          // day on Tasks (e.5 — the grid is a tasks surface now, so `i` must not make an event there)
-          const create = this.store.currentApp()==='tasks'
-            ? ()=>{ const t=this.store.addTask({ title:'', due:cal.cursor }); this.store.selectedTaskId=t.id; this.store.detailOpen=true; }
-            : ()=>cal.newEvent(cal.cursor);
+          // day on Tasks (e.5 — the grid is a tasks surface now, so `i` must not make an event there).
+          // It also OPENS THE DAY DRAWER for that day (e.6): when you're dropping something onto a
+          // day you want to see what's already scheduled there. The drawer stacks left of the new
+          // item's drawer, so you get the day's context beside the thing you're creating.
+          const create = ()=>{
+            cal.openDay();                                   // day context first, so it's behind the new item
+            if(this.store.currentApp()==='tasks') this.store.startDraftTask({ due:cal.cursor });   // draft, not a persisted 'untitled' (e.6)
+            else cal.newEvent(cal.cursor);
+          };
           const map={ h:()=>cal.moveCursor(-1), l:()=>cal.moveCursor(1), k:()=>cal.moveCursor(-7), j:()=>cal.moveCursor(7),
             H:()=>cal.moveMonth(-1), L:()=>cal.moveMonth(1), K:()=>cal.moveMonthKeepCell(-1), J:()=>cal.moveMonthKeepCell(1),
-            i:create, E:()=>cal.openDay() };
+            i:create, E:()=>cal.openDay(), t:()=>cal.today() };   // t = jump to today (audit e.4)
           const fn=map[e.key]; if(fn){ e.preventDefault(); fn(); }
         }
         return;
@@ -701,14 +731,9 @@ const app = createApp({
     scrollSelIntoView(){
       this.$nextTick(()=>{ const el=document.querySelector('.list-wrap .task.sel'); if(el) el.scrollIntoView({block:'nearest'}); });
     },
-    // J/K from the captured detail pane: swap to the prev/next visible task, keeping the drawer open
-    detailSwap(dir){
-      const rows=this.store.visibleRows();
-      let idx=rows.findIndex(t=>t.id===this.store.selectedTaskId);
-      if(idx<0) return;
-      idx=Math.max(0, Math.min(rows.length-1, idx+dir));
-      if(rows[idx]){ this.store.selectedTaskId=rows[idx].id; this.scrollSelIntoView(); }
-    },
+    // (detailSwap removed — J/K now go through store.listSwap, the one shared list cursor (a.2),
+    //  which the task list and the mixed list each register. TaskList registers the logic that
+    //  used to live here.)
     // ---- sidebar keyboard navigation ----
     enterSidebar(){
       this.store.navCollapsed=false;   // h/← always reveals the nav before entering
@@ -939,12 +964,18 @@ const app = createApp({
           break;
         }
         case 'h': case 'ArrowLeft': {
-          // walk up / collapse the tree; at the top (a section header) h jumps LEFT into
-          // the deep-nav app rail (§4.4). Tab still toggles a section.
+          // Walk up / collapse the tree; h only leaves for the app rail when there is NOTHING
+          // LEFT TO COLLAPSE (§4.4). On a section header that means: collapse the section first,
+          // and only jump out on a second h, once it's already collapsed (audit n.10). This is
+          // the mirror of `case 'l'` above, which expands a collapsed header.
           e.preventDefault();
           const it=items[idx];
           if(!it) break;
-          if(it.kind==='head'){ this.enterDeepNav(); break; }   // top of the tree → app rail
+          if(it.kind==='head'){
+            if(!this.store.navSections[it.section]){ this.toggleSection(it.section); break; }   // still open → collapse it, stay put
+            this.enterDeepNav();                                                                // nothing left to collapse → app rail
+            break;
+          }
           if(isCat(it.kind)){
             if(!it.ref.collapsed && this.store.catChildren(it.kind, it.ref.id).length){ it.ref.collapsed=true; this.scrollSideIntoView(); break; }  // collapse expanded parent (stay on it)
             this.store.sideFocusId = it.ref.parentId || ('head_'+it.kind);   // up: parent, else the section header
@@ -1036,7 +1067,7 @@ const app = createApp({
           // default to the top sidebar view (view isn't persisted) — honors the
           // user's saved-query order rather than always landing on "Today"
           const top = this.store.savedQueries[0];
-          if(top) this.store.openQueryView(top);
+          if(top) this.store.openQueryView(top, 'tasks');   // boot: explicitly the Tasks app (a.7)
           this.routeFromHash();   // honor the URL on load/refresh (#/events, #/notes)
           return;
         }

@@ -6,7 +6,14 @@
    change those. Replaces the per-view minimal pickers. Props: store, type, id. */
 
 window.LinkedItems = {
-  props: ['store', 'type', 'id'],
+  // kbFocus = which chip the HOST's keyboard cursor is on (-1 = not on the links row). The links
+  // row lives in the host's kbRows() (that's where KbForm is), but the chips render here — so the
+  // host tells us which one is focused, and we tell the host what we've loaded (audit n.13).
+  props: { store: Object, type: String, id: String, kbFocus: { type: Number, default: -1 } },
+  // 'links' is NOT decoration: $refs is not reactive, so a host's kbRows() reading
+  // $refs.links.links would run before we mount, see undefined, emit ZERO nav rows, and — having
+  // registered no dependency — never recompute. Emitting into host state is what makes it work.
+  emits: ['links', 'pick'],
   data() { return { links: [], query: '', events: [], notes: [] }; },
   computed: {
     pickTypes() { return ['task', 'event', 'note'].filter((t) => t !== this.type); },
@@ -27,7 +34,10 @@ window.LinkedItems = {
   watch: { id() { this.load(); } },
   mounted() { this.load(); },
   methods: {
-    async load() { this.links = this.type && this.id ? await this.store.fetchLinks(this.type, this.id) : []; },
+    async load() {
+      this.links = this.type && this.id ? await this.store.fetchLinks(this.type, this.id) : [];
+      this.$emit('links', this.links);   // → the host's reactive copy, which its kbRows() reads
+    },
     // pull the picker's candidate lists when the user opens the picker (refreshed each
     // focus so newly-created events/notes show up without a reload)
     ensureSources() {
@@ -57,7 +67,8 @@ window.LinkedItems = {
   <div class="linkbox">
     <div class="linkbox-h mut">links</div>
     <div class="link-chips">
-      <span v-for="l in links" :key="l.id" class="link-chip" @click="open(l)" :title="l.other.type + ': ' + l.other.title">
+      <span v-for="(l,i) in links" :key="l.id" class="link-chip" :class="{ kfocus: i === kbFocus }"
+            @click="$emit('pick', i)" :title="l.other.type + ': ' + l.other.title">
         <span class="lc-type mut">{{ l.other.type }}</span>{{ l.other.title }}
         <span v-if="l.source==='app'" class="lc-x" @click.stop="unlink(l)" title="unlink">✕</span>
         <span v-else class="lc-src mut" title="from a note’s [[link]] — edit the note to change">↟</span>

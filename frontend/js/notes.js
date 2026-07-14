@@ -21,6 +21,7 @@ window.NotesView = {
       // see kbRows/curLine); we own only the character column + a remembered goal column.
       curCol: 0, goalCol: 0,
       pending: null,          // multi-key operator prefix: 'g' (gg) · 'd' (dd/dw) · 'r' (replace)
+      linkList: [],           // links emitted up by <linked-items> ($refs isn't reactive) — n.13
       kbAutoListen: false,    // the app routes keys here (index.html) → onKey drives kbKey
       kbAutofocus: false };   // opening a note lands on the body, not in the title
   },
@@ -49,6 +50,8 @@ window.NotesView = {
       if (this.matchIds) r = r.filter((n) => this.matchIds.has(n.id));
       return r;
     },
+    // which link chip the cursor is on; -1 while insert mode owns the keyboard (the navCls rule)
+    linkFocus() { return this.mode === 'insert' ? -1 : this.kbCellOf('links'); },
     editing() { return !!this.sel || this.creating; },
     dirty() {
       if (!this.editing) return false;
@@ -165,7 +168,11 @@ window.NotesView = {
         { id: 'review', type: 'input', ref: 'reviewInput' },
         // the body: one row per source line — this is what makes the ladder continuous
         ...this.bodyLines.map((_, i) => ({ id: 'body_' + i, type: 'static' })),
-        { id: 'links',  type: 'button', activate: () => { if (this.$refs.links) this.$refs.links.focus(); }, when: () => !!this.sel },
+        // links = a grid row, like labels: h/l cross the chips, space opens (n.13). The
+        // `+ link` picker stays mouse/click-driven (space on a chip is 'open', not 'add').
+        { id: 'links', type: 'grid', items: this.linkList, cols: 99,
+          select: (l) => this.$refs.links && this.$refs.links.open(l),
+          when: () => !!this.sel && this.linkList.length > 0 },
         // the action row, in the order it renders left→right (§6.2): back · edit/render · delete · save
         { id: 'back',   type: 'button', activate: () => this.closeEditor() },
         { id: 'mode',   type: 'button', activate: () => this.toggleMode() },
@@ -344,6 +351,9 @@ window.NotesView = {
       // ---- list mode ----
       // h leaves left into the notes nav, like the task list does (audit n.9)
       if (e.key === 'h' || e.key === 'ArrowLeft') { e.preventDefault(); this.$emit('enter-nav'); return; }
+      // i creates a note, like i creates a task on the tasks list (audit n.14). ABOVE the
+      // empty-list guard — you must be able to make the FIRST note in an empty list.
+      if (e.key === 'i') { e.preventDefault(); this.newNote(); return; }
       const rows = this.rows;
       if (!rows.length) return;
       if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); this.listSel = Math.min(rows.length - 1, this.listSel + 1); this.scrollListSel(); }
@@ -615,7 +625,8 @@ window.NotesView = {
         </div>
       </div>
       <div v-if="sel" :class="navCls('links')" class="note-links-row">
-        <linked-items ref="links" :store="store" type="note" :id="sel.id"></linked-items>
+        <linked-items ref="links" :store="store" type="note" :id="sel.id"
+                      :kb-focus="linkFocus" @links="linkList = $event" @pick="kbPick('links', $event)"></linked-items>
       </div>
       <div class="note-actions">
         <div class="na-left">

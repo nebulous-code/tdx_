@@ -16,6 +16,7 @@ window.NoteDetail = {
       _orig: '',
       loaded: false,
       kbAutofocus: false,   // editing an existing note → start in nav mode, not in the title
+      linkList: [],         // links emitted up by <linked-items> ($refs isn't reactive) — n.13
     };
   },
   mounted() {
@@ -23,6 +24,21 @@ window.NoteDetail = {
     this.load();
   },
   beforeUnmount() { if (this._unreg) this._unreg(); },
+  // Re-load IN PLACE when pointed at a different note (a wikilink/mixed-row click, or a J/K list
+  // swap — a.2). This replaces the :key that used to remount the component, which read as a
+  // leave+enter to <Transition> and so broke the open/close slide.
+  watch: {
+    'store.selectedNoteId'(id) {
+      if (!id) return;
+      this.loaded = false;
+      this.linkList = [];
+      this.load().then(() => this.$nextTick(() => this.kbInit()));
+    },
+  },
+  computed: {
+    // which link chip the cursor is on → <linked-items :kb-focus> (the child renders the chips) — n.13
+    linkFocus() { return this.kbCellOf('links'); },
+  },
   methods: {
     async load() {
       const n = await this.store.getNote(this.store.selectedNoteId);
@@ -46,6 +62,9 @@ window.NoteDetail = {
         { id: 'labels', type: 'grid', items: labels, cols: 99,
           isOn: l => this.f.labels.includes(l.id), select: l => this.toggleLabel(l.id), when: () => labels.length > 0 },
         { id: 'notes', type: 'input', ref: 'notes' },   // ref → md-field.focus() (i edits)
+        // links = a grid row, like labels: j/k skip it, h/l cross the chips, space opens (n.13)
+        { id: 'links', type: 'grid', items: this.linkList, cols: 99,
+          select: (l) => this.$refs.links && this.$refs.links.open(l), when: () => this.linkList.length > 0 },
         { id: 'openFull', type: 'button', activate: () => this.openFull() },
         { id: 'cancel', type: 'button', activate: () => this.kbAttemptClose() },
         { id: 'save', type: 'button', activate: () => this.save() },
@@ -53,12 +72,17 @@ window.NoteDetail = {
     },
     kbSubmit() { this.save(); },
     kbDirty() { return this.loaded && JSON.stringify(this.snap()) !== this._orig; },
-    // `o` = open the note fully (the rich /notes editor) — but never hijack `o` while typing
+    // `o` = open the note fully (the rich /notes editor); J/K = walk the list underneath and swap
+    // what this drawer shows, without closing it (a.2 — this drawer owns the keyboard, so the
+    // app's onKey never sees J/K while it's open). Never hijack either while typing.
     kbDelegate(e) {
-      if (e.key !== 'o') return false;
+      if (e.key !== 'o' && e.key !== 'J' && e.key !== 'K') return false;
       const a = document.activeElement, tag = (a && a.tagName || '').toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return false;
-      e.preventDefault(); this.openFull(); return true;
+      e.preventDefault();
+      if (e.key === 'o') this.openFull();
+      else this.store.listSwap(e.key === 'J' ? 1 : -1);
+      return true;
     },
     blurField() { const a = document.activeElement; if (a && a.blur) a.blur(); },
     toggleLabel(id) { const i = this.f.labels.indexOf(id); if (i >= 0) this.f.labels.splice(i, 1); else this.f.labels.push(id); },
@@ -110,7 +134,8 @@ window.NoteDetail = {
       </div>
 
       <div class="field" v-if="f.id">
-        <linked-items :store="store" type="note" :id="f.id"></linked-items>
+        <linked-items ref="links" :store="store" type="note" :id="f.id"
+                      :kb-focus="linkFocus" @links="linkList = $event" @pick="kbPick('links', $event)"></linked-items>
       </div>
     </div>
     <div v-else class="detail-body"><span class="mut">loading…</span></div>

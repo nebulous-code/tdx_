@@ -20,7 +20,7 @@ window.DeepNav = {
       if (app === this.app) { this.store.deepNavOpen = false; return; }
       if (app === 'tasks') {
         const top = this.store.savedQueries[0];
-        if (top) this.store.openQueryView(top);
+        if (top) this.store.openQueryView(top, 'tasks');   // the rail means "go to Tasks" (a.7)
       } else if (app === 'events') {
         this.store.openCalendar();
       } else if (app === 'notes') {

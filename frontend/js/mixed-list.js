@@ -19,7 +19,17 @@ window.MixedList = {
   watch: {
     query() { this.load(); },
   },
-  mounted() { this.load(); },
+  // register the shared list cursor (a.2) so J/K in ANY open drawer walks this list and swaps
+  // what the drawer shows. openItem already opens the right drawer per type.
+  mounted() {
+    this.load();
+    this._unregCursor = this.store.registerListCursor({
+      rows: () => this.items,
+      index: () => this.sel,
+      go: (i) => { this.sel = i; this.scrollSel(); this.openItem(this.items[i]); },
+    });
+  },
+  beforeUnmount() { if (this._unregCursor) this._unregCursor(); },
   methods: {
     async load() {
       const seq = ++this._seq;
@@ -43,13 +53,16 @@ window.MixedList = {
       else if (it.type === 'note') { this.store.openNoteDrawer(it.id); }   // peek drawer (§4.3)
     },
     // ---- keyboard (driven from index.html mixedKey when isMixedView) ----
-    kbMove(d) {
-      if (!this.items.length) return;
-      this.sel = Math.max(0, Math.min(this.items.length - 1, this.sel + d));
+    scrollSel() {
       this.$nextTick(() => {
         const el = this.$el && this.$el.querySelector('.mixed-row.sel');
         if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
       });
+    },
+    kbMove(d) {
+      if (!this.items.length) return;
+      this.sel = Math.max(0, Math.min(this.items.length - 1, this.sel + d));
+      this.scrollSel();
     },
     kbActivate() { const it = this.items[this.sel]; if (it) this.openItem(it); },
   },

@@ -6,33 +6,55 @@ Some notes about keyboard accessiblity for section 6. (2E §6.4 — the final ke
 > Claude's assessment + the order of attack live at the bottom under **Triage**.
 
 ## Status
-**Batch 1 shipped and passed testing** — 11 items (**n.2** `o`/`O` · **n.3** the unified ladder · **n.4** list continuation · **n.5** `r` replace · **n.6** checkbox styling · **n.7** wikilink clicks · **n.8** the `o|pen` gap · **n.9** `h` → notes nav · **n.12** `dd`/`D`/`dw` · **a.1** header count spacing · **e.2** the event drawer not switching), plus **n.1** closed as standard markdown behavior. Each section's **Resolved issues** subsection holds them, in their original order — collapse those to see only what's outstanding.
+**22 of 26 resolved.** Batch 5 tested by the user: **5 passed** (n.10 · e.4 · a.2 · a.7 · a.8), **2 failed** (**n.13** links grid · **n.14** `i` → new note) — shipped but not behaving as specified; awaiting repro, no further code until then.
 
-Also resolved along the way: **2E §6.2** (note button layout). One `back ⎋` control replaced the header's `‹ back` **and** the bottom-right `close` — they had never actually been different (both called `closeEditor()`) — and every editor control now lives in the bottom action row as a ladder rung.
+| batch | items |
+|---|---|
+| 1 | n.2 `o`/`O` · n.3 the unified note ladder · n.4 list continuation · n.5 `r` replace · n.6 checkbox styling · n.7 wikilink clicks · n.8 the `o|pen` gap · n.9 `h` → notes nav · n.12 `dd`/`D`/`dw` · a.1 header count spacing · e.2 the event drawer not switching *(plus n.1 closed as standard markdown)* |
+| 2 | e.1 grid/list toggle (`display` as view metadata; occurrence-level date filtering) · e.5 the grid obeys the `type:` rule → **tasks got a calendar view** |
+| 3 | a.3 the ⊞ query button · a.4 the quick-add ⚠ · a.5 `h` in the query builder · query-bar polish (`c` = clear · `query`⇄`hide Q` · text-only buttons) |
+| 4 | e.3 **decided** (`h` stays "previous day"; the nav is reached with `n`) · a.6 `n` enters the app nav, second press closes it |
+| 5 | ✅ n.10 · ✅ e.4 · ✅ a.7 · ✅ a.2 (one shared list cursor) · ✅ a.8 (every drawer slides) · ❌ n.13 · ❌ n.14 |
 
-**Behavior change now live:** **`d` in the note body no longer deletes the note** — it's vim's operator prefix (`dd`/`dw`). Delete-the-note lives on the **field rows** and in the **notes list** (see **n.12**).
+**Behavior changes now live:** **`d` in the note body** is vim's operator prefix (`dd`/`dw`), not delete-note (that's on the field rows + the notes list). **`n`** enters the app nav rather than just toggling it. **`c`** clears the query (was `x`).
 
-**Batch 2 shipped and passed testing** — **e.1** (grid/list toggle; `display` as view metadata; occurrence-level date filtering) and **e.5** (the grid obeys the `type:` rule — which gave **tasks a calendar view** for free).
-
-**Batch 3 shipped** — **a.3** (the ⊞ query button never revealed save/update/clear), **a.4** (the quick-add ⚠ fired on every default task view), **a.5** (`h` in the query builder now reaches the app nav). Plus query-bar polish: clear is now **`c`** (not `x`), the toggle's label carries its state (**`query`** ⇄ **`hide Q`**) instead of a glow, and the buttons are text-only with underlined shortcut letters.
-
-**Batch 4 shipped** — **e.3** (DECIDED: `h` stays "previous day" on the calendar; the nav is reached with `n`) and **a.6** (**`n` now enters the app nav** and closes it on a second press — `N` already did; both left-hand drawers now behave identically, in every app).
-
-**Still outstanding:** **n.10** (`h` inside the nav jumps to the deep nav too eagerly — untouched by a.6) · **n.11** (design open) · **n.13** (links have no keyboard model) · **n.14** (`i` → new note) · **n.15** (notes search — a surface question first) · **e.4** (`t` → today; written up, not built) · **a.2** (the capstone — **unblocked**: event views now have a list to navigate).
+**Outstanding:** **n.13** + **n.14** (failed — need your repro) · **e.6** (day drawer — ⏳ **built, awaiting your smoke test**) · **n.11** + **n.15** (⛔ gated on the user — suggestions only, NOT approved to build).
 
 ## notes
 
-**n.10 — Bug: collapsing View/Calendars/Folders/Projects/Labels doesn't work with `h`.** Instead I get put into the deep nav menu. I can still collapse those areas with space. I'd like to hit `h` and collapse the area then land in the deep nav if I want to by hitting `h` again. This keeps the `h` to collapse functionality we have in prod today. If someone wants to quick access the deep nav we support `N` to get there so this is collapsing is a more natural flow for users.
-> *This is a **regression against the §4.4 spec**, which already says `h` jumps to the deep nav "only when there's nothing left to collapse/walk-up." The implementation is jumping too eagerly. Same family as **n.9** / **e.3**.*
-
-**n.11 — Feature: navigate wikilinks with keyboard.** Not sure how I want to implement this. Right now you've got to click any imbedded wikilinks with a mouse. Open to ideas on how to get this one done.
-> *Depends on **n.3** (there's no in-note field/nav ladder to hang link-hopping off of yet) and on **n.7** (links have to resolve before they're worth navigating to). Ideas in Triage — no decision needed now.*
+### ❌ Failed test — needs your repro
 
 **n.13 — Nav gap: the `links` section can't be navigated (GENUINE DESIGN GAP, not a wiring miss).** Found while testing **n.3**. `linked-items.js` — the component shared by the task, event **and** note detail surfaces — has **no keyboard model at all**: no cursor over the link chips, no way to open a linked item or unlink one. The only keyboard affordance is the `+ link` picker input (which the n.3 ladder now focuses). It has always been mouse-only; the ladder just made that visible.
-> *The fix is a **nested KbForm sub-pane**, exactly like the task drawer's recurrence builder: `l`/`i` on the links row descends into it, `j`/`k` walk the chips, Enter/space opens the linked item, `x` unlinks, `h`/`Esc` pops back out to the host ladder. Because the component is **shared**, doing this once fixes links in the task and event drawers too. That's real work, not a patch — sizing it as its own item rather than smuggling it into the n.3 batch. **Depends on nothing; can go anytime.***
+> *Claude's original proposal was a **nested KbForm sub-pane** (the recurrence-builder pattern). **Superseded — the user's call is simpler and better:***
+>
+> **DECIDED (user) — treat the links exactly like the LABEL CHIPS.** They become **one KbForm `grid` row**, not a sub-pane you descend into:
+> - **`j`/`k` skip over the links row as a whole** (it's a single nav row, like the labels row).
+> - **`h`/`l` move across the link chips** within that row.
+> - **`space` opens** the focused link in the **right-hand drawer**.
+>
+> *Feasible as specified, and it's **less** code than the sub-pane: `kbRows()` gains `{ type:'grid', items:links, cols:99, select:l => open(l) }` — the same descriptor the labels row already uses, so the mixin does the h/l + space work for free. No `kbDelegate`, no enter/exit protocol.*
+>
+> *Because `linked-items.js` is **shared**, this lands in the task, event **and** note drawers at once. **Open (small):** keyboard **unlink** has no binding — `space` is taken by "open". Unlink stays mouse-only (the chip's ✕) unless you want a key; it's destructive and currently has no confirm, so leaving it to the mouse is the safe default.*
+> **❌ FAILED TEST** — *shipped, but does not behave as specified. Awaiting the user's repro; NOT resolved.*
+> **How to test:** open the **task**, **event** or **note** drawer (all three — `linked-items` is shared). `j`/`k` **skip the links row as a unit**, exactly like the labels row; `h`/`l` move across the link chips (the focused one is highlighted); **`space` opens** that linked item in its own right-hand drawer. Clicking a chip also moves the cursor to it.
+>
+> *Built as the user spec'd — a KbForm `grid` row (`cols:99`), not the nested sub-pane Claude first proposed. Less code: the mixin does h/l + space for free. Two traps handled: (1) **`$refs` is not reactive**, so `linked-items` **emits** its loaded links up into host state — a `kbRows()` reading `$refs.links.links` would have evaluated before the child mounted, emitted zero rows and never recomputed; (2) the chips are rendered by the **child**, which can't call `kbCls`, so the host passes down the focused index (new `kbCellOf(id)` helper in the mixin) and the child highlights it.*
+>
+> **Not built (deliberately):** keyboard **unlink**. A grid's only verb is `select` (= `space` → open), so there's no key left; unlink stays mouse-only (the chip's ✕). It's destructive with no confirm — not inventing a key without you.
+
+ISSUE: the issue with this one is that I can't actually select the links or insert a new one. And the drawers skip them altogether which is unhelpful. So this might be a full redo. But let's talk about what the code does and doesn't do to see if it's a miss on execution or a dropped wire.
 
 **n.14 — Bug: `i` doesn't create a new note from the notes list.** I'd like to mirror the way you add new tasks on the tasks screen. Right now you have to click the `＋ new` button to create a note; `i` would be much easier.
 > *Straightforward and consistent: `i` is already "create" on the tasks list (`index.html`), and the notes list is the one list where it does nothing. `newNote()` exists and the `＋ new` button already calls it — this is a binding, not a feature. Note it lands you in the **title** (a note needs a name before it can be written to the vault), which is the one way it differs from the task list's inline quick-add.*
+> **❌ FAILED TEST** — *shipped, but does not behave as specified. Awaiting the user's repro; NOT resolved.*
+> **How to test:** in the notes list, `i` creates a new note and drops you in the **title** (a note needs a name before it can be written to the vault). Works on an **empty** list too — the binding sits above the empty-list guard, so you can create the first note.
+
+ISSUE: Issue on this one is that I can't escape out of the insert note. I suspect this is because it fails to save and therefore doesn't want to let you create the note or edit around a note without a title. But if you lock my cursor into the title I can't cancel creating the note. Let's look closely at the flow in code and figure out what it IS doing before I make any sweeping declarations on what should happen.
+
+### Open
+
+**n.11 — Feature: navigate wikilinks with keyboard.** Not sure how I want to implement this. Right now you've got to click any imbedded wikilinks with a mouse. Open to ideas on how to get this one done.
+> *Depends on **n.3** (there's no in-note field/nav ladder to hang link-hopping off of yet) and on **n.7** (links have to resolve before they're worth navigating to). Ideas in Triage — no decision needed now.*
 
 **n.15 — Nav gap: the notes list's own search box can't be reached by keyboard.** The global `/` find works, but the notes screen's search input — which searches within the current folder/list — is mouse-only. Not sure how I want to handle this yet.
 > *Real gap, and it needs a small design call first — the notes search box is a **third** search surface alongside the global `/` find and the query bar (`q`), so the question is which key owns it without stomping the other two. Options: give the notes list its own focus key, or fold folder-scoped search into the existing query bar (`folder:` is already a query field) and retire the bespoke box. **No code until you decide.** Related: **e.1** (the other "what is this surface for" question).*
@@ -42,6 +64,7 @@ Also resolved along the way: **2E §6.2** (note button layout). One `back ⎋` c
 **n.1 — Bug: view mode does not show line breaks while insert mode does.** Example in Pragmatic Programmer highlights note. There's a line break between "design." and "See also" when I'm in insert mode but view mode shows them all on a single line. I think this is a single line break versus double line break issue. Let's discuss before you implement a fix so I can understand it better.
 > *Root cause is known and cheap to explain — it's a one-word markdown-it option (`breaks: false`), not a bug in our code. Related: **n.4** (both are about how source lines map to rendered output). Discussion below in Triage.*
 > Response. Great now that I understand that's just how markdown is I'm willing to accept it. No code change needed here.
+> **✅ RESOLVED** — accepted as standard markdown behavior (`breaks: false`). No code change.
 
 **n.2 — Feature: `o` and `O` in vim style.** `O` opens a line above the cursor and `o` opens a new line below the cursor.
 > *Same family as **n.5** (`r`) — both are normal-mode editing operators on top of the §6.1 block cursor.*
@@ -110,6 +133,13 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 > **✅ RESOLVED**
 > **How to test:** from the notes **list**, press `h` → the notes nav takes focus, same as `h` from the task list. (Only the list — inside the editor `h` is still a cursor motion.)
 
+**n.10 — Bug: collapsing View/Calendars/Folders/Projects/Labels doesn't work with `h`.** Instead I get put into the deep nav menu. I can still collapse those areas with space. I'd like to hit `h` and collapse the area then land in the deep nav if I want to by hitting `h` again. This keeps the `h` to collapse functionality we have in prod today. If someone wants to quick access the deep nav we support `N` to get there so this is collapsing is a more natural flow for users.
+> *This is a **regression against the §4.4 spec**, which already says `h` jumps to the deep nav "only when there's nothing left to collapse/walk-up." The implementation is jumping too eagerly. Same family as **n.9** / **e.3**.*
+> **✅ RESOLVED** — *verified by the user.*
+> **How to test:** in the app nav, `h` on an **expanded** section header (Views / Projects / Labels…) now **collapses that section** and leaves the cursor on it. `h` again — with nothing left to collapse — jumps out to the app rail. `h` on a project still collapses its children, then walks up to its parent. (`Tab` still toggles a section too.)
+>
+> *One-line fix in `sidebarKey`'s `case 'h'`: on a `head` row, collapse via `toggleSection()` when `!store.navSections[section]`, and only `enterDeepNav()` once it's already collapsed. It now mirrors `case 'l'`, which expands a collapsed header. That is the §4.4 rule verbatim.*
+
 **n.12 — Feature: vim delete operators in the note body (`dd`, `D`, `dw`).** None of these exist today — the body's normal mode has exactly one `d` binding (delete the whole note). `dd` deletes the current line, `D` deletes from the cursor to end of line, `dw` deletes a word forward.
 > *Spun out of the **n.3** `d` decision, which frees `d` in the body to act as an operator prefix. Same family as **n.2** (`o`/`O`) and **n.5** (`r`) — all normal-mode operators on the §6.1 block cursor, and all cheap once the first one establishes the pending-key pattern (the `gg` `pendingG` flag is the existing precedent). **Depends on n.3** (the row-context split is what makes `d` available at all).*
 > **✅ RESOLVED**
@@ -117,8 +147,33 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 
 ## events
 
-**e.4 — Feature: shortcut to today.** It'd be nice if you could jump to today with the `t` key. Assuming it's not already bookmarked for something. We should underline the `t` in the today button next to the month name and year in the header. Maybe make that today button look more like a button in our style.
-> *`t` is **completely unbound** — nothing global, nothing in the calendar's key map (`h/l/j/k` · `H/L/J/K` · `i` · `E` · now `v`). So it's free, and `cal.today()` already exists (the button calls it). This is a **binding + a restyle**, not a feature. Small enough to ride along with anything. Note the button underline must wrap its label in a single element — a bare `<u>t</u>oday` next to loose text hits the `.btn` flex-gap trap from **n.8**.*
+### Open
+
+**e.6 — Bug: the day-schedule drawer renders blank and won't go away.** I put the app in a state where the day-detail drawer shows blank and won't go away. I think it happens when I press `i` on the item. It might just be opening the right-hand detail drawer with the **spacer** to make room for the hour drawer if it's there (and it's not, so it shows as blank). Biggest issue is that **the spacer doesn't go away when the task is saved/cancelled**.
+> **Root cause — three separate faults, not one:**
+> 1. **The "spacer" IS the day drawer, rendered empty.** It stacks (`.day-detail.stacked { right: var(--detail-w) }`, keyed off `eventDetailOpen || detailOpen`), so opening a detail drawer slides it left and you get two panels. An empty one reads exactly as leftover chrome.
+> 2. **Why it's empty — a regression from e.5 (mine).** `dayOccs()` opens with `if (!store.gridShowsEvents()) return [];`. On a **tasks** calendar (`type:task`), that is always false → the day drawer shows **zero events, forever**: 24 empty hour rows. I applied the `type:` rule to the day drawer without noticing it turns that drawer into a permanently blank shell. The month grid degrades gracefully there (it still has task chips); the day drawer doesn't.
+> 3. **Why it won't close.** `closeDrawers()` deliberately does **not** clear `dayDetailOpen` (that's what lets the day drawer persist *under* an event drawer — the §4.2 two-level stack), **and** the global Escape ladder has **no branch for it**. Escape only reaches the drawer via `dayKey`, which is gated behind `store.showsGrid()` — so whenever the grid isn't the active surface, or `focusPane==='detail'` grabs keys first, **Escape can never close it** and the `✕` is the only exit.
+>
+> *Bonus inconsistency: `i` **inside** the day drawer always creates an **event**, even on the tasks calendar where `i` on the grid creates a **task** (e.5). The drawer disagrees with the surface it sits on.*
+>
+> **DECIDED (user) — option A: the day drawer is a "what's actually on this day" surface, NOT a query result.**
+> - It shows **everything scheduled that day — events *and* dated tasks — regardless of the current calendar or filter.** *"If you're at the point of inputting an event/task you probably want to see what else is happening that day with regards to the events/tasks you've already scheduled, regardless of if they're on your current calendar or filter."* So the `gridShowsEvents()` / `calShows()` / `calFilter` gates come **off** the day drawer. The **grid** answers the query; the **day drawer** shows the truth, because it's context for scheduling. This alone kills the blank.
+> - **`i` creates what the app is about** — a task on Tasks, an event on Events — matching the grid (e.5).
+> - **Inserting opens the day drawer**, with the target time-slot highlighted (the slot cursor + `createAt(hour)` already exist, so this is a small lift).
+> - **Plug the leaks regardless:** give the global Escape ladder a day-drawer branch (Escape always closes it, in any state), and clear `dayDetailOpen` when the grid stops being the active surface.
+>
+> **✅ READY TO TEST** — *built + headless-verified; awaiting your smoke test.*
+> **How to test:**
+> - **The blank is gone.** On a **tasks** calendar (`v` from a task view), `E` on a day → the drawer shows that day's **events AND dated tasks**, not an empty hour grid. Same on the events calendar with a narrow filter (`label:…`) or a single calendar selected in the nav — the drawer always shows the **whole day**, because it's context, not a query result.
+> - **Insert opens the day.** `i` on a grid day now **opens the day drawer** alongside the new item's drawer, so you can see what's already scheduled while you fill it in. On **Tasks** `i` makes a **task** (due that day); on **Events** an **event**. Inside the drawer, `i` on an hour slot does the same — task on Tasks, event on Events at that hour (it used to always make an event).
+> - **It always closes.** `Esc` closes the day drawer from **any** state now (it was previously reachable only while the grid was the active surface — that's why it got stuck). It also closes itself if the grid goes away (you flip to the agenda list, or the query broadens to a mixed list).
+>
+> *Note: creating still uses the nav's selected calendar for a new event — the calendar filter now only affects what you CREATE, never what you SEE.*
+>
+> **Follow-up found while testing (fixed):** `i` on the tasks calendar **persisted a task immediately** — `addTask()` defaults an empty title to `'untitled'` — so every stray `i` left a junk row *and* a detail drawer sitting open on it. **Decided (user): don't persist until it has a name**, matching the notes editor (nothing hits the vault until it's named). `i` now opens the drawer on a **draft** that lives OUTSIDE `store.tasks` — so it never syncs, never shows in a list, and `J`/`K` can't land on it — and is committed only once it has a title. Backing out discards it. The drawer also lands the cursor **in the title** so you can just type.
+>
+> **Stack order:** the agenda sitting LEFT of the detail drawer is the original §4.2 model (*"opens the event detail drawer to its right"*) — confirmed as intended, left as-is.
 
 ### Resolved issues
 
@@ -171,6 +226,11 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 > **✅ RESOLVED**
 > **How to test:** on the calendar, `h`/`l` still walk days and `H`/`L` still walk months — `h` never leaves the grid. `n` drops you into the events nav on the calendar you're viewing; `n` again closes it.
 
+**e.4 — Feature: shortcut to today.** It'd be nice if you could jump to today with the `t` key. Assuming it's not already bookmarked for something. We should underline the `t` in the today button next to the month name and year in the header. Maybe make that today button look more like a button in our style.
+> *`t` is **completely unbound** — nothing global, nothing in the calendar's key map (`h/l/j/k` · `H/L/J/K` · `i` · `E` · now `v`). So it's free, and `cal.today()` already exists (the button calls it). This is a **binding + a restyle**, not a feature. Small enough to ride along with anything. Note the button underline must wrap its label in a single element — a bare `<u>t</u>oday` next to loose text hits the `.btn` flex-gap trap from **n.8**.*
+> **✅ RESOLVED** — *verified by the user.*
+> **How to test:** on the calendar, `t` jumps to today (from any month). The header's `today` control is now a real button reading `today` with the **t** underlined — and it renders cleanly, with no `t oday` gap (its label is wrapped in a single span; `.btn` is `inline-flex` with a gap, the **n.8** trap).
+
 **e.5 — Bug: dated tasks on the calendar ignore the `type:` rule (and the query entirely).** Tasks should be filtered out altogether if the query doesn't select tasks. If tasks ARE selected they should respect the calendar/list view (rendered as they are today — no special treatment, just make the queries respect them).
 > *Confirmed, and it's **wrong at both ends**. The grid decides tasks by whether **any predicate exists**, never by `type:` (`calendar.js` `tasks: this.store.calMatchIds ? [] : …`; same in `day-detail.js`):*
 > - *Default events view is `type:event` → no predicate → `calMatchIds` null → **tasks show anyway**, though the query says events only.*
@@ -195,17 +255,29 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 
 ## all
 
-**a.2 — Bug: `j`/`k` don't work on mixed item lists.** It seems to still work as designed in task only views. Event only views don't seem to display as lists (see **e.1**) and notes open the note in full screen instead of a rh side drawer. However mixed lists show all items and should be navigatable through `j`/`k` to switch detailed items without closing the rh side bar. Let's make sure we write this in a way that doesn't duplicate the existing logic that works for tasks and find an intelligent way to implement this so we don't have duplicate code. We should resolve this after we're happy with keyboard nav for notes and events.
-> *Agreed on the sequencing, and it's the right instinct: this should be the **generalization** of the task-list cursor, not a second copy of it. Depends on **e.1** (events need a list) and **n.3** (notes need the drawer/ladder). Do it last — it's the capstone that proves the model is actually shared.*
-
-a.3 Bug: the view list screens pop you back to the Tasks app if you select an everything list. I would prefer if it kept you in whatever app you're currently in. This would apply to situations where we've searched 2/3 of the types as well. 
-
 ### Resolved issues
 
 **a.1 — Bug: no space between the count and the view title in the header.** The header view/query counts like open overdue urgent appear as `13open | 10overdue | 2urgent`. Look into the root cause here don't auto fix it.
 > ***This one is mine, and recent.*** *When I gated the count badges (so event/note views don't show a bogus `0`), I wrapped the count in a `<template v-if>` and left the separating space **inside** it — Vue's whitespace condensing then drops that trailing space. Fix is to own the spacing in CSS/markup rather than rely on a text-node space. Same cosmetic bucket as **n.8**.*
 > **✅ RESOLVED**
 > **How to test:** look at the header — `13 open │ 10 overdue │ 2 urgent`. (My regression: the separating space was a whitespace-only text node inside a `<template v-if>`, which Vue drops at compile time. It's now folded into the interpolation.)
+
+**a.2 — Bug: `j`/`k` don't work on mixed item lists.** It seems to still work as designed in task only views. Event only views don't seem to display as lists (see **e.1**) and notes open the note in full screen instead of a rh side drawer. However mixed lists show all items and should be navigatable through `j`/`k` to switch detailed items without closing the rh side bar. Let's make sure we write this in a way that doesn't duplicate the existing logic that works for tasks and find an intelligent way to implement this so we don't have duplicate code. We should resolve this after we're happy with keyboard nav for notes and events.
+> *Agreed on the sequencing, and it's the right instinct: this should be the **generalization** of the task-list cursor, not a second copy of it. Depends on **e.1** (events need a list) and **n.3** (notes need the drawer/ladder). Do it last — it's the capstone that proves the model is actually shared. **e.1 shipped, so this is unblocked.***
+>
+> **CLARIFIED (user) — it's `J`/`K` (SHIFT), not `j`/`k`.** The escalated pair is the whole point, and it got lost in the original write-up:
+> - **`j`/`k`** navigate the **fields of the right-hand drawer** (the KbForm ladder).
+> - **`J`/`K`** walk the **list underneath** and swap which item the drawer is showing — **without closing it**. That's the behavior in prod today for tasks, and it must carry through to mixed/event lists.
+>
+> *Confirmed in code: `detailSwap(dir)` (`index.html`) walks `store.visibleRows()` and reassigns `store.selectedTaskId`, bound to `J`/`K` and gated on `focusPane==='detail'`. It is **task-only** — hard-wired to `selectedTaskId` and the task list's rows. `mixedKey` has **no `J`/`K` at all** (only `j`/`k`/`l`/`e`/Enter/`h`).*
+>
+> *So the generalization is precisely: one list cursor + one "swap the open drawer to row N" that works per-type (task → task drawer · event → event drawer · note → the note **peek drawer**, per §4.3 — not the full-screen editor it opens today).*
+
+a.3 Bug: the view list screens pop you back to the Tasks app if you select an everything list. I would prefer if it kept you in whatever app you're currently in. This would apply to situations where we've searched 2/3 of the types as well. 
+> **✅ RESOLVED** — *verified by the user.*
+> **How to test:** on a **mixed** list (or an **event** list), open any item, then press **`J`/`K`** — the drawer swaps to the next/previous item in the list **without closing**, and it works **across types** (task → event → note, each in its own drawer). `j`/`k` still drive the open drawer's fields. It clamps at both ends. With **unsaved edits** in the event/note drawer it asks before discarding them.
+>
+> *Built as one **shared list cursor**, not a second copy: whichever list is on screen (`tasklist` or `mixed-list`) **registers** `{rows, index, go}` with the store, and every drawer calls the single `store.listSwap(dir)`. `detailSwap` — which was hard-wired to `visibleRows()` + `selectedTaskId` — is **deleted**; the task list now registers that same logic behind the shared interface. `J`/`K` had to be added **inside** the event/note drawers (`kbDelegate`), because they are KbForm takeovers with their own key listener and the app's `onKey` bails while they're open. A dirty guard was added: those drawers snapshot their entity and are remounted on id change, so a swap would otherwise **silently bin unsaved edits**.*
 
 **a.3 — Bug: the ⊞ query button doesn't reveal save / update / clear.** Long-standing. Clicking the query button in the top right opens the builder but shows none of the save/update/close controls — you have to use the `q` shortcut to get them.
 > *Root cause: **the mouse and the keyboard were two different implementations of one action.** The button's click handler was a raw state flip, `store.builderOpen = !store.builderOpen` — it opened the builder **panel** but never set `focusPane`. The save / update / clear controls are gated on `focusPane==='query'`, so for a mouse user they could never appear. The `q` key instead calls `enterQuery()`, which sets **both** `builderOpen` **and** `focusPane`, plus seeds the pane's keyboard cursor.*
@@ -235,45 +307,39 @@ a.3 Bug: the view list screens pop you back to the Tasks app if you select an ev
 >
 > *One-line change: `toggleNav()` now branches on `showing && focusPane==='side'` — mirroring `toggleDeepNav()` exactly — instead of on `navCollapsed`. `n`/`N` are intercepted before the pane dispatch, so they still fire from inside the nav (which the close case needs).*
 
+**a.7 — Bug: opening a multi-type view (e.g. "Everything") always dumps you back in the Tasks app.** Long-standing, noticed for a while. Select an "Everything"-style view from the **Events** or **Notes** nav and you get yanked to the **Tasks** app instead of staying where you were. **Captured only — no code yet.**
+> *Root cause confirmed, and it's structural rather than a slip. `store.openQueryView` (`js/data.js`) routes a saved view to a screen **purely by the view's own `type:` tokens**, and never considers **which app you're standing in**:*
+> - *exactly one type, `event` → the calendar screen*
+> - *exactly one type, `note` → the notes screen*
+> - ***everything else → `kind:'query'`, which is the Tasks screen***
+>
+> *So any view spanning **more than one** type falls into that last branch by construction — Tasks is the catch-all. Meanwhile `store.viewMatchesApp` deliberately surfaces such a view in **every** nav whose type it includes (a `type:task,event` view appears in both the Tasks and Events navs). The two rules disagree: **the nav offers it to you from Events, and the router then moves you to Tasks.***
+>
+> **DECIDED (user) — "don't boot me to Tasks: keep me in the app I'm already in."** Approved to fix.
+>
+> *Implementation follows the spec directly: `openQueryView` keeps its type-derived routing as the **fallback**, but first — if the view's `type:` tokens **include the current app's native type** — it stays put (`store.currentApp()`). An "Everything" view opened from Events stays on Events; from Notes stays on Notes; from Tasks stays on Tasks. Only a view that genuinely can't be shown in the current app (e.g. a notes-only view opened from Events) falls back to the type-derived screen.*
+>
+> *Interacts with **e.1**/**e.5** in our favour: a `type:task,event` view is grid-capable, so "stay in Events" correctly renders it on the **calendar**, drawing both events and dated tasks.*
+> **✅ RESOLVED** — *verified by the user.*
+> **How to test:** open an **"Everything"** (multi-type) view from the **Events** nav → you **stay in Events** (and it renders on the calendar, drawing both events and dated tasks); from the **Notes** nav → you stay in Notes. A view that genuinely can't be shown where you are (a notes-only view opened from Events) still routes to its own app. Switching apps via the rail, `#/tasks`, the calendar toggle, or a fresh load still lands on **Tasks** as before.
+>
+> *`openQueryView(sv, forceApp)`: `forceApp` wins → else stay in the current app when the view's types include its native type → else the old type-derived routing. **The trap:** five call sites use this function as "go to the Tasks app" (the app rail, `switchApp`, `toggleCalendar`, `#/tasks`, boot). A naive "stay put" rule would have stranded you in Events when you explicitly asked for Tasks — they now pass `'tasks'` explicitly.*
+
+**a.8 — Bug: only the task drawer animates; the others pop in.** The task right-hand drawer slides out with a clean animation, the event/note drawers don't. I assumed they'd all share the same appearance logic since that's the efficient way to code it.
+> *Right assumption, wrong reality — they **do** share the CSS, they just never get to use it. `.detail` carries `transform: translateX(100%)` + `transition: transform .16s ease`, and the **task drawer is ALWAYS MOUNTED**, toggling a `.hidden` class — so it slides both ways. The event, note and **day-schedule** drawers are `v-if`, so they mount already at their final position (no slide in) and are ripped out of the DOM on close (no slide out). Same stylesheet, zero animation.*
+> **✅ RESOLVED** — *verified by the user.*
+> **How to test:** the **event**, **note** and **day-schedule** drawers now slide in/out exactly like the task drawer. Opening a *second* item while a drawer is open swaps its contents **in place** (no re-slide, no flicker) — including a `J`/`K` swap.
+>
+> *Fixed with one `<transition name="drawer">` per v-if drawer, reusing the **same** transform + transition `.detail` already had — one appearance model, not a second one. It also forced a real improvement: the `:key` remount added for **e.2** reads as a leave+enter to `<Transition>`, so it would have flickered the drawer on every swap. Both drawers now **re-seed in place from a watcher** (`store.editingEvent` / `store.selectedNoteId`) instead of being remounted — cheaper, keeps scroll position, and e.2 still holds (verified: pointing the drawer at a second event re-seeds the form and resets its dirty baseline).*
+
 ---
 
-## Triage — Claude's read + proposed order of attack
+## Triage — what's left
 
-**Overall:** this is a coherent list, and it clusters better than it looks. Fourteen items collapse into **five themes**, and the sequence matters more than the individual fixes — three of these items are cheap *only if* the shared model lands first. Two are already effectively resolved (**n.7** fixed in the working tree; **a.1** is a regression I introduced and can undo).
+**24 items raised · 22 resolved · 2 gated.** Nothing is blocked, and nothing is in flight.
 
-### Theme A — the note editor's normal mode (n.2, n.4, n.5)
-Small, additive, low-risk. These are all operators layered on the §6.1 block cursor that already exists; each is a handful of lines in the same `normalKey` switch. **n.4** (list continuation) is insert-mode and slightly different, but equally contained. Good "warm-up" batch — ship them together, they share tests and feel.
+### ⛔ GATED ON THE USER — suggestions only, NOT approved to build
+- **n.11 — keyboard-navigable wikilinks.** Rides on **n.3** (shipped). Suggestion for *discussion*: a **hint-label overlay** (Vimium `f` style) — press a key, each visible link gets a letter, press the letter to follow it. Reuses no cursor state and doesn't fight the block cursor. Alternative: `Tab`-cycling links in the current block — simpler, clumsier in long notes.
+- **n.15 — the notes search box is mouse-only.** A **surface question before a keyboard one**: it's a *third* search surface next to the global `/` find and the query bar. The real question is whether it should exist at all, given `folder:` is already a query field. It may dissolve into the query bar rather than need a key.
 
-### Theme B — cosmetics with known causes (a.1, n.8, n.6)
-All three are CSS/markup, no logic. **a.1** is a one-line undo of my regression. **n.8** is the underline pattern (fix once, applies everywhere we underline a hotkey). **n.6** is a restyle of the checkbox — worth doing properly with the system colors, and it does **not** endanger click-to-toggle. Cheap, visible, satisfying; can go anytime.
-
-### Theme C — the "h at the edge" model (n.9, n.10, e.3) ← *do this before the big one*
-Not three bugs — **one missing rule**, applied inconsistently. §4.4 already specifies it: `h` collapses/walks up, and only jumps to the deep nav when there's **nothing left to collapse**. Today the notes list jumps too eagerly (**n.10**), the notes list can't get in at all (**n.9**), and the calendar has a real conflict (**e.3**).
-
-For **e.3** my suggestion: keep `h` = previous day, and let the *grid edge* be the trigger — `h` on the **leftmost column** (Sunday/Monday) walks out into the events nav, exactly like `h` at the top of a tree walks out to the deep nav. That preserves the day-nav you want, needs no new key, and makes the calendar consistent with the rule rather than an exception to it. If that feels wrong in the hand, the fallback is your "calendar is different, use `n`" — but I'd try the edge rule first.
-
-### Theme D — the Escape ladder in notes (n.3) ← *the big one*
-This is the largest item and the one everything else waits on. It's not really "add field nav to the note editor" — it's **defining the ladder** (insert → text-nav → field-nav → list) and making the note editor a citizen of the same `KbForm` model the task drawer already uses. You're right that we wrote the generic field nav for exactly this; the work is mostly *wiring the note editor into it* and getting the Escape semantics right at each rung, not writing new nav logic. Expect this to be the one that needs live iteration.
-
-### Theme E — the list/drawer model (e.2, e.1, n.11, a.2) ← *last, and in this order*
-- **e.2** is an outlier: a small structural bug (snapshot-in-`data()`), fixable immediately and independent of the rest. Do it whenever.
-- **e.1** is a **decision, not a task** — until you decide whether event views render as a calendar or a list, **a.2** can't be finished. This is the one I'd want your call on soonest, because it gates the capstone.
-- **n.11** (keyboard wikilinks) rides on **n.3**. Cheapest idea that fits your existing vocabulary: since the links already render as spans, give them a **hint-label** overlay (vim-easymotion / Vimium `f` style) — press a key, each visible link gets a letter, press the letter to follow it. That reuses no cursor state and doesn't fight the block cursor. The alternative — `Tab`/`n` cycling through links in the current block — is simpler but clumsier in long notes. No decision needed now.
-- **a.2** is the capstone: generalize the task-list cursor into one shared list-cursor used by task, mixed, and event lists. Doing it last means the model has been proven by the others first, which is exactly what stops it becoming a second copy of the logic.
-
-### Sequence
-1. ~~**Theme B** (cosmetics) + **e.2**~~ — ✅ **shipped in batch 1** (a.1, n.6, n.8, e.2).
-2. ~~**Theme A** (normal-mode operators)~~ — ✅ **shipped in batch 1** (n.2, n.4, n.5, n.12).
-3. ~~**Theme D** (**n.3**, the ladder)~~ — ✅ **shipped in batch 1**, together with **n.9**. It came in *smaller* than billed: the fields were already on screen, and `notes.js` was simply the one module that had never adopted `KbForm`. Making the body's lines KbForm rows meant `j`/`k` crossing from the fields into the text needed **no** boundary code — the mixin's own row-clamp does it.
-4. **Theme C** (`h` at the edge — **n.10**, **e.3**) — ← **next.** One rule, three call sites. Blocked only on your yes/no to the calendar edge-rule in **e.3**. (**n.9** shipped early because the notes list handler was already open on the bench.)
-5. **n.14** (`i` → new note) — a **binding, not a feature**; it can ride along with anything.
-6. **n.13** (links keyboard model) — its own slice, but it pays for itself: `linked-items` is **shared**, so one nested KbForm sub-pane fixes links in the task and event drawers too.
-7. ~~**e.1**~~ + ~~**e.5**~~ — ✅ **shipped in batch 2.** The event list is `mixed-list` scoped to events, so **a.2** now has the surface it was waiting on. e.5 fell out of it: once the grid honors `type:`, a dated-task view can *be* a calendar.
-8. **a.2** (shared list cursor) — ← **next**, now unblocked. Then **n.11**.
-9. **n.14** (`i` → new note) + **e.4** (`t` → today) — bindings, not features; can ride along with anything.
-10. **n.15** (notes search) — deliberately last: it's a **surface question** before it's a keyboard one (three search surfaces already exist), and it may dissolve into the query bar rather than need a key.
-
-**What I still need from you — one call, design not code:**
-- **e.3** — does `h` on the calendar's **leftmost column** walk out into the events nav? (That's what unblocks Theme C.)
-
-**n.15** needs a decision too, but it isn't blocking anything, so it can wait.
+**These two are the user's call.** Do not implement either until explicitly approved — the ideas above are conversation starters, not a plan.

@@ -185,7 +185,9 @@ window.CalendarView = {
       <span class="qbtn cal-nav" @click="moveMonth(-1)" title="previous month (H)">‹</span>
       <span class="cal-title">{{ monthLabel }}</span>
       <span class="qbtn cal-nav" @click="moveMonth(1)" title="next month (L)">›</span>
-      <span class="qbtn" @click="today" title="jump to today">today</span>
+      <!-- label wrapped in ONE span: .btn is inline-flex with a gap, so a bare <u> beside loose
+           text renders as "t oday" (the n.8 trap) -->
+      <button class="btn cal-today" @click="today" title="jump to today (t)"><span><u>t</u>oday</span></button>
       <span v-if="activeCalendar" class="cal-filter" :style="{ color: store.resolveColor(activeCalendar.color) }" title="filtered to this calendar">{{ activeCalendar.glyph }} {{ activeCalendar.name }} <span class="cal-filter-x" @click="store.openCalendar()" title="show all calendars">✕</span></span>
       <span class="grow"></span>
       <span class="qbtn" @click="store.toggleDisplay()" title="show this query as a list (v)">☰ list <span class="mut">v</span></span>

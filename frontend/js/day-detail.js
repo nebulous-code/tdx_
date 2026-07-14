@@ -20,18 +20,19 @@ window.DayDetail = {
       const d = Rec.parseYMD(this.ymd);
       return d ? d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : '';
     },
-    calFilter() { return this.store.view.calendarId || null; },   // selected-calendar filter (mirrors the grid)
-    // every occurrence on this day, honoring the calendar selection + the active query filter
-    dayOccs() {
-      if (!this.store.gridShowsEvents()) return [];   // the query didn't ask for events (e.5)
-      return this.store.events.filter((e) =>
-        e.date === this.ymd
-        && (!this.calFilter || e.calendarId === this.calFilter)
-        && this.store.calShows(e));   // series-level + this occurrence's own date (e.1)
-    },
+    calFilter() { return this.store.view.calendarId || null; },   // the nav's selected calendar (used only when CREATING here)
+    // ---- what this drawer shows (audit e.6) --------------------------------------------
+    // EVERYTHING on this day — every event and every dated task — regardless of the current
+    // query, type: rule or selected calendar. The GRID answers the query; the DAY DRAWER tells
+    // the truth, because it's the surface you schedule against: when you're about to drop
+    // something on a day you want to see what's already there, not a filtered subset of it.
+    //
+    // This is also the blank-drawer fix. It used to start with `if (!store.gridShowsEvents())
+    // return []` (my e.5 change), which on a task-only view is ALWAYS false — so the drawer showed
+    // zero events forever: 24 empty hour rows, i.e. the "blank spacer".
+    dayOccs() { return this.store.events.filter((e) => e.date === this.ymd); },
     allDay() { return this.dayOccs.filter((e) => e.allDay || (e.startAt || '').length <= 10); },
-    // dated tasks due this day (top strip, like the month grid) — gated by type: + the query (e.5)
-    dayTasks() { return this.store.tasks.filter((t) => t.due === this.ymd && this.store.taskShows(t)); },
+    dayTasks() { return this.store.tasks.filter((t) => t.due === this.ymd && !t.archived); },
     // timed occurrences with parsed start/end minutes + duration
     timed() {
       return this.dayOccs.filter((e) => !e.allDay && (e.startAt || '').length > 10).map((e) => {
@@ -162,7 +163,14 @@ window.DayDetail = {
     openTask(t) { this.store.selectedTaskId = t.id; this.store.detailOpen = true; },
     createAtFocus() { const c = this.focusedCell; this.createAt(c && typeof c.hour === 'number' ? c.hour : 8); },
     alldayFocused(e) { const c = this.focusedCell; return !!(c && c.type === 'allday' && this.focusedEvent && this.focusedEvent.id === e.id); },
+    // `i` creates what the APP you're in is about — a task on Tasks, an event on Events — so the
+    // drawer agrees with the grid behind it (e.5/e.6). A task has no time-of-day, so the hour is
+    // only used for events; the task just lands on this day.
     createAt(hour) {
+      if (this.store.currentApp() === 'tasks') {
+        this.store.startDraftTask({ due: this.ymd });   // draft — only written once it has a name (e.6)
+        return;
+      }
       this.store.editEvent({
         startAt: this.ymd + 'T' + String(hour).padStart(2, '0') + ':00',
         allDay: false, title: '', calendarId: this.calFilter || null,
@@ -170,7 +178,9 @@ window.DayDetail = {
     },
   },
   template: `
-  <div class="detail day-detail" :class="{ stacked: store.eventDetailOpen || store.detailOpen }">
+  <!-- the day agenda holds the OUTER edge (right:0) and never moves; when an item opens from it,
+       the detail drawer slides in INBOARD of it (.main.day-open, styles.css) — audit e.6 -->
+  <div class="detail day-detail">
     <div class="detail-head">
       <span class="mut">day</span>
       <span class="cy">{{ dateLabel }}</span>

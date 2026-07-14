@@ -245,5 +245,25 @@ window.TaskList = {
   },
   data(){ return {
     draft:'',
-  }; }
+  }; },
+  // The task list's half of the shared list cursor (a.2). Same interface the mixed list
+  // registers, so store.listSwap() — and therefore J/K in the open drawer — is ONE
+  // implementation rather than a task-shaped copy and a mixed-shaped copy.
+  mounted(){
+    this._unregCursor = this.store.registerListCursor({
+      rows: () => this.store.visibleRows(),
+      index: () => this.store.visibleRows().findIndex(t => t.id === this.store.selectedTaskId),
+      go: (i) => {
+        const t = this.store.visibleRows()[i];
+        if(!t) return;
+        this.store.selectedTaskId = t.id;
+        this.store.detailOpen = true;
+        this.$nextTick(() => {
+          const el = document.querySelector('.list-wrap .task.sel');
+          if(el && el.scrollIntoView) el.scrollIntoView({ block:'nearest' });
+        });
+      },
+    });
+  },
+  beforeUnmount(){ if(this._unregCursor) this._unregCursor(); }
 };

@@ -310,8 +310,16 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .main {
   grid-area: main;
   display: flex; flex-direction: column;
-  min-width: 0; overflow: hidden;
+  min-width: 0;
   position: relative;
+  /* `overflow: hidden` hides the scrollbar but STILL makes this a scroll container. The drawers
+     are absolute children parked off to the right (a hidden one sits at translateX(760px)), so
+     .main carries ~380px of horizontal overflow — and the moment anything inside a drawer takes
+     FOCUS, the browser auto-scrolls this container sideways to reveal it. It never scrolls back:
+     the calendar ends up shoved left with Monday clipped and the header cut off (audit e.6).
+     `clip` clips identically but creates NO scroll container, so it can never be scrolled. */
+  overflow: hidden;   /* fallback for browsers without `clip` */
+  overflow: clip;
 }
 
 /* query bar */
@@ -541,7 +549,16 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
   display: flex; flex-direction: column; z-index: 5;
   transform: translateX(0); transition: transform .16s ease;
 }
-.detail.hidden { transform: translateX(100%); pointer-events: none; }
+/* A hidden drawer must paint NOTHING. transform moves the box off-screen, but the box-shadow is
+   cast leftward (-16px offset + 40px blur), so it bleeds back INSIDE .main and leaves a permanent
+   dark band down the right edge of the content — a "spacer" no drawer flag can explain, because
+   the task drawer is always mounted (audit e.6). Kill the shadow + take it out of the paint. */
+.detail.hidden { transform: translateX(100%); pointer-events: none; box-shadow: none; visibility: hidden; }
+/* v-if drawers (event · note · day schedule) slide with the SAME transform + transition the
+   always-mounted task drawer uses — they just need an off-screen start/end state to animate from,
+   which is all <transition name="drawer"> supplies. One appearance model for every drawer. */
+.drawer-enter-from, .drawer-leave-to { transform: translateX(100%); }
+.drawer-leave-active { pointer-events: none; }
 .detail-head {
   display: flex; align-items: center; gap: 8px; padding: 8px 12px;
   border-bottom: 1px solid var(--line); color: var(--amber-mut); font-size: 11px;
@@ -875,10 +892,18 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .cal-task .cal-tk { color: var(--amber-mut); }
 
 /* ---- day-schedule drawer (2E §4.2) ---------------------------------- */
-/* reuses .detail (absolute, right:0, slide). When an event opens from it, .stacked shifts
-   it left by one drawer-width so the event drawer sits at right:0 — the two-level stack.
-   Desktop only; on mobile both are full-width overlays (--detail-w:100%) so event covers day. */
-@media (min-width: 861px) { .day-detail.stacked { right: var(--detail-w); } }
+/* The two-level right-hand stack (day → item). The DAY AGENDA owns the OUTER edge (right:0) and
+   stays put; opening an item from it slides the task/event/note drawer in INBOARD of it. The
+   agenda is the stable surface you're scheduling against, so it shouldn't get shoved around by
+   the drawers that come and go beside it (audit e.6 — this reverses the original §4.2 order).
+   Desktop only; on mobile both are full-width overlays (--detail-w:100%) so the item covers day. */
+@media (min-width: 861px) {
+  .main.day-open .detail:not(.day-detail) { right: var(--detail-w); }
+  /* an inboard drawer must still slide fully OFF-SCREEN, i.e. past the agenda parked outside it */
+  .main.day-open .detail:not(.day-detail).hidden,
+  .main.day-open .drawer-enter-from:not(.day-detail),
+  .main.day-open .drawer-leave-to:not(.day-detail) { transform: translateX(calc(100% + var(--detail-w))); }
+}
 .day-allday { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 12px; border-bottom: 1px solid var(--line); }
 .day-ad-ev { font-size: 11px; padding: 1px 6px; border-radius: var(--radius); background: var(--bg-1); cursor: pointer; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .day-ad-ev.kfocus { box-shadow: 0 0 0 1px var(--amber-hi); background: var(--bg-3); }
@@ -1038,6 +1063,9 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .link-chips { display: flex; flex-wrap: wrap; gap: 5px; }
 .link-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 2px 6px; font-size: 12px; color: var(--amber-hi); background: var(--bg-1); border: 1px solid var(--line-2); border-radius: var(--radius); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .link-chip:hover { border-color: var(--amber-mut); }
+/* keyboard cursor on a link chip (n.13). Unscoped on purpose: linked-items is shared by the
+   task, event and note drawers, and the .chip.kfocus rules are scoped to .detail / .note-editor. */
+.link-chip.kfocus { box-shadow: 0 0 0 1px var(--amber-hi); border-color: var(--amber-hi); }
 .link-chip .lc-type { font-size: 9px; text-transform: uppercase; }
 .link-chip .lc-x { color: var(--amber-mut); cursor: pointer; }
 .link-chip .lc-x:hover { color: var(--red); }

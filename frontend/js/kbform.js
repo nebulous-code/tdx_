@@ -115,6 +115,15 @@ window.KbForm = {
     kbScroll(){ this.$nextTick(()=>{ const el=this.$el && this.$el.querySelector('.kfocus'); if(el) el.scrollIntoView({block:'nearest', inline:'nearest'}); }); },
     // ---- click wiring (keep mouse + keyboard cursor in sync) ----
     kbFocusRow(id){ const i=this.kbNav.findIndex(r=>r.id===id); if(i>=0){ this.kbRow=i; this.kbCell=0; this.kbGoalCol=0; } },
+    // The ABSOLUTE item index of the focused cell in grid row `id`, or -1 when the cursor isn't
+    // on that row. For grids whose cells are rendered by a CHILD component (which can't call
+    // kbCls): pass this down as a prop and the child highlights that index itself.
+    kbCellOf(id){
+      const r = this.kbCur();
+      if(!r || r.id!==id || !r.cells) return -1;
+      const c = r.cells[this.kbCell];
+      return c===undefined ? -1 : c;
+    },
     kbPick(id, cellAbs){   // grid cell click: move cursor there + select it
       const i = this.kbNav.findIndex(r => r.id===id && r.cells && r.cells.includes(cellAbs));
       if(i>=0){ this.kbRow=i; this.kbCell=this.kbNav[i].cells.indexOf(cellAbs); this.kbGoalCol=this.kbCell; }

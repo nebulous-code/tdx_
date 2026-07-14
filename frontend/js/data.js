@@ -134,6 +134,7 @@
     // ui state
     view: { kind:'query', id:'sv_today', title:'Today', query:'status:open due:today' },
     selectedTaskId: null,
+    draftTask: null,         // an unsaved new task, NOT in store.tasks until it has a name (e.6)
     detailOpen: false,
     completion: { open: true, done: false },   // which completion states the list includes (≥1 always on)
     searchActive: false,     // vim '/' free-text search is showing its results
@@ -294,7 +295,9 @@
     if(first) store.sortField = first;
   };
   store.subtasks = (tid) => store.tasks.filter(t=>t.parentId===tid);
-  store.taskById = (id) => store.tasks.find(t=>t.id===id);
+  // the uncommitted draft is findable by id too, so the detail drawer can edit it like any task
+  // (it just isn't in store.tasks yet — see startDraftTask)
+  store.taskById = (id) => (store.draftTask && store.draftTask.id===id) ? store.draftTask : store.tasks.find(t=>t.id===id);
 
   // count open tasks for a project incl. subprojects
   // exact: a project's count is its own open root tasks, not its subprojects'
@@ -649,6 +652,32 @@
     for(const fn of store._dirtyCheckers){ try { if(fn()) return true; } catch(e){ /* ignore */ } }
     return false;
   };
+  // ---- the shared list cursor (audit a.2) -------------------------------------------------
+  // J/K walk the list UNDER an open drawer and swap which item it shows, without closing it
+  // (j/k belong to the drawer's own fields). That worked for tasks only, because detailSwap was
+  // hard-wired to store.visibleRows() + selectedTaskId. Instead of copying it per list, whichever
+  // list is on screen REGISTERS a cursor here, and every drawer calls the one listSwap().
+  //   rows()  → the items, in display order
+  //   index() → the current position
+  //   go(i)   → move there AND show it in its drawer (each list already knows how, per type)
+  store.listCursor = null;
+  store.registerListCursor = (c) => { store.listCursor = c; return () => { if(store.listCursor===c) store.listCursor = null; }; };
+  store.listSwap = async (dir) => {
+    const c = store.listCursor;
+    if(!c) return;
+    const rows = c.rows() || [];
+    if(!rows.length) return;
+    const i = Math.max(0, Math.min(rows.length - 1, c.index() + dir));
+    if(i === c.index()) return;                       // already at the end — don't churn the drawer
+    // The event/note drawers SNAPSHOT their entity and are remounted by :key, so swapping away
+    // would silently bin unsaved edits. Tasks are safe (task-detail edits the store directly).
+    if(store.isAnyDirty() && store.askConfirm){
+      const ok = await store.askConfirm('Discard unsaved changes?');
+      if(!ok) return;
+    }
+    c.go(i);
+  };
+
   const applyView = (v) => {
     store.view = v; store.selectedTaskId = null; store.sidebarOpen = false;
     store.searchActive = false;   // switching views exits search (the term is kept for the next '/')
@@ -665,15 +694,28 @@
     }
     applyView(v);
   };
-  store.openQueryView = (sv) => {
-    // a saved view that targets exactly one non-task app opens in that app's native screen
-    // (so an events/notes seed view lands on the calendar/notes list, query-filtered), else
-    // it's a regular query view (tasks tree, or the mixed list when it spans types).
+  // Open a saved view. WHICH SCREEN it lands on (audit a.7):
+  //   1. `forceApp` wins — the app-switch callers (the app rail, #/tasks, toggleCalendar, boot)
+  //      mean "go to THIS app", and must not be second-guessed by the rules below.
+  //   2. else, if the view's types include the CURRENT app's own type, STAY WHERE YOU ARE. An
+  //      "Everything" view opened from the Events nav keeps you in Events. This is the fix: the
+  //      old code routed purely by type: tokens, so anything spanning >1 type fell into the
+  //      tasks catch-all — even though the nav had offered it to you from Events/Notes.
+  //   3. else, derive the app from the view's types (a single-type events/notes view opens on
+  //      that app's native screen; anything else is a task/mixed query view).
+  store.openQueryView = (sv, forceApp) => {
     const types = new Set();
     for(const t of Q.parse(sv.query||'').terms)
       if(t.field==='type' && !t.neg) String(t.value).split(',').map(s=>s.trim()).forEach(x=>{ if(x) types.add(x); });
-    if(types.size===1 && types.has('event')) store.setView({ kind:'calendar', id:sv.id, title:sv.name, query:sv.query, calendarId:null });
-    else if(types.size===1 && types.has('note')) store.setView({ kind:'notes', id:sv.id, title:sv.name, query:sv.query, folderId:null });
+
+    const derived = types.size===1 && types.has('event') ? 'events'
+      : types.size===1 && types.has('note') ? 'notes'
+      : 'tasks';
+    const stay = !forceApp && types.has(store.nativeType());   // the view speaks this app's language
+    const app = forceApp || (stay ? store.currentApp() : derived);
+
+    if(app==='events') store.setView({ kind:'calendar', id:sv.id, title:sv.name, query:sv.query, calendarId:null });
+    else if(app==='notes') store.setView({ kind:'notes', id:sv.id, title:sv.name, query:sv.query, folderId:null });
     else store.setView({ kind:'query', id:sv.id, title:sv.name, query:sv.query });
   };
   // ---- calendar (D2) ----
@@ -754,6 +796,34 @@
     else if(it.kind==='label') store.openLabelView(it.ref);
   };
 
+  // ---- draft task (audit e.6) --------------------------------------------------------------
+  // `i` on the calendar used to call addTask() immediately, which PERSISTS a task titled
+  // 'untitled' the moment you press the key — junk rows from a stray keystroke, and a detail
+  // drawer sitting open on nothing. Instead the drawer opens on a DRAFT that lives OUTSIDE
+  // store.tasks (so it never syncs, never shows in a list, and J/K can't land on it) and is
+  // committed only when it has a name. Same rule the notes editor uses: nothing is written
+  // until it's named.
+  store.startDraftTask = (partial) => {
+    const t = mk(uid('t'), partial.projectId || currentProjectId(), null, '', partial);
+    store.draftTask = t;
+    store.closeDrawers();
+    store.selectedTaskId = t.id;
+    store.detailOpen = true;
+    return t;
+  };
+  store.commitDraftTask = () => {
+    const t = store.draftTask;
+    if(!t) return null;
+    store.draftTask = null;
+    store.tasks.push(t);          // now it's real — the autosave picks it up from here
+    return t;
+  };
+  store.discardDraftTask = () => {
+    if(!store.draftTask) return;
+    const id = store.draftTask.id;
+    store.draftTask = null;
+    if(store.selectedTaskId === id) store.selectedTaskId = null;
+  };
   store.addTask = (partial) => {
     const t = mk(uid('t'), partial.projectId || currentProjectId(), partial.parentId||null, partial.title||'untitled', partial);
     if(partial.rec) t.recurrence = partial.rec;
