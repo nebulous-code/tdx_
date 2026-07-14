@@ -1,14 +1,19 @@
 name: build-image
 
-# Run the server test suite on every PR and on pushes to main; only after it
-# passes do we build the app image and push it to GHCR (on main pushes only).
+# Run BOTH test suites — server and frontend — on every push to ANY branch and on every PR.
+# Only after both pass do we build the app image and push it to GHCR (on main pushes only).
 # The image is consumed by compose.yaml (ghcr.io/nebulous-code/tdx:latest); a
 # Watchtower instance on the host auto-pulls new :latest images (see compose.watchtower.yml).
 # Because Watchtower auto-deploys :latest, the test gate below is what stops a broken
 # commit from reaching prod.
+#
+# Why every branch, not just main + PRs: a broken test should surface on the push that broke
+# it, not weeks later at merge time. `store.searchRoots` was deleted in da7dac6 (2026-06-30)
+# and its test stayed red until someone happened to run the suite locally — because feature
+# branches never ran CI and the frontend suite never ran AT ALL.
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request: {}
   workflow_dispatch: {}
 
@@ -17,7 +22,7 @@ permissions:
   packages: write
 
 jobs:
-  test:
+  test-server:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,8 +51,28 @@ jobs:
       - name: Test + coverage gate
         run: bash tools/test_coverage.sh
 
+  # The frontend is a NO-BUILD Vue app (window globals, script tags) with zero dependencies —
+  # the golden suite runs on a bare Node with node:test, no install, no jsdom, no bundler.
+  # It is not optional: the creation language (frontend/js/create.js) and the query/recurrence
+  # engines are frontend-ONLY, and they ship inside the same image the server does.
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Same script you run locally: `tools/test_coverage_frontend.sh` (use --bump to ratchet
+      # the floors up). Fails if lines/branches/functions drop below tools/coverage-floor-frontend.txt.
+      - name: Test + coverage gate
+        run: bash tools/test_coverage_frontend.sh
+
   build-push:
-    needs: test
+    # BOTH suites gate the image — the frontend is baked into it (the Dockerfile COPYs
+    # server/ + frontend/), so a green server suite alone is not evidence the app works.
+    needs: [test-server, test-frontend]
     # only build + publish on a real push to main — never on PRs (Watchtower would deploy it)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest

@@ -19,7 +19,7 @@ const FRONTEND = path.resolve(__dirname, '../../frontend/js');
 
 function execFile(name) {
   const code = fs.readFileSync(path.join(FRONTEND, name), 'utf8');
-  vm.runInThisContext(code, { filename: 'frontend/js/' + name });
+  vm.runInThisContext(code, { filename: path.join(FRONTEND, name) });
 }
 
 function ensureWindow() {

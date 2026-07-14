@@ -5,9 +5,16 @@ Golden-master (characterization) tests that lock today's frontend engine behavio
 ## Run
 
 ```sh
-npm test            # run all tiers, compare against goldens
-npm run test:update # regenerate goldens (after an INTENTIONAL behavior change)
+npm test                    # run all tiers, compare against goldens
+npm run test:update         # regenerate goldens (after an INTENTIONAL behavior change)
+npm run test:coverage       # + RATCHETING coverage gate — this is what CI runs
+npm run test:coverage:bump  # lock in a coverage improvement (floors only move up)
 ```
+
+**CI runs this suite on every push to every branch** (`.github/workflows/docker.yml`, job
+`test-frontend`), and it gates the image build alongside the server suite. It didn't used to:
+CI was server-only, so a store test deleted out from under itself in `da7dac6` stayed red for
+weeks. Floors live in `tools/coverage-floor-frontend.txt`.
 
 Both pin `TZ=UTC`; the suite freezes the clock to **2026-06-18** (`support/clock.cjs`), so results are identical on any machine or CI. No dependencies are installed — `node:test` is built in, Vue's vendored global build and the engines load via a `vm.runInThisContext` global shim (`support/load.cjs`), so **nothing in `frontend/` is modified**.
 
