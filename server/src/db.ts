@@ -256,6 +256,9 @@ export interface BackupConfigTable {
   last_status: string | null;
   last_error: string | null;
   next_run_at: string | null;
+  vault_last_status: string | null; // git-vault backup health — 012, distinct from the DB backup's status
+  vault_last_error: string | null;
+  vault_last_run_at: string | null;
 }
 
 export interface Database_ {

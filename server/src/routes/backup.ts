@@ -21,6 +21,10 @@ function statusPayload(app: FastifyInstance) {
     last_status: cfg.last_status,
     last_error: cfg.last_error,
     next_run_at: cfg.next_run_at,
+    // git-vault backup health — reported independently of the DB backup (012)
+    vault_last_status: cfg.vault_last_status,
+    vault_last_error: cfg.vault_last_error,
+    vault_last_run_at: cfg.vault_last_run_at,
     dirOk: probe.ok,
     dirError: probe.ok ? null : probe.error,
     backupCount: probe.ok ? probe.count : 0,

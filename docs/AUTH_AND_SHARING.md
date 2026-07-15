@@ -91,6 +91,14 @@ Endpoints (contract-complete in D1, some UI-less): grant/revoke share, set/clear
 - **Wired later (frontend + UX, no backend rebuild):** the sharing UI, the assignment UI, group management, the token-issuance screen, multi-user onboarding, agent/portfolio setup.
 - **Deployment approach (suggestion):** fold the auth/ownership *model* into the D1 rewrite itself rather than as a follow-on phase — it's the scoping layer, so it can't cleanly be a separate step. Ship the endpoints contract-complete (even if the frontend ignores most of them), deploy, and **daily-drive as a single-user app on a multi-user-ready backend.** That satisfies "don't rebuild a third time": adding real sharing later is frontend wiring + turning on UI, not a backend re-lay.
 
+## 12. Open seam — vault backup attribution (resolve when notes sharing ships)
+
+The notes vault is laid out per-owner (`/vault/<owner>/…`), and its backup (see [`VAULT_BACKUP.md`](VAULT_BACKUP.md)) snapshots the **whole `/vault` as a single git repo**, committing as the sole owner's username. That's correct and simplest while tdx is single-user, but it doesn't cleanly attribute history once a vault holds multiple owners' subtrees — one scheduled snapshot would span several owners in a single commit.
+
+When notes sharing / multi-user editing is wired, resolve it one of two ways: **per-owner commits** (stage and commit each owner's subtree separately within a snapshot tick, so each commit carries the right author), or **per-owner repos** (`/backups/<owner>.git` over `/vault/<owner>`). Per-owner repos also line up with per-user *permanent delete* ([`VAULT_VERSION_CONTROL.md`](VAULT_VERSION_CONTROL.md) Feature B), since a history rewrite would then be scoped to one user's history rather than the shared one.
+
+This is recorded here so the MVP's single-repo choice stays a conscious, revisitable boundary — not a forgotten assumption. It's a backup/attribution detail only; it does **not** affect the ownership/grants model above (the vault files already sit under per-owner paths, which is all the access model needs).
+
 ## Decisions (resolved)
 1. **IDs = UUIDs** — global, no per-user counter coordination.
 2. **Roles = `viewer` / `editor` / `owner`** — coarse on purpose; extend later if a finer grade is ever needed.

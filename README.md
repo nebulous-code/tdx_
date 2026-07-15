@@ -96,6 +96,17 @@ The container publishes port 3000 on all interfaces, so reach it at
 keep it on a trusted network (a tailnet, or LAN behind your firewall) — and keep
 Tailscale **Funnel off**.
 
+## Backups & restore
+
+Backups are scheduled from the app (admin: **@ account → backups**) and protect both halves of your data with one switch:
+
+- **The database** (tasks, events, projects, labels, saved queries, note metadata) → a standalone SQLite snapshot `tdx-<timestamp>.db`.
+- **The notes vault** (the `.md` files and attachments — the note content) → committed into a `vault.git` repository, so you get point-in-time history, not just the latest copy. In-app edits also commit within a few seconds.
+
+Set a backup directory (an absolute, writable path — a mounted volume like `/backups` in production) and turn backups on; both artifacts land there side by side.
+
+**Restoring** is a documented runbook, not a UI button — see [`RESTORE.md`](RESTORE.md): §1–§3 for the database (stop → swap the file → start) and §4 for the notes vault (check the file out of `vault.git`, then sync). Design and rationale: [`docs/BACKUP_DESIGN.md`](docs/BACKUP_DESIGN.md) (database) and [`docs/VAULT_BACKUP.md`](docs/VAULT_BACKUP.md) (vault).
+
 ## How persistence works (one-paragraph version)
 
 The frontend keeps the whole app state in a reactive store and, on any change

@@ -49,15 +49,21 @@ The one place git is *worse* than tar-with-retention is **binaries**: git stores
 
 ## Restore
 
-Files are truth, so every restore ends by letting the scanner rebuild the DB shadow:
+Files are truth, so every restore is two steps: put files back, then reconcile the DB shadow. Run git **from inside the vault work-tree** (`$VAULT_DIR`) — a pathspec issued from elsewhere is rejected as outside the repository. Paths are `<owner_id>/<rel>.md`.
 
-- **A single file, point-in-time (CLI in MVP; friendly UI is the enhancements doc):**
+- **A single file, point-in-time** (redirect form needs no work-tree — it just reads a blob):
   ```sh
-  git --git-dir=/backups/vault.git show <commit>:relative/path.md > /vault/relative/path.md
+  git --git-dir=/backups/vault.git show <commit>:<owner_id>/note.md > "$VAULT_DIR/<owner_id>/note.md"
   ```
-- **The whole vault, current tip:** `git --git-dir=/backups/vault.git --work-tree=/vault checkout -- .`
-- **Disaster — vault dir gone entirely:** the repo at `/backups/vault.git` still has everything; check out a fresh work tree into a new `/vault`.
-- **Then:** trigger a rescan (or just restart) so the DB shadow reconciles to the restored files. Order is always files → rescan.
+- **A deleted note:** the delete is itself a commit, so pick a commit from *before* it — `git log` the path, then check out `<that-commit>` (often `HEAD~1`), **not** `HEAD` (which is the deleted state).
+  ```sh
+  cd "$VAULT_DIR" && git --git-dir=/backups/vault.git --work-tree=. checkout HEAD~1 -- <owner_id>
+  ```
+- **The whole vault** (disaster — vault dir gone): recreate it and check the snapshot out into it.
+  ```sh
+  mkdir -p "$VAULT_DIR" && cd "$VAULT_DIR" && git --git-dir=/backups/vault.git --work-tree=. checkout <commit> -- .
+  ```
+- **Then reconcile — mandatory, and a plain restart will NOT do it.** The DB shadow only rebuilds when `scanVault` runs, which is triggered by `POST /api/notes/sync?mode=full` (per owner) or the app's sync action — never at boot. Until you sync, restored files are on disk but invisible in the app (and any note you brought back is still tombstoned in the DB). The sync re-reads the files, re-keys them by their frontmatter `id`, and clears tombstones.
 
 ## What it covers / doesn't
 
@@ -67,3 +73,5 @@ Files are truth, so every restore ends by letting the scanner rebuild the DB sha
 ## Scope boundary
 
 Out of this doc, in [`VAULT_VERSION_CONTROL.md`](VAULT_VERSION_CONTROL.md): the in-app version-history/restore UI, and permanent-delete-with-history-pruning (the "soft archive vs hard delete" idea). The MVP here just makes the history *exist* and be restorable from the CLI.
+
+Also deliberately out of scope: **multi-user attribution.** This MVP snapshots the whole `/vault` as a single repo and commits as the sole owner — correct while tdx is single-user. Per-owner commit attribution (or per-owner repos) is deferred to whenever notes sharing is wired, and is recorded as an open seam in [`AUTH_AND_SHARING.md`](AUTH_AND_SHARING.md) §12 so it resurfaces then.

@@ -37,6 +37,7 @@ export default async function noteRoutes(app: FastifyInstance): Promise<void> {
         request.user!.id,
         request.body as Parameters<typeof createNote>[2],
       );
+      app.vaultGit.scheduleSnapshot(); // debounced commit-on-save (no-op unless backups enabled)
       return reply.code(201).send(note);
     },
   );
@@ -57,7 +58,9 @@ export default async function noteRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request) => {
       const { mode } = request.query as { mode?: 'incremental' | 'full' };
-      return scanVault(app.db, request.user!.id, mode ?? 'incremental');
+      const summary = await scanVault(app.db, request.user!.id, mode ?? 'incremental');
+      app.vaultGit.scheduleSnapshot(); // capture externally-edited files just reconciled
+      return summary;
     },
   );
 
@@ -92,6 +95,7 @@ export default async function noteRoutes(app: FastifyInstance): Promise<void> {
         request.body as Parameters<typeof updateNote>[3],
       );
       if (!note) return reply.code(404).send({ error: 'not found' });
+      app.vaultGit.scheduleSnapshot(); // debounced commit-on-save
       return reply.send(note);
     },
   );
@@ -100,6 +104,7 @@ export default async function noteRoutes(app: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string };
     if (await denyAccess(app, request, reply, 'note', id, 'write')) return;
     await deleteNote(app.db, request.user!.id, id);
+    app.vaultGit.scheduleSnapshot(); // debounced commit-on-save
     return reply.code(204).send();
   });
 }

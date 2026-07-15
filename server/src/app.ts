@@ -32,10 +32,12 @@ import tokenRoutes from './routes/tokens.js';
 import { ensureDefaultCalendars } from './services/calendars.js';
 import { migrateVaultLayout } from './services/notes.js';
 import { backfillReadableIds } from './services/readableIds.js';
+import { type VaultGit, createVaultGit } from './vault-git.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
     backups: Backups;
+    vaultGit: VaultGit;
   }
 }
 
@@ -72,6 +74,7 @@ export async function buildApp(opts: AppOpts = {}): Promise<FastifyInstance> {
   await backfillReadableIds(handle.db); // one-time: assign readable ids to any legacy rows missing one
   await registerAuth(app);
   app.decorate('backups', createBackups(handle.sqlite));
+  app.decorate('vaultGit', createVaultGit(handle.sqlite));
 
   await app.register(authRoutes);
   await app.register(adminRoutes);
