@@ -1,8 +1,15 @@
 # D1 cutover — running the TypeScript server in prod
 
-This is the one-time switch from the legacy `backend/` service to the new `server/` (TypeScript) service. The compose/CI changes are already in the tree but **must not reach `main` until the prod database has been converted** — the new server runs the D1 (UUID) schema and **will not start against the legacy DB**.
+> **✅ COMPLETED — this cutover has already happened.** Verified by read-only probe of prod on
+> **2026-07-15**: the box runs the TypeScript `server/` (`/health` → `tdx-server`) on the migrated
+> UUID DB (1 user · 24 projects · 468 tasks · 36 labels · 9 saved queries, all in the new schema).
+> This document is now **historical** — the record of the legacy → TS switch.
+>
+> **It is tasks-only.** The deployed image (built 2026-06-18) predates the Events & Notes work and
+> its DB sits at migration `001_init`. **For the next release — deploying the Events/Notes apps,
+> the creation language, and migrations 002–011 — follow [`DEPLOY_EVENTS_AND_NOTES.md`](DEPLOY_EVENTS_AND_NOTES.md).**
 
-Do this only after you're happy daily-driving on `:3001` in dev.
+This was the one-time switch from the legacy `backend/` service to the new `server/` (TypeScript) service. The new server runs the D1 (UUID) schema and **will not start against the legacy DB**, so the prod database had to be converted first.
 
 ## What changes
 - `compose.yaml` + `.github/workflows/docker.yml` build from `server/Dockerfile` (was `backend/Dockerfile`). Same image name (`ghcr.io/nebulous-code/tdx:latest`), same env (`PORT`/`HOST`/`DB_PATH`/`TZ`/`SESSION_SECRET`), same volumes (`./data`, `./backups`), same port (`3000`). The new server serves the API **and** the static frontend.
