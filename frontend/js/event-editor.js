@@ -23,6 +23,7 @@ window.EventDetail = {
       _orig: JSON.stringify(evSnapshot(f)),
       kbAutofocus: !f.id, // new event → jump into the title; editing → start in nav mode
       linkList: [],       // links emitted up by <linked-items> ($refs isn't reactive) — n.13
+      recurActive: false, // inside the recurrence-builder sub-pane (e.12) — same pattern as task-detail
     };
   },
   // Re-seed IN PLACE when the drawer is pointed at a different event (a mouse click on another
@@ -82,7 +83,9 @@ window.EventDetail = {
         { id: 'endDate', type: 'input', ref: 'endDate' },
         { id: 'endTime', type: 'input', ref: 'endTime', when: () => !this.f.allDay },
         { id: 'location', type: 'input', ref: 'location' },
-        { id: 'recurrence', type: 'input', ref: 'recurrence' },
+        // a cursor-only stop: `i` descends into the recurrence-builder sub-pane, it has no input
+        // to focus (e.12 — same as task-detail's recur row). h/l/space/enter also enter it.
+        { id: 'recurrence', type: 'static' },
         { id: 'notes', type: 'input', ref: 'notes' },   // ref → md-field.focus() (i edits)
         // links = a grid row, like labels: j/k skip it, h/l cross the chips, space opens (n.13)
         { id: 'links', type: 'grid', items: this.linkList, cols: 99,
@@ -96,10 +99,39 @@ window.EventDetail = {
     },
     kbSubmit() { this.save(); },
     kbDirty() { return JSON.stringify(evSnapshot(this.f)) !== this._orig; },
-    // J/K walk the list underneath and swap what this drawer shows, without closing it (a.2).
-    // It has to live here: this drawer is a KbForm takeover with its own key listener, so the
-    // app's onKey bails while it's open and would never see J/K. Not while typing.
+    // ---- recurrence-builder sub-pane (e.12) — the exact pattern task-detail uses -----------
+    enterRecur() {
+      const b = this.$refs.recur; if (!b) return;
+      this.recurActive = true;
+      b.kbRow = 0; b.kbCell = 0; b.kbGoalCol = 0;   // land on the frequency row
+    },
+    exitRecur() {
+      this.recurActive = false;
+      const a = document.activeElement; if (a && a.blur) a.blur();   // drop out of any builder input
+    },
+    // kbDelegate is called FIRST by KbForm.kbKey (kbform.js), so it intercepts keys before the
+    // form's own handling. Two responsibilities, in order: forward keys into the recurrence
+    // builder while it's active, and J/K list-swap while it isn't.
     kbDelegate(e) {
+      const b = this.$refs.recur;
+      // (1) inside the builder — forward everything, and pop back out at the edges
+      if (this.recurActive) {
+        if (e.key === 'Escape') { e.preventDefault(); this.exitRecur(); return true; }
+        if (b) {
+          const r = b.kbCur && b.kbCur();
+          if ((e.key === 'h' || e.key === 'ArrowLeft') && (!r || r.cellCount <= 1 || b.kbCell === 0)) { e.preventDefault(); this.exitRecur(); return true; }
+          if ((e.key === 'k' || e.key === 'ArrowUp') && b.kbRow === 0) { e.preventDefault(); this.exitRecur(); this.kbMove(-1); return true; }
+          if ((e.key === 'j' || e.key === 'ArrowDown') && b.kbRow === b.kbNav.length - 1) { e.preventDefault(); this.exitRecur(); this.kbMove(1); return true; }
+          b.kbKey(e);
+        }
+        return true;
+      }
+      // (2) `i` on the recurrence row descends into the builder (like `i` edits any other field)
+      const cur = this.kbCur();
+      if (cur && cur.id === 'recurrence' && e.key === 'i') { e.preventDefault(); this.enterRecur(); return true; }
+      // (3) J/K walk the list underneath and swap what this drawer shows, without closing it (a.2).
+      // It has to live here: this drawer is a KbForm takeover with its own key listener, so the
+      // app's onKey bails while it's open and would never see J/K. Not while typing.
       if (e.key !== 'J' && e.key !== 'K') return false;
       const a = document.activeElement, tag = (a && a.tagName || '').toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return false;
@@ -194,9 +226,17 @@ window.EventDetail = {
         <label>location</label>
         <input ref="location" class="input" v-model="f.location" placeholder="location" @focus="kbFocusRow('location')" @keydown.enter.stop.prevent="save" @keydown.esc.stop.prevent="blurField">
       </div>
-      <div class="field" :class="kbCls('recurrence')">
-        <label>recurrence</label>
-        <input ref="recurrence" class="input" v-model="f.recurrence" placeholder="e.g. weekly on mon,wed,fri" @focus="kbFocusRow('recurrence')" @keydown.enter.stop.prevent="save" @keydown.esc.stop.prevent="blurField">
+      <!-- the guided recurrence builder (e.12) — the same component the task drawer uses, driven
+           by f.recurrence. The host highlight shows only when NOT inside the sub-pane; the builder
+           shows its own kfocus via :active. Writes straight back to f.recurrence, so evSnapshot /
+           the dirty-guard need no change. anchor = the start date → the "next 3" preview. -->
+      <div class="field" :class="!recurActive ? kbCls('recurrence') : null">
+        <label>recurrence
+          <span class="mut" v-if="recurActive" style="font-size:11px;text-transform:none;">— editing · esc to exit</span>
+          <span class="mut" v-else-if="kbCls('recurrence').kfocus" style="font-size:11px;text-transform:none;">— i to edit</span>
+        </label>
+        <recurrence-builder ref="recur" :model-value="f.recurrence" @update:model-value="v => f.recurrence = v"
+                            :anchor="f.date" :active="recurActive"></recurrence-builder>
       </div>
 
       <div class="field">

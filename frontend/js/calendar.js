@@ -24,7 +24,7 @@ window.CalendarView = {
       const day = this.cursor;
       return this.clType === 'task'
         ? 'add task on ' + day + '…  (try: Call plumber /home #errand !2)'
-        : 'add event on ' + day + '…  (try: Retro /Work #standup $friday)';
+        : 'add event on ' + day + "…  (try: Mom's Birthday /Birthdays #fun)";
     },
     tagGhost() { return this.store.clGhost(this.draft, this.clType); },
     // ⚠ when the view filters on something a new item won't have — it's still created, just

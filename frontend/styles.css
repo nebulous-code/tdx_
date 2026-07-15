@@ -248,7 +248,9 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .side-head.kfocus .sec-toggle { color: var(--amber-hi); }
 
 /* help modal tabs */
-.help-tabs { display: flex; align-items: center; gap: 4px; padding: 7px 14px; border-bottom: 1px solid var(--line); flex: 0 0 auto; }
+/* wrap so the growing tab list + the "h/l tabs · j/k scroll" hint never run off the right edge
+   (there are 9 tabs now); the width bump on the modal keeps the wrap to ~2 tidy rows */
+.help-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 7px 14px; border-bottom: 1px solid var(--line); flex: 0 0 auto; }
 .help-tab { cursor: pointer; padding: 3px 10px; border-radius: var(--radius); font-size: 11px; color: var(--amber-mut); border: 1px solid transparent; }
 .help-tab:hover { color: var(--amber); }
 .help-tab.on { color: var(--on-accent); background: var(--amber); border-color: var(--amber); font-weight: 500; }

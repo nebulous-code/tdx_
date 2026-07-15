@@ -104,7 +104,7 @@ window.HelpModal = {
       // ONE grammar for every quick-add: a symbol means the same IDEA everywhere, and each
       // app maps it to its own field ($ = the date → a task's due date, a note's review date).
       // A symbol an app doesn't have isn't a dead key there — it's just text.
-      { name:'creation language (quick-add)', code:'amber', items:[
+      { name:'creation language', code:'amber', items:[
         { k:'#label',       d:'add or create a label (forced lowercase) · tasks + notes' },
         { k:'$friday',      d:'THE DATE — a task’s due date, a note’s review date. today · tomorrow · friday · next friday · 2026-07-13 · 6/7/2026 (month first) · 13/7 (only one reading)' },
         { k:'/project',     d:'WHERE IT LIVES — a task’s project, a note’s folder. Matches like the query does, so /tdx finds tdx-app. An unknown one stays in the title' },
@@ -138,7 +138,7 @@ window.HelpModal = {
   },
   template: `
   <div class="overlay" @click.self="$emit('close')">
-    <div class="modal" style="max-width:600px;width:92vw;max-height:76vh;display:flex;flex-direction:column;">
+    <div class="modal" style="max-width:760px;width:92vw;max-height:76vh;display:flex;flex-direction:column;">
       <div class="modal-head" style="flex:0 0 auto;display:flex;align-items:center;">
         <span style="flex:1;">quick reference</span>
         <span class="acct-x" @click="$emit('close')" title="close (esc)">✕</span>
