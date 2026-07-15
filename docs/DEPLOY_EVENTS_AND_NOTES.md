@@ -95,9 +95,9 @@ The `/health` endpoint already exists (`app.ts`).
 2. **Back up prod's DB** out-of-band: `cp .../data/tdx.db …/tdx.pre-events-notes.db`. (The backup service also snapshots it, but take an explicit named copy.)
 3. **Pause Watchtower** so the deploy is deliberate, not a surprise mid-work: `docker stop watchtower` (or drop the container's watchtower label).
 4. **Merge to `main`.** CI runs both test suites, builds the image (migrations 001–011 baked in), pushes `:latest` + `:<sha>`.
-5. **Pull + restart deliberately:** `docker compose pull tdx && docker compose up -d tdx`. Watch the logs — `applyMigrations` prints each version as it applies. Confirm it reaches 011 and the server logs "listening" (not a boot throw).
+5. **Rotate `SESSION_SECRET`, then pull + restart deliberately.** This restart is deliberate anyway, so fold the secret rotation in here and it costs no extra restart or re-login: generate a new value (`openssl rand -base64 48`) and replace `SESSION_SECRET` in prod's env, then `docker compose pull tdx && docker compose up -d tdx`. Watch the logs — `applyMigrations` prints each version as it applies. Confirm it reaches 011 and the server logs "listening" (not a boot throw). *(See "Deliverable: rotate `SESSION_SECRET`" below for the why.)*
 6. **Smoke test** at `http://<host>:3000`:
-   - Log in (same credentials — sessions may be dropped if `SESSION_SECRET` changed; it hasn't).
+   - Log in — you'll be **logged out by the secret rotation**, so this is the one expected re-login (same credentials). With a single user that re-login is the entire cost of rotating.
    - **Tasks intact:** all 468 there, the Inbox project reads **Inbox** with the `❯` glyph.
    - **Events app** loads (the calendar), **Notes app** loads, the creation-language quick-add works.
    - Create a note → confirm it lands in the **mounted** vault dir on the host (`ls ./vault/<owner>/`).
@@ -128,16 +128,34 @@ The whole reason for the backend rewrite was a clean, documented API a designer 
 
 Scope it as its own pass after the box is updated — like the Playwright suite, it makes the release *solid* and *usable by others*, but it isn't a gate on getting the container upgraded.
 
+---
+
+## Bugs to fix before shipping (not gates, but wanted before release)
+
+Not release dependencies — the container can be upgraded without them — but these are things to clear before calling the release done. All three are already tracked in the `tdx_` project on tdx; they're surfaced here because this release is what makes them matter (or makes them worse).
+
+- **Renaming a project/calendar/folder/label breaks queries.** Saved queries reference their categorizer by *name*, so renaming one silently breaks every query that filters on it. Today it's a project-only bug; **this release widens the blast radius** by adding calendars and folders as new shared-name categorizers, so the same break now spans four entity types. The fix is a generic rename-propagation pass that rewrites the affected filters when a project/calendar/folder/label is renamed. This is the highest-value of the three.
+- **Note query doesn't support multiple-folder search.** `folder:inbox,grocery` isn't supported, even though the comma-list form works for other filters. A parser gap in the notes feature this release ships.
+- **Calendar date styling.** The calendar/date controls still render with the browser's default format and styling instead of the app's own CSS — cosmetic, but it's the new headline app so it should match the rest of the UI.
+
+---
+
+## Deliverable: rotate `SESSION_SECRET` (done during the deploy restart)
+
+`SESSION_SECRET` is the key the server uses to sign session cookies — effectively a forge-any-login key, so it's a higher-value secret than a read token. It's set and required in prod today (the server won't boot without it). It very likely **passed through a prod-probing debugging session** on 2026-07-15, which puts it in the same transcript-exposure class as the read PAT that was already rotated — but rotating that PAT did **not** touch this; it's a separate secret living in prod's env, not in the database.
+
+Do it as **step 5 of the runbook**, timed with the deliberate restart so it's free: `openssl rand -base64 48` → replace `SESSION_SECRET` in prod's env → the restart you're already performing loads it. The only effect is that existing session cookies are invalidated, so the post-deploy smoke-test login (step 6) is the single re-login. No data is touched. The reason it lives here rather than as a standalone chore is timing — the right moment to rotate a cookie-signing key is exactly when you're already restarting the container and about to log in anyway.
+
 ## Scope decisions & things intentionally left out
 
 - **Sharing / multi-user is built server-side but dormant** — grants, "shared with me", group CRUD, PATs, `/complete`·`/assign`·`/labels/merge`. Ship v1 **single-user** (the app doesn't drive any of it) and leave the surface asleep. Building the UI for it is a separate initiative.
 - **Yearly/annual recurrence** — parked; tracked in the prod tdx task list. A monthly-every-12 covers a birthday until the grammar is expanded.
 - **HTTPS / `secure` cookie** — the session cookie is `secure:false` (fine on plain-HTTP LAN/tailnet). If this ever goes behind TLS, that flag needs flipping and there's no env toggle for it yet.
-- **The vault is not covered by the DB backup service** — that service snapshots SQLite only. Once notes exist, snapshot the mounted vault dir separately (a ZFS snapshot of the host path is clean).
+- **The vault is not covered by the DB backup service** — that service snapshots SQLite only. The vault (the note `.md` files + any binaries) needs its own backup; the design for that is [`VAULT_BACKUP.md`](VAULT_BACKUP.md) (a scheduled git snapshot into a separate git dir under `/backups`), with the user-facing history/restore and permanent-delete features deferred to [`VAULT_VERSION_CONTROL.md`](VAULT_VERSION_CONTROL.md). The vault *mount* (Blocker 1 above) is the deploy gate; the git backup is the MVP target to land with the release.
 
 ---
 
 ## Housekeeping (low priority)
 
-- `SESSION_SECRET` is set and required (server refuses to boot without it — good). No documented generation step; `openssl rand -base64 48` is fine. **It surfaced in a debugging session** while probing prod — if you treat that session's logs as sensitive, rotate it (`openssl rand`, update `.env`, restart; with one user the only cost is a single re-login).
+- **`SESSION_SECRET` rotation** is now a deploy deliverable — see "Deliverable: rotate `SESSION_SECRET`" above; it's folded into runbook step 5.
 - Doc status, reconciled against the probe: `docs/DEPLOY.md`'s cutover **did happen** (stamped ✅ COMPLETED there) — `docs/BACKEND_REDESIGN_TODO.md`'s "cutover executed" line was *correct*, not aspirational. What's stale in that TODO is the **test counts** and the "multi-user gate DONE" framing (multi-user is built-but-dormant, not shipped). This file is the source of truth for the Events & Notes deploy.
