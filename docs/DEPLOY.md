@@ -1,13 +1,8 @@
 # D1 cutover — running the TypeScript server in prod
 
-> **✅ COMPLETED — this cutover has already happened.** Verified by read-only probe of prod on
-> **2026-07-15**: the box runs the TypeScript `server/` (`/health` → `tdx-server`) on the migrated
-> UUID DB (1 user · 24 projects · 468 tasks · 36 labels · 9 saved queries, all in the new schema).
-> This document is now **historical** — the record of the legacy → TS switch.
+> **✅ COMPLETED — this cutover has already happened.** Verified by read-only probe of prod on **2026-07-15**: the box runs the TypeScript `server/` (`/health` → `tdx-server`) on the migrated UUID DB (1 user · 24 projects · 468 tasks · 36 labels · 9 saved queries, all in the new schema). This document is now **historical** — the record of the legacy → TS switch.
 >
-> **It is tasks-only.** The deployed image (built 2026-06-18) predates the Events & Notes work and
-> its DB sits at migration `001_init`. **For the next release — deploying the Events/Notes apps,
-> the creation language, and migrations 002–011 — follow [`DEPLOY_EVENTS_AND_NOTES.md`](DEPLOY_EVENTS_AND_NOTES.md).**
+> **It is tasks-only.** The deployed image (built 2026-06-18) predates the Events & Notes work and its DB sits at migration `001_init`. **For the next release — deploying the Events/Notes apps, the creation language, and migrations 002–011 — follow [`DEPLOY_EVENTS_AND_NOTES.md`](DEPLOY_EVENTS_AND_NOTES.md).**
 
 This was the one-time switch from the legacy `backend/` service to the new `server/` (TypeScript) service. The new server runs the D1 (UUID) schema and **will not start against the legacy DB**, so the prod database had to be converted first.
 
