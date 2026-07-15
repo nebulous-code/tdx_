@@ -6,7 +6,7 @@ Some notes about keyboard accessiblity for section 6. (2E §6.4 — the final ke
 > Claude's assessment + the order of attack live at the bottom under **Triage**.
 
 ## Status
-**33 of 36 resolved.**  ⏳ **a.9 + e.10 are BUILT and awaiting your test** (not counted until you've run them). Every original audit item (n.1–n.15 · e.1–e.6 · a.1–a.8) is closed; what's left was all spun out during testing. **n.16** is done and user-tested — the vault's base directory is now a folder you can **name** (a user preference, default `Inbox`; blank hides it), which is the last structural gap in notes. **n.17** shipped as something bigger than planned: **one creation engine for all three apps** (`CL`, `docs/CREATION_LANGUAGE.md`) — tasks got their first **typed due date** (`$friday`), notes got the whole grammar. **n.11 is closed as a non-issue** — n.13 made the link chips keyboard-navigable, so every link is already reachable without a mouse. **The notes app has nothing open.** **e.10** (the "all calendars" nav row + its preference) and **a.9** (the glyph list is now the enforced source of truth — 40 glyphs, an off-list one is a 400) are **built, ready to test**. **e.9** (no creation-language caller on the calendar) remains captured, not scheduled.
+**36 of 37 resolved — one open item, and it's a feature, not a gap.** Every original audit item (n.1–n.15 · e.1–e.6 · a.1–a.8) is closed, and so is everything spun out during testing: **n.16** (the named vault base directory), **n.17** + **e.9** (the **creation language now reaches all three apps** — one engine, `#` `$` `/` `{…}` on tasks, notes *and* events), **e.10** (the "all calendars" nav row), **a.9** (the glyph list is the enforced source of truth — 40 glyphs, an off-list one is a 400), and **e.8** (the agenda's `J`/`K` + `H`/`L` shift layer). **n.11** is closed as a non-issue (the link chips are keyboard-navigable). **The only thing open is [e.11](#events): yearly/annual recurrence** — the shared `Rec` grammar never had it, so `annually` fails on tasks *and* events alike. It's a well-scoped addition, not a bug.
 
 | batch | items |
 |---|---|
@@ -18,11 +18,12 @@ Some notes about keyboard accessiblity for section 6. (2E §6.4 — the final ke
 | 6 | ✅ n.13 re-fix (`+ link` as its own ladder rung, entered with `i` **or** space) · ✅ n.14 **redo** (the notes quick-add bar — the phantom "unsaved note" state is gone) · ✅ n.15 (`f` = find text **in this view**; the box was silently searching the whole vault) · ✅ n.18 (`e` peeks a note in the right-hand drawer) · ✅ e.7 (`e` = the day's agenda · `E` = agenda + the day's first item) |
 | 7 | ✅ **e.7** (`e` = the day’s agenda · `E` = agenda + the day’s first item) · ✅ **n.16** — the vault's base directory as a folder you can name (`users.notes_root_name`, default `Inbox`, blank = hidden) · `folder:<name>` addresses the vault root · the verbs on that row are inert by construction |
 | 8 | ✅ **n.17** — the **creation language**: one engine (`CL`), `#` `$` `/` `{…}` on tasks **and** notes; tasks gain a typed due date · **n.11** closed as a non-issue (the link chips are navigable — n.13) · **e.8** (`J`/`K` jump event-to-event in the agenda) |
-| 9 | ⏳ **a.9** — the glyph picker is the source of truth (40 glyphs; parity-locked frontend≡server; an off-list glyph is a **400**) · ⏳ **e.10** — the "all calendars" nav row + its preference (and the keyboard could not clear a calendar filter at all before it) |
+| 9 | ✅ **e.9** — the calendar's quick-add bar (`i` = bar · `I` = full editor); the creation language reaches all three apps · ✅ **a.9** — the glyph picker is the source of truth (40 glyphs; parity-locked frontend≡server; an off-list glyph is a **400**) · ✅ **e.10** — the "all calendars" nav row + its preference (and the keyboard could not clear a calendar filter at all before it) |
+| 10 | ⏳ **e.11** — yearly/annual recurrence in the shared `Rec` grammar (feasibility only — captured, not scheduled) |
 
-**Behavior changes now live:** **`e` on the calendar** opens the day's agenda (that was `E`); **`E`** now opens the agenda *and* the day's first item in your current view. **`f` on the notes list** finds text *within the current folder/view* (it used to search the whole vault, ignoring both). **`d` in the note body** is vim's operator prefix (`dd`/`dw`), not delete-note (that's on the field rows + the notes list). **`n`** enters the app nav rather than just toggling it. **`c`** clears the query (was `x`). **Notes are created from a quick-add bar** (`i`, then a name, then `↵`) — the `＋ new` button and the unsaved-note editor state are gone.
+**Behavior changes now live:** **`i` on the calendar** focuses the quick-add bar (creation language, same as tasks/notes); **`I`** opens the full new-event drawer (was `i`). **`e` on the calendar** opens the day's agenda (that was `E`); **`E`** now opens the agenda *and* the day's first item in your current view. **`f` on the notes list** finds text *within the current folder/view* (it used to search the whole vault, ignoring both). **`d` in the note body** is vim's operator prefix (`dd`/`dw`), not delete-note (that's on the field rows + the notes list). **`n`** enters the app nav rather than just toggling it. **`c`** clears the query (was `x`). **Notes are created from a quick-add bar** (`i`, then a name, then `↵`) — the `＋ new` button and the unsaved-note editor state are gone.
 
-**Outstanding:** **e.10** + **a.9** — ⏳ **built, awaiting your smoke test** · **e.9** (the calendar has no creation-language caller) — captured, not scheduled.
+**Outstanding:** **e.11** only — yearly/annual recurrence in the shared `Rec` grammar (feasibility written up; captured, not scheduled). The entire keyboard audit is otherwise closed.
 
 ## notes
 
@@ -197,7 +198,7 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 >
 > *The **highest-value half needs no symbols at all**: give notes a view-defaults sibling. Today a note inherits only the folder, so creating one in a `label:work` view yields an unlabeled note that vanishes from the list — exactly what the quick-add's `⚠` is there to warn about. Porting the inheritance makes the `⚠` fire **less**, because the new note would satisfy the view it was made in. Related: **n.16** — the base directory now has a **name**, so a folder token finally has something to say.*
 >
-> **✅ READY TO TEST** — shipped as slice 1: **`#` `$` `/` `{…}`**, on tasks **and** notes, through one engine (`frontend/js/create.js` → `window.CL`). `%` `*` `^` `@` deferred (they're the tokens whose values contain spaces). Events are **engine-only** — `CL.apply('event', …)` works and is golden-tested, but the calendar has nowhere to type: **e.9**.
+> **✅ VERIFIED & RESOLVED** — shipped as slice 1: **`#` `$` `/` `{…}`**, on tasks **and** notes, through one engine (`frontend/js/create.js` → `window.CL`). `%` `*` `^` `@` deferred (they're the tokens whose values contain spaces). Events are **engine-only** — `CL.apply('event', …)` works and is golden-tested, but the calendar has nowhere to type: **e.9**.
 >
 > **Three things the goldens caught that the design didn't:**
 > 1. **`!0 … !5` gave priority 5.** `parseQuickAdd`'s `!` replace was **non-global**, so the *first* `!N` won and later ones stayed in the title. The rewrite took the last. Now **first-wins for every single-valued field** (`!` `$` `/`), and a second one is literal — the only rule that stays predictable while you edit a half-typed line.
@@ -215,6 +216,41 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 
 ### Open
 
+**e.11 — Feature: the recurrence grammar has no YEARLY frequency (birthdays, anniversaries).** User typed `annually` / `yearly` on an event and neither worked. *(User: "I think it should work like the recurrence in tasks… it'd be nice if we could steal it wholesale and reuse the module.")*
+> **Feasibility (no code yet) — the premise is already true, and it changes the framing.** Events **already share the tasks recurrence module**: `services/events.ts:220` parses `ev.recurrence` with **`Rec.parse`** and expands occurrences with `Rec.matches`, the exact functions the task spawn-on-complete uses. There's nothing to "steal" — it's one module (`frontend/js/recurrence.js` ≡ `server/src/rec.ts`, parity-locked + golden-tested). So `annually` failed for the same reason it would fail on a **task**: **`Rec` has no yearly rule at all.** Its whole grammar is `daily` · `every N days` · `weekly on …` · `every N weeks` · `monthly on day N` · `monthly on Nth weekday` · `every N months` (`recurrence.js` parse). An unrecognized string returns `{type:'invalid'}`, and both callers treat that as "not recurring — show once" (`events.ts:221`), which is exactly what you saw.
+>
+> **What it takes — a new frequency in the shared module, low–medium risk:**
+> - **`parse`**: add `yearly` / `annually` / `every N years` → `{ type:'yearly', interval, month, day }`, anchored to the series start's month + day.
+> - **`matches(date, rule, anchor)`**: `date.month === anchor.month && date.day === anchor.day && (date.year − anchor.year) % interval === 0`.
+> - **`stringify` / `summary` / `compact`**: the canonical text + the human label + the badge.
+> - **`nextOccurrences` / `next`**: step by year instead of day, or the daily walk in `events.ts:226` handles it for free (it already walks every day and asks `matches`).
+> - **Parity + goldens**: both files, regenerated via `npm run test:update` (`test/goldens/rec.*.json`). **Events and tasks both inherit it at once** — no per-app work, because it's the shared module.
+> - **The one real design call: Feb 29.** A yearly event anchored to a leap day — does it fire on Feb 28 in common years, or only every 4th year? (Tasks will hit this too; decide once.) That's the only judgement in the whole item; everything else is a clean new branch.
+>
+> *So this is NOT "make events use the tasks module" (done) — it's "add the frequency the shared module never had." The Birthdays seed calendar is the poster child.*
+
+### Resolved issues
+
+**e.9 — Gap: the calendar has no caller for the creation language.** The creation-language engine (`CL`, `docs/CREATION_LANGUAGE.md`) ships knowing how to build an **event** — `date → startAt`, `category → calendarId`, `body → notes` — and it's golden-tested. **Nothing calls it**, because the calendar has no text-entry creation surface at all: `i` on a day opens the event **drawer**, and there is nowhere to type `Retro /Work $friday`. Tasks and notes both got the grammar; events are the odd one out. *(Filed as a deliverable of the creation-language build; **no code** — this is a design call.)*
+> *The engine half is **done and free**: `CL.apply('event', …)` is implemented and pinned by a golden, so this item is a **UI** question, not an engine one. What needs deciding:*
+> - **Where does the bar live?** The calendar's main surface is a **grid**, not a list — there's no natural strip above a list of rows the way there is on tasks/notes. Candidates: a bar in the calendar header · a bar inside the **day-agenda drawer** (`e`), which *is* a list and already has an `i` that creates at the focused hour.
+> - **What wins, the cursor or the token?** The grid cursor already implies a date (`i` creates on the focused day). If you also type `$friday`, one of them has to lose. Consistent with the rest of the grammar, **typed should beat implied** — the cursor is a default, exactly like a view's `due:` is on tasks.
+> - **`type:` rule (e.5).** On a **tasks** calendar, `i` creates a *task*. A quick-add bar there should create a task and parse the **task** grammar (`!priority` becomes a symbol again) — the bar's type follows the app, not the surface.
+> - *Cheapest first step, if you want one: put the bar in the **day-agenda drawer** only. It's already a list with a cursor and an `i`, so it needs no new layout thinking, and it's where you're standing when you actually schedule something.*
+>
+> **DECIDED (user) — the bar goes on the GRID, in the same slot the other two apps use:** below the query bar, above the `‹ Month Year ›  today` header. It lives inside `calendar.js`, which means the **tasks-as-calendar** surface gets it too, from one component.
+> - **`i` focuses the bar** (matching tasks and notes, where `i` is *always* the bar). **`I` opens the full new-event drawer** on the cursor day — the same lowercase-is-quick / uppercase-is-the-big-version split this app already uses (`j`/`J` · `h`/`H` · `e`/`E`). Nothing was lost: the drawer is the only place a **timed** event can be made (the bar has no time token — `%`/`*` are still deferred), so it keeps a key of its own.
+> - **The bar follows the APP, not the surface** — the rule `i` already used (e.5/e.6). On a tasks calendar it parses the **task** grammar (`!2` is a priority again) and creates a task due on the cursor day; without this, flipping a task view to grid display would silently take away the quick-add you had in list mode.
+> - **Date precedence: typed `$date` > the grid CURSOR > the view's default.** `CL.apply` fills the date from the view's query, but the cursor is the stronger signal — you moved there on purpose. It never overrides a typed `$date`.
+>
+> **Two bugs this surfaced, both silent:**
+> 1. **`store.saveEvent` DROPPED `labels` on the floor** (`index.html:1203` whitelists the wire body). The server has accepted event labels all along (`EventCreateSchema.labels`, `services/events.ts:125`) — no client had ever *sent* them, so a `#tag` on an event would have been **created and then never attached**. This bar is the first producer of event labels. *Fixed conditionally:* the server reads `labels !== undefined` on a PUT as "replace them", and the event drawer carries no labels at all, so an unconditional send would have made **every drawer save wipe an event's tags**.
+> 2. **`CL.apply('event', …)` produces no `allDay`**, and `saveEvent` sends `allDay: !!ev.allDay` → a bare `$friday` would have stored `all_day = 0` against a date with no time. The bar forces `allDay: true`; timed events are the drawer's job.
+> 3. **Follow-up (user, during test): a no-`/calendar` event on the "Everything" view was HOMELESS.** The bar set `calendarId = calFilter || null`, and on Everything `calFilter` is null — so the event was saved with **no calendar at all**: it rendered (amber) but would vanish the moment you filtered to any calendar. The **drawer** never had this problem — it falls back to `store.calendars[0]`. Aligned the bar to that same convention: filtered view → that calendar · Everything → the first calendar · a typed `/calendar` still wins.
+> **✅ VERIFIED & RESOLVED**
+> **How to test:** on the events grid, `i` → the bar takes focus. `Retro /Work #standup $friday {bring the deck}` → an **all-day event on Friday**, in the *Work* calendar, **tagged standup** (that tag is the bug above — verify it survives a reload), with the body in its notes. Type a bare title → it lands on **the cursor day** (move with `hjkl` first); a typed `$monday` **beats** the cursor. `I` → the full drawer on the cursor day, exactly as `i` used to behave. `esc` → back to the grid. Tab/→ completes `/cal`, `#lab`, `$fri`. Then **Tasks → `v`** (calendar display): the bar is still there, creates a **task** due on the cursor day, and `!2` is a priority again.
+
+
 **e.10 — Design: there's no "all calendars" — every way into the events app applies a filter.** Every saved event view carries a query (the seeds are all date-filtered: *This week* · *This month* · *Next month*), and every calendar in the nav is itself a filter. There's no entry that means **"show me everything, unfiltered."** *(User: same spirit as the notes base directory — "just a way to see an unfiltered calendar view." No code yet; hashing out the details.)*
 >
 > **The good news: the unfiltered state already EXISTS.** `store.openCalendar()` (`data.js:802`) sets exactly it — `{ kind:'calendar', query:'type:event', calendarId:null }`. So nothing needs inventing. **What's missing is a way to GET there:**
@@ -231,21 +267,12 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 > - **Events-only.** On a **tasks** calendar (e.5) the grid shows tasks, which have their own unfiltered path. This row is a *calendar* filter-clearer; it must not try to be cross-app.
 >
 > *The **keyboard hole is the real payoff**: with a nav row, `j`/`k` land on it and `Enter` clears the calendar filter. Today that filter can only be cleared with a mouse.*
-> **✅ READY TO TEST**
+> **✅ VERIFIED & RESOLVED**
 > **How to test:** the calendars nav shows **Everything** on top. Pick a calendar → the grid filters to it. Now the whole point: **`j`/`k` onto the Everything row + `Enter` clears the filter** — before this, the ✕ on the filter chip was the only way back, so a keyboard user was stuck. `h` out of the unfiltered view lands **on the row**, not on a query. `e`/`x`/`a` toast toward preferences (it isn't a calendar — it's the *absence* of a calendar filter, so it has no verbs). Account (`@`) → the **all calendars** field sits **above** the base-directory one → rename it and the nav row **and the view title** change live; blank it and the row disappears and the title falls back to *Calendar*; name it after an existing calendar → **400**.
 >
 > *Built on the n.16 shape, with one thing deliberately simpler: **no sentinel id**. The notes base row is a FILTER (`folderId === null`) and needed one; this row is the ABSENCE of a filter, and `openCalendar()`'s view id is already `'calendar'` — reusing it as the row id makes the sidebar's cursor-restore match for free. `openCalendar()` gained one line (its title follows the preference), which covers all **7** callers at once.*
 >
 > *Two latent bugs in the base-directory row surfaced while generalizing its guards, and are fixed for both synthetic rows: `Tab` called `toggleSection('baseFolder')` — a section that doesn't exist — and `h` sent the cursor to `head_query` instead of the row's own section header.*
-
-**e.9 — Gap: the calendar has no caller for the creation language.** The creation-language engine (`CL`, `docs/CREATION_LANGUAGE.md`) ships knowing how to build an **event** — `date → startAt`, `category → calendarId`, `body → notes` — and it's golden-tested. **Nothing calls it**, because the calendar has no text-entry creation surface at all: `i` on a day opens the event **drawer**, and there is nowhere to type `Retro /Work $friday`. Tasks and notes both got the grammar; events are the odd one out. *(Filed as a deliverable of the creation-language build; **no code** — this is a design call.)*
-> *The engine half is **done and free**: `CL.apply('event', …)` is implemented and pinned by a golden, so this item is a **UI** question, not an engine one. What needs deciding:*
-> - **Where does the bar live?** The calendar's main surface is a **grid**, not a list — there's no natural strip above a list of rows the way there is on tasks/notes. Candidates: a bar in the calendar header · a bar inside the **day-agenda drawer** (`e`), which *is* a list and already has an `i` that creates at the focused hour.
-> - **What wins, the cursor or the token?** The grid cursor already implies a date (`i` creates on the focused day). If you also type `$friday`, one of them has to lose. Consistent with the rest of the grammar, **typed should beat implied** — the cursor is a default, exactly like a view's `due:` is on tasks.
-> - **`type:` rule (e.5).** On a **tasks** calendar, `i` creates a *task*. A quick-add bar there should create a task and parse the **task** grammar (`!priority` becomes a symbol again) — the bar's type follows the app, not the surface.
-> - *Cheapest first step, if you want one: put the bar in the **day-agenda drawer** only. It's already a list with a cursor and an `i`, so it needs no new layout thinking, and it's where you're standing when you actually schedule something.*
-
-### Resolved issues
 
 **e.8 — Feature: the agenda's SHIFT keys — `J`/`K` jump event-to-event, `H`/`L` change the day.** Started as *"`J`/`K` should jump event-to-event, not hour-by-hour"* (walking an empty day one hour at a time to reach the 3pm is tedious) and **generalized on the user's call** into the agenda's whole shift layer: *"in a similar vein of extending the navigation… `H`/`L` should switch days forward and back."*
 >
@@ -266,7 +293,7 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 >
 > ***The `h`/`l` question this raised, and why it went the way it did:*** the user's first framing was `h`/`l` **and** `H`/`L` switching days — but `h`/`l` are **already bound** here (crossing overlapping events, and the chips on the all-day/task strips). Making them switch days would have deleted that. The alternative — `h`/`l` switch days only when there's nothing to cross — was rejected for the same reason **e.7**'s first build was: a key whose meaning depends on where the cursor happens to sit is unpredictable from the keyboard.
 >
-> **✅ READY TO TEST**
+> **✅ VERIFIED & RESOLVED** — user-tested.
 > **How to test — `J`/`K`:** open a day with a **9am and a 2pm and nothing else** (`e` on the day). `J` from the top → the all-day strip if there is one, else the dated-tasks strip, else the **9am** — **never an empty hour**. `J` again → the **2pm**, skipping the empties between. `K` walks back up. `J` on the **2pm** (nothing after it) → **stays put**; same for `K` at the top. `j`/`k` still crawl **every** hour, and `i` on an empty slot still creates at that hour. An **empty day** → `J`/`K` do nothing; `j`/`k` still walk it.
 > **How to test — `H`/`L`:** in the agenda, `L` → **tomorrow's** agenda, `H` → **yesterday's**; the cursor lands at the top of the new day and the view scrolls to morning. **Watch the grid behind it: the calendar's day cursor moves too** — `Esc` leaves you on the day you navigated to, not the one you started on, and `e` reopens *that* day. Cross a **month boundary** (`H` from the 1st, `L` from the 31st) — the grid flips month and loads it. `h`/`l` still cross overlapping events and the all-day/task chips, unchanged.
 
@@ -391,6 +418,8 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 
 ### Open
 
+### Resolved issues
+
 **a.9 — Design: the glyph picker isn't the source of truth — the server accepts ANY string.** Spotted by the user: *"I see a heart icon on the Personal calendar and that doesn't look like an icon that I can select on the edit."* Correct — it can't be. `glyph` is `Type.String()` in **every** schema (`schemas.ts` — projects · calendars · folders · saved queries), so nothing is validated against the 30-glyph list the UI offers (`data.js:35`).
 > *It came from the seeds, not from a user: `seed-dev.ts:253` hardcodes `glyph: '♥'`. And it's **not just the heart** — the seeds ship **four** unpickable glyphs: **`⌂`** (the Inbox project) · **`♥`** (the Personal calendar) · **`◫`** and **`»`** (the *This month* / *Next month* saved views). So "what the picker offers" and "what's storable" have always disagreed.*
 >
@@ -411,10 +440,8 @@ Make sure we're reusing our generic field navigation logic for this. It's why we
 > 2. **`migrate-from-legacy` cannot rely on migration 010** — migrations run against the **empty** target *before* the importer inserts a row. The exact trap the `Inbox` capitalization hit. The importer normalizes glyphs itself, with the same `⌂ → ❯` rule; a legacy cutover is the path prod actually takes, and the migration test now pins both halves (`⌂` gets mapped, `☉` is **left alone** — a shipped icon must not be normalized away).
 > 3. **The `▸` folder default arrives from `.tdx-folder.json` on the user's own filesystem**, never through a request schema. It's coerced now — the vault is theirs to hand-edit, so trusting it would have left a hole straight past the lock.
 > 4. *Nearly missed: the **app itself** was violating its own rule — the frontend's demo data and the notes base-directory row used `⌂`/`⚡`. A source of truth the app breaks is not one.*
-> **✅ READY TO TEST**
+> **✅ VERIFIED & RESOLVED** — user-tested.
 > **How to test:** the edit modal now offers **40** glyphs — including `☉ ○ ! ▸`, the ones the system views were already wearing. Every seeded view keeps its icon. The **Inbox project shows `❯`** (and so does the notes base-directory row, which is named after it). Over the wire, a `♥` or `⌂` on a project/calendar/folder/view is a **400**; a `☉` or `▸` is a 201. Verified against the dev DB: **zero illegal glyphs** after migration.
-
-### Resolved issues
 
 **a.1 — Bug: no space between the count and the view title in the header.** The header view/query counts like open overdue urgent appear as `13open | 10overdue | 2urgent`. Look into the root cause here don't auto fix it.
 > ***This one is mine, and recent.*** *When I gated the count badges (so event/note views don't show a bogus `0`), I wrapped the count in a `<template v-if>` and left the separating space **inside** it — Vue's whitespace condensing then drops that trailing space. Fix is to own the spacing in CSS/markup rather than rely on a text-node space. Same cosmetic bucket as **n.8**.*

@@ -648,11 +648,15 @@ const app = createApp({
         if(this.store.dayDetailOpen){ const dd=this.$refs.dayDetail; if(dd) dd.dayKey(e); return; }
         const cal=this.$refs.cal;
         if(cal){
-          // `i` creates the thing the app you're IN is about: an event on Events, a task due that
-          // day on Tasks (e.5 — the grid is a tasks surface now, so `i` must not make an event there).
-          // It also OPENS THE DAY DRAWER for that day (e.6): when you're dropping something onto a
-          // day you want to see what's already scheduled there. The drawer stacks left of the new
-          // item's drawer, so you get the day's context beside the thing you're creating.
+          // `I` = the FULL editor. It creates the thing the app you're IN is about: an event on
+          // Events, a task due that day on Tasks (e.5 — the grid is a tasks surface now, so it
+          // must not make an event there). It also OPENS THE DAY DRAWER for that day (e.6): when
+          // you're dropping something onto a day you want to see what's already scheduled there.
+          //
+          // This used to be `i`. `i` now focuses the QUICK-ADD BAR (e.9), matching tasks and notes
+          // where `i` is always the bar — lowercase is the quick way, uppercase is the big version,
+          // the same split j/J · h/H · e/E already use here. The drawer is still the only place a
+          // TIMED event can be made (the bar has no time token yet), so it keeps a key of its own.
           const create = ()=>{
             cal.openDay();                                   // day context first, so it's behind the new item
             if(this.store.currentApp()==='tasks') this.store.startDraftTask({ due:cal.cursor });   // draft, not a persisted 'untitled' (e.6)
@@ -663,7 +667,8 @@ const app = createApp({
             // e = the day's agenda · E = the agenda PLUS the day's item, when the view you're
             // looking at has exactly one on that day (e.7). `e` used to be dead here: it was
             // reserved for "this item's detail" (§4.2), but the grid's cursor is a DAY, not an item.
-            i:create, e:()=>cal.openDay(), E:()=>cal.openDayItem(), t:()=>cal.today() };   // t = jump to today (audit e.4)
+            i:()=>cal.focusAdd(), I:create,                                     // i = quick-add bar · I = full editor (e.9)
+            e:()=>cal.openDay(), E:()=>cal.openDayItem(), t:()=>cal.today() };   // t = jump to today (audit e.4)
           const fn=map[e.key]; if(fn){ e.preventDefault(); fn(); }
         }
         return;
@@ -1206,6 +1211,14 @@ const app = createApp({
       const body = { title:ev.title, startAt:ev.startAt, endAt:ev.endAt||null, allDay:!!ev.allDay,
         location:ev.location||null, recurrence:ev.recurrence||null, notes:ev.notes||'', reminder:ev.reminder||null,
         calendarId:ev.calendarId||null };
+      // Labels were dropped on the floor here (e.9): the server has always accepted them
+      // (EventCreateSchema.labels) but no client ever sent them, so a #tag on an event would be
+      // CREATED and then never attached. The calendar quick-add is the first producer of them.
+      //
+      // Only when SUPPLIED — never `ev.labels || []`. The server reads `labels !== undefined` on a
+      // PUT as "replace them", and the event DRAWER carries no labels at all, so an unconditional
+      // send would make every drawer save wipe an event's tags.
+      if(ev.labels !== undefined) body.labels = ev.labels;
       const ok = await this.apiSend(ev.id?'PUT':'POST', ev.id?('/api/events/'+ev.id):'/api/events', body);
       if(ok && this.store.calFrom) await this.store.fetchEvents(this.store.calFrom, this.store.calTo);
       return ok;

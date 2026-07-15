@@ -10,10 +10,34 @@ window.CalendarView = {
   props: ['store'],
   data() {
     const now = new Date();
-    return { year: now.getFullYear(), month: now.getMonth(), cursor: Rec.ymd(now), _fseq: 0 };
+    return { year: now.getFullYear(), month: now.getMonth(), cursor: Rec.ymd(now), _fseq: 0,
+      draft: '' };   // the quick-add bar's text (e.9)
   },
   computed: {
     weekStart() { return (this.store.currentUser && this.store.currentUser.week_start) ?? 1; },
+    // ---- the quick-add bar (e.9) -------------------------------------------------------
+    // It creates what the APP is about — a task on Tasks, an event on Events — NOT what the
+    // surface shows. Same discriminator `i` has always used (e.5/e.6), so a task view flipped
+    // to calendar display keeps making tasks, and `!2` is a priority there again.
+    clType() { return this.store.currentApp() === 'tasks' ? 'task' : 'event'; },
+    addPlaceholder() {
+      const day = this.cursor;
+      return this.clType === 'task'
+        ? 'add task on ' + day + '…  (try: Call plumber /home #errand !2)'
+        : 'add event on ' + day + '…  (try: Retro /Work #standup $friday)';
+    },
+    tagGhost() { return this.store.clGhost(this.draft, this.clType); },
+    // ⚠ when the view filters on something a new item won't have — it's still created, just
+    // hidden from this grid. store.viewWarn() can't be reused: it's task-shaped (type:→'task').
+    warn() {
+      // a new item satisfies: type: · calendar:/folder:/category: (it's filed where you are) ·
+      // label: (inherited) · due: (it lands on the cursor day) · has:. Not: free text, flags.
+      const ok = new Set(['type', 'calendar', 'category', 'project', 'label', 'due', 'status', 'has']);
+      return Q.parse(this.activeQuery).terms.some((t) => !ok.has(t.field));
+    },
+    warnTip() {
+      return this.warn ? 'This view filters on things a new item won’t have — it’ll be created, just hidden from this grid.' : '';
+    },
     // when a specific calendar is selected in the nav, show only its events
     calFilter() { return this.store.view.calendarId || null; },
     activeCalendar() { return this.calFilter ? this.store.calendarById(this.calFilter) : null; },
@@ -206,9 +230,70 @@ window.CalendarView = {
     onCell(ymd) { this.cursor = ymd; this.newEvent(ymd); },
     newEvent(ymd) { this.store.editEvent({ startAt: ymd, allDay: true, title: '', calendarId: this.calFilter || null }); },
     openTask(t) { this.store.selectedTaskId = t.id; this.store.detailOpen = true; },
+    // ---- the quick-add bar (e.9) — the creation language's last caller ------------------
+    focusAdd() { const el = this.$refs.qa; if (el) el.focus(); },
+    // Esc must be bound on the input: the app's global onKey bails at its typing gate, so the
+    // key never reaches the calendar's map. Hands the keyboard back to the grid.
+    escAdd() { this.draft = ''; const el = this.$refs.qa; if (el) el.blur(); },
+    // Tab / → accept the grey completion (#label · /calendar · $date). → only at the very end
+    // of the line, so it doesn't hijack cursor movement.
+    acceptTag(e) {
+      if (!this.tagGhost) return;
+      if (e.key === 'ArrowRight') { const el = this.$refs.qa; if (el && el.selectionStart !== el.value.length) return; }
+      e.preventDefault();
+      this.draft += this.tagGhost;
+    },
+    async commitAdd() {
+      const text = this.draft.trim();
+      if (!text) return;
+      const type = this.clType;
+      const parsed = CL.parse(text, { type, known: this.store.clKnown });
+      const payload = CL.apply(type, parsed, this.store.clCtx(type));
+      // DATE PRECEDENCE: what you TYPED beats the grid CURSOR, which beats the view's default.
+      // CL.apply already filled the date from the view's query; the cursor is a stronger signal
+      // (you moved there on purpose), so it overrides that — but never overrides a typed $date.
+      const typedDate = parsed.fields.date !== undefined;
+      if (type === 'task') {
+        if (!typedDate) payload.due = this.cursor;
+        this.store.addTask(payload);
+        this.store.toast('+ task added');
+      } else {
+        if (!typedDate) payload.startAt = this.cursor;
+        // CL.apply doesn't produce allDay, and saveEvent sends allDay:!!ev.allDay — without this
+        // the row would claim to be TIMED while holding a date with no time. The drawer (I) is
+        // where a timed event gets made; the bar has no time token yet.
+        payload.allDay = true;
+        // no /calendar typed → the calendar you're FILTERED to, else the first one — matching the
+        // drawer's default (event-editor.js). On the "Everything" view calFilter is null, so
+        // without the calendars[0] fallback a bar event there would be HOMELESS (calendar_id null):
+        // it'd render but vanish the moment you filtered to any calendar. A typed /calendar wins
+        // (it's already set, so this guard is skipped).
+        if (payload.calendarId === undefined) {
+          payload.calendarId = this.calFilter || (this.store.calendars[0] ? this.store.calendars[0].id : null);
+        }
+        if (!(await this.store.saveEvent(payload))) return;   // failed → keep the text, don't strand them
+        this.store.toast('+ event added');
+      }
+      this.draft = '';
+    },
   },
   template: `
   <div class="calendar">
+    <!-- the quick-add bar (e.9) — the same slot tasks and notes use: below the query bar, above
+         the month header. It creates what the APP is about (a task on Tasks, an event on Events),
+         which is why it lives in this component: the tasks-as-calendar grid gets it too. -->
+    <div class="quickadd">
+      <span class="prompt" :class="{ warn }" :data-tip="warnTip">{{ warn ? '⚠' : '+' }}</span>
+      <span class="qa-caret">❯</span>
+      <span class="qa-input-wrap">
+        <input ref="qa" v-model="draft" :placeholder="addPlaceholder"
+               @keydown.enter.prevent="commitAdd" @keydown.esc.stop.prevent="escAdd"
+               @keydown.tab="acceptTag" @keydown.right="acceptTag" />
+        <span v-if="tagGhost" class="qa-ghost" aria-hidden="true"><span class="qa-ghost-pre">{{ draft }}</span>{{ tagGhost }}<span class="qa-ghost-hint"> →</span></span>
+      </span>
+      <span class="mut" style="font-size:11px;">↵ add</span>
+    </div>
+
     <div class="cal-head">
       <span class="qbtn cal-nav" @click="moveMonth(-1)" title="previous month (H)">‹</span>
       <span class="cal-title">{{ monthLabel }}</span>
@@ -219,7 +304,7 @@ window.CalendarView = {
       <span v-if="activeCalendar" class="cal-filter" :style="{ color: store.resolveColor(activeCalendar.color) }" title="filtered to this calendar">{{ activeCalendar.glyph }} {{ activeCalendar.name }} <span class="cal-filter-x" @click="store.openCalendar()" title="show all calendars">✕</span></span>
       <span class="grow"></span>
       <span class="qbtn" @click="store.toggleDisplay()" title="show this query as a list (v)">☰ list <span class="mut">v</span></span>
-      <span class="mut cal-hint">hjkl move · H/L · J/K month · i new event</span>
+      <span class="mut cal-hint">hjkl move · H/L · J/K month · i quick-add · I full editor</span>
     </div>
     <div class="cal-weekdays">
       <div v-for="w in weekdays" :key="w" class="cal-wd mut">{{ w }}</div>

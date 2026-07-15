@@ -1,10 +1,16 @@
 # Creation language — one grammar, one engine, three apps
 
-> **Status: SLICE 1 SHIPPED** — `#` `$` `/` `{…}` on tasks **and** notes, through one engine
-> (`frontend/js/create.js` → `window.CL`, golden-tested in `test/create.test.cjs`). Tracked as
-> **n.17** in `KEYBOARD_AUDIT.md`. **Deferred:** `%` `*` `^` (the multi-word values) and `@`
-> (needs multi-user). **Events are engine-only** — `CL.apply('event', …)` works and is tested, but
-> the calendar has no text-entry surface to type into: **e.9**.
+> **Status: SLICE 1 SHIPPED, ALL THREE APPS** — `#` `$` `/` `{…}` on tasks, notes **and events**,
+> through one engine (`frontend/js/create.js` → `window.CL`, golden-tested in `test/create.test.cjs`).
+> Tracked as **n.17** (tasks + notes) and **e.9** (the calendar's quick-add bar) in
+> `KEYBOARD_AUDIT.md`. **Deferred:** `%` `*` `^` (the multi-word values) and `@` (needs multi-user).
+>
+> *What the events caller (e.9) had to fix, and neither was in the engine:* `store.saveEvent`
+> **dropped `labels`** from the wire body — the server had accepted them all along, but no client
+> ever sent them, so a `#tag` on an event would have been created and never attached — and
+> `CL.apply('event')` produces **no `allDay`**, so a date-only `startAt` would have been stored as
+> a *timed* event. On a grid there's also a third date source: **typed `$date` > the grid cursor >
+> the view's default.**
 >
 > **What the build changed in this doc** — three rules the design didn't have, all forced by tests:
 > **first-wins** for single-valued fields · **`CL.nameMatch`** (the query engine's own slug-or-substring
@@ -95,15 +101,17 @@ DOM and no store access (`ctx` is passed in) so that port is mechanical when it 
 
 | Symbol | Idea | Tasks | Notes | Events |
 |---|---|---|---|---|
-| `#` | label | **shipped** | **port (1:1)** | port |
+| `#` | label | **shipped** | **shipped** | **shipped** *(the first event labels the app has ever stored)* |
 | `!` | priority | **shipped** | — | — |
-| `$` | **date** | **NEW — due date** | **NEW — review date** | **NEW — start date** |
-| `/` | **category** | **NEW — project** | **NEW — folder** | **NEW — calendar** |
-| `{…}` | body | NEW — inline note | **NEW — body** | NEW — notes |
-| `%` | recurrence | NEW | — | NEW |
-| `*` | reminder | NEW | — | NEW |
-| `^` | size | NEW | — | — |
+| `$` | **date** | **shipped — due date** | **shipped — review date** | **shipped — start date** *(all-day; the drawer makes timed ones)* |
+| `/` | **category** | **shipped — project** | **shipped — folder** | **shipped — calendar** |
+| `{…}` | body | **shipped — inline note** | **shipped — body** | **shipped — notes** |
+| `%` | recurrence | deferred | — | deferred |
+| `*` | reminder | deferred | — | deferred |
+| `^` | size | deferred | — | — |
 | `@` | assignee | **reserved** | — | reserved |
+
+*The deferred three (`%` `*` `^`) are the **multi-word** values — the ones needing greedy consume-and-stop, where `Rec`'s lenient weekly parser will silently eat trailing title text if it's done carelessly. That's the next slice's problem, deliberately.*
 
 Unclaimed on the number row: `&` `(` `)` `-` `_` `=` `+`. **Keep at least one free** — a grammar with
 no spare symbols can't grow without breaking muscle memory.
