@@ -85,3 +85,22 @@ test('reconcile: rewrites store.savedQueries in place and returns the count chan
   assert.equal(s.savedQueries[0].query, 'project:job status:open');
   assert.equal(s.savedQueries[1].query, 'status:overdue');
 });
+
+test('rebindQuery / detectRenames / reconcile: no-op + fallback branches', () => {
+  const s = store({ projects: [{ id: 'p1', name: 'A' }] });
+  // empty query string comes back as-is (the !queryStr guard)
+  assert.equal(QR.rebindQuery('', [{ kind: 'project', oldName: 'A', newName: 'B' }], s), '');
+  // no renames -> query returned untouched (the !renames.length guard)
+  assert.equal(QR.rebindQuery('status:open', [], s), 'status:open');
+  // detectRenames with a prev snapshot missing keys, and a store id absent from prev
+  // (no `was`) -> no renames (covers the `(prev && prev[key]) || {}` + `was &&` fallbacks)
+  assert.deepEqual(QR.detectRenames({}, s), []);
+  assert.deepEqual(QR.detectRenames({ projects: {} }, s), []);
+  // reconcile when nothing was renamed -> 0 changed, saved queries untouched (early return)
+  const s2 = store({
+    projects: [{ id: 'p1', name: 'A' }],
+    savedQueries: [{ id: 'v1', query: 'project:a status:open' }],
+  });
+  assert.equal(QR.reconcile({ projects: { p1: { name: 'A' } }, calendars: {}, folders: {}, labels: {} }, s2), 0);
+  assert.equal(s2.savedQueries[0].query, 'project:a status:open');
+});
