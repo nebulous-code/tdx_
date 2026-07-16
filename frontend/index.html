@@ -26,7 +26,7 @@
 <div id="app">
   <!-- auth gate: the whole app shell only renders once authenticated -->
   <login-screen v-if="!store.currentUser" @authed="onAuthed"></login-screen>
-  <div v-else class="shell" :class="{ 'detail-open': store.detailOpen, 'nav-collapsed': store.navCollapsed, 'deepnav-collapsed': store.deepNavCollapsed }">
+  <div v-else class="shell" data-testid="app-shell" :class="{ 'detail-open': store.detailOpen, 'nav-collapsed': store.navCollapsed, 'deepnav-collapsed': store.deepNavCollapsed }">
 
     <!-- deep-nav app switcher (D2 2d). Owns its own toggle: the bottom-left > on mobile,
          N on desktop. When open alongside the app nav it sits to the nav's left. -->
@@ -230,7 +230,7 @@
 
   <!-- toasts -->
   <div class="toasts">
-    <div v-for="t in store.toasts" :key="t.id" class="toast">{{ t.msg }}</div>
+    <div v-for="t in store.toasts" :key="t.id" class="toast" data-testid="toast">{{ t.msg }}</div>
   </div>
 </div>
 

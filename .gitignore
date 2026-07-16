@@ -22,6 +22,12 @@ build/
 .env.*
 !.env.example
 
+# playwright e2e artifacts
+server/test-results/
+server/playwright-report/
+server/.playwright/
+server/blob-report/
+
 # os / editor
 .DS_Store
 *.swp

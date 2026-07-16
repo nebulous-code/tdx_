@@ -174,7 +174,7 @@ window.EventDetail = {
     },
   },
   template: `
-  <div class="detail">
+  <div class="detail" data-testid="event-drawer">
     <div class="detail-head">
       <span class="mut">event</span>
       <span class="cy">{{ f.id ? (f.readableId || '') : 'new' }}</span>
@@ -182,7 +182,7 @@ window.EventDetail = {
     </div>
 
     <div class="detail-body">
-      <input ref="title" class="d-title" :class="kbCls('title')" v-model="f.title" placeholder="event title" @focus="kbFocusRow('title')" @keydown.enter.stop.prevent="save" @keydown.esc.stop.prevent="blurField">
+      <input ref="title" class="d-title" data-testid="event-title" :class="kbCls('title')" v-model="f.title" placeholder="event title" @focus="kbFocusRow('title')" @keydown.enter.stop.prevent="save" @keydown.esc.stop.prevent="blurField">
 
       <!-- calendar + all-day -->
       <div class="row2">
@@ -253,7 +253,7 @@ window.EventDetail = {
     <div class="d-actions">
       <button v-if="f.id" class="btn danger" :class="kbCls('delete')" style="margin-right:auto;" @click="del">delete</button>
       <button class="btn" :class="kbCls('cancel')" @click="kbAttemptClose">cancel</button>
-      <button class="btn primary" :class="kbCls('save')" @click="save">{{ f.id ? 'save ↵' : 'create ↵' }}</button>
+      <button class="btn primary" data-testid="event-create" :class="kbCls('save')" @click="save">{{ f.id ? 'save ↵' : 'create ↵' }}</button>
     </div>
   </div>`,
 };

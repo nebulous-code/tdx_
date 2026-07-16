@@ -15,14 +15,14 @@ window.TaskRow = {
   props: ['store','task','depth'],
   template: `
   <div>
-    <div class="task" :class="{ done: task.done, sel: store.selectedTaskId===task.id, moving: store.taskMoveId===task.id }"
+    <div class="task" data-testid="task-row" :class="{ done: task.done, sel: store.selectedTaskId===task.id, moving: store.taskMoveId===task.id }"
          :style="rowStyle"
          @click="select">
       <span v-if="subs.length" class="twist-sub" @click.stop="task.collapsed=!task.collapsed">{{ task.collapsed ? '▸' : '▾' }}</span>
       <span v-else-if="depth>0" class="twist-sub mut">└</span>
       <span class="checkbox" :class="{ on: task.done }" @click.stop="store.toggleDone(task)">{{ task.done ? '✓' : '' }}</span>
       <div class="tmain">
-        <div class="ttitle">{{ task.title }}</div>
+        <div class="ttitle" data-testid="task-title">{{ task.title }}</div>
         <div class="tmeta">
           <span v-if="task.readableId" class="m rid mut" title="readable id">{{ task.readableId }}</span>
           <span v-if="depth===0 && proj" class="m tproj">
@@ -97,7 +97,7 @@ window.TaskList = {
       <span class="prompt" :class="{ warn }" :data-tip="warnTip">{{ warn ? '⚠' : '+' }}</span>
       <span class="qa-caret">❯</span>
       <span class="qa-input-wrap">
-        <input ref="qa" v-model="draft" :placeholder="addPlaceholder" @keydown.enter.exact.prevent="commitAdd" @keydown.enter.shift.prevent="commitAddToNotes" @keydown.esc="escAdd" @keydown.tab="acceptTag" @keydown.right="acceptTag" />
+        <input ref="qa" data-testid="task-quickadd" v-model="draft" :placeholder="addPlaceholder" @keydown.enter.exact.prevent="commitAdd" @keydown.enter.shift.prevent="commitAddToNotes" @keydown.esc="escAdd" @keydown.tab="acceptTag" @keydown.right="acceptTag" />
         <span v-if="tagGhost" class="qa-ghost" aria-hidden="true"><span class="qa-ghost-pre">{{ draft }}</span>{{ tagGhost }}<span class="qa-ghost-hint"> →</span></span>
       </span>
       <span class="mut" style="font-size:11px;">↵ add</span>

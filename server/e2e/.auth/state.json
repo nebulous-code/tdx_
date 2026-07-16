@@ -1,0 +1,15 @@
+{
+  "cookies": [
+    {
+      "name": "tdx_session",
+      "value": "sxkXP7UXgBg-jViAUaDXzyPLgHxQbh8ZZyfMp8gYs2k.yPp6jm47DrZuKNpnedWnElx73wJJzdeFU6FFD3D5c%2Fc",
+      "domain": "127.0.0.1",
+      "path": "/",
+      "expires": 1786822395.41114,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Strict"
+    }
+  ],
+  "origins": []
+}

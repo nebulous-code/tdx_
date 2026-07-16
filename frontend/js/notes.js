@@ -671,7 +671,7 @@ window.NotesView = {
         <span class="prompt" :class="{ warn }" :data-tip="warnTip">{{ warn ? '⚠' : '+' }}</span>
         <span class="qa-caret">❯</span>
         <span class="qa-input-wrap">
-          <input ref="qa" v-model="qaDraft" :placeholder="addPlaceholder"
+          <input ref="qa" data-testid="note-quickadd" v-model="qaDraft" :placeholder="addPlaceholder"
                  @keydown.enter.prevent="commitAdd" @keydown.esc.stop.prevent="escAdd"
                  @keydown.tab="acceptTag" @keydown.right="acceptTag" />
           <!-- ghost-completion for the trailing token (#tag · /folder · $date) — the same
@@ -711,8 +711,8 @@ window.NotesView = {
       </div>
     </div>
 
-    <div v-else class="note-editor">
-      <input ref="titleInput" class="ti note-title" :class="navCls('title')" v-model="draft.title"
+    <div v-else class="note-editor" data-testid="note-editor">
+      <input ref="titleInput" class="ti note-title" data-testid="note-title" :class="navCls('title')" v-model="draft.title"
              placeholder="note name (this is the filename)" @focus="kbFocusRow('title')"
              @keydown.enter="save" @keydown.esc.stop.prevent="blurField">
       <div v-if="store.folders.length || store.rootFolder()" class="note-folder-row" :class="navCls('folder')">

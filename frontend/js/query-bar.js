@@ -12,7 +12,7 @@ window.QueryBar = {
   <div class="qbar">
     <div class="qbar-row">
       <span class="prompt">?</span>
-      <input class="qinput" ref="q" v-model="queryString" spellcheck="false"
+      <input class="qinput" ref="q" data-testid="query-input" v-model="queryString" spellcheck="false"
              placeholder="query… e.g.  label:urgent due:<7d status:open"
              @keydown.enter="run" @keydown.esc="blur" />
       <!-- Clicking this does exactly what the q key does (audit a.3): one action, one path.

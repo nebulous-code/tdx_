@@ -69,10 +69,36 @@ jobs:
       - name: Test + coverage gate
         run: bash tools/test_coverage_frontend.sh
 
+  # Playwright smokes: boot the real app (server serving the built frontend) against a
+  # throwaway seeded DB/vault and drive chromium through the critical paths. Baked into
+  # the same image, so it gates the build alongside the unit suites.
+  test-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+        working-directory: server
+
+      - name: Install Playwright (chromium)
+        run: npx playwright install --with-deps chromium
+        working-directory: server
+
+      - name: e2e smokes
+        run: npx playwright test
+        working-directory: server
+
   build-push:
     # BOTH suites gate the image — the frontend is baked into it (the Dockerfile COPYs
     # server/ + frontend/), so a green server suite alone is not evidence the app works.
-    needs: [test-server, test-frontend]
+    needs: [test-server, test-frontend, test-e2e]
     # only build + publish on a real push to main — never on PRs (Watchtower would deploy it)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
