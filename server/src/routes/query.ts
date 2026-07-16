@@ -3,9 +3,8 @@
 // the parity-locked `Q` engine across all selected types (see services/unifiedQuery.ts).
 // Read scope is sufficient.
 
-import { Type } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
-import { QueryRequestSchema, QueryResponseSchema } from '../schemas.js';
+import { ErrorSchema, QueryRequestSchema, QueryResponseSchema } from '../schemas.js';
 import { UnknownTypeError, runUnifiedQuery } from '../services/unifiedQuery.js';
 
 export default async function queryRoutes(app: FastifyInstance): Promise<void> {
@@ -14,10 +13,18 @@ export default async function queryRoutes(app: FastifyInstance): Promise<void> {
     {
       preHandler: app.authenticate,
       schema: {
+        summary: 'Run a unified query',
+        description:
+          'Run a tdx query across tasks/events/notes and get back matching entities. The query is a ' +
+          'space-separated set of predicates, e.g. `status:open due:<7d label:urgent`. `type:task,event,note` ' +
+          'selects which entity kinds to return (default `task`); `category:`/`project:`/`folder:`/`calendar:` ' +
+          'filter by name; `limit`/`offset` paginate. Each result carries a `type` discriminator plus that ' +
+          "entity's fields. An unknown `type:` token returns 400.",
+        tags: ['Query'],
         body: QueryRequestSchema,
         response: {
           200: QueryResponseSchema,
-          400: Type.Object({ error: Type.String() }), // unknown type: token
+          400: ErrorSchema, // unknown type: token
         },
       },
     },

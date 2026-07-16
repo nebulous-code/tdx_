@@ -238,14 +238,35 @@ test('project: subtree/slug resolution', () => {
   };
   // match by id
   assert.equal(ev('project:p1', task({ projectId: 'p1' }), ctx), true);
-  // match by slug of name
-  assert.equal(ev('project:bigproject', task({ projectId: 'p1' }), ctx), true);
-  // partial slug includes
+  // match by slug of name (per-char underscore encoding)
+  assert.equal(ev('project:big_project', task({ projectId: 'p1' }), ctx), true);
+  // the old space-deleted form no longer matches
+  assert.equal(ev('project:bigproject', task({ projectId: 'p1' }), ctx), false);
+  // partial slug includes (word substring still works across the underscore)
   assert.equal(ev('project:big', task({ projectId: 'p1' }), ctx), true);
   // no project match
   assert.equal(ev('project:p1', task({ projectId: 'p2' }), ctx), false);
   // ctx.projects missing → (ctx.projects || []) guard, no match
   assert.equal(Q.evaluate(task({ projectId: 'p1' }), 'project:p1', { labels: [] }), false);
+});
+
+test('folder/calendar/category accept comma-lists (multi-value)', () => {
+  const note = (cat: string) => task({ kind: 'note', category: cat });
+  const event = (cat: string) => task({ kind: 'event', category: cat });
+  // folder: matches a note in ANY listed folder
+  assert.equal(ev('folder:inbox,grocery', note('Grocery')), true);
+  assert.equal(ev('folder:inbox,grocery', note('Inbox')), true);
+  assert.equal(ev('folder:inbox,grocery', note('Work')), false);
+  assert.equal(ev('folder:grocery', note('Grocery')), true); // single value unaffected
+  // calendar: same, events only
+  assert.equal(ev('calendar:home,work', event('Work')), true);
+  assert.equal(ev('calendar:home,work', note('Work')), false); // a note never matches calendar:
+  // category: spans apps
+  assert.equal(ev('category:grocery,home', note('Grocery')), true);
+  assert.equal(ev('category:grocery,home', event('Home')), true);
+  // empty list elements are safe (no spurious match)
+  assert.equal(ev('folder:grocery,', note('Grocery')), true);
+  assert.equal(ev('folder:,', note('Grocery')), false);
 });
 
 test('unknown field falls back to literal "field:value" text match', () => {
@@ -298,7 +319,9 @@ test('dueDelta + slug helpers', () => {
   assert.equal(Q.dueDelta(task({ due: TOMORROW })), 1);
   assert.equal(Q.dueDelta(task({ due: YESTERDAY })), -1);
   assert.equal(Q.dueDelta(task({ due: null })), null);
-  assert.equal(Q.slug('My Project!'), 'myproject');
+  assert.equal(Q.slug('My Project!'), 'my_project'); // per-char underscore, edges trimmed
+  assert.equal(Q.slug('Inbox (base)'), 'inbox__base');
+  assert.equal(Q.slug('a-b-c'), 'a_b_c');
   assert.equal(Q.slug(null), '');
   assert.equal(Q.slug(undefined), '');
 });

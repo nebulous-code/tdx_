@@ -4,7 +4,6 @@
 // so a raw int / unparsed JSON never leaks to a client.
 
 import { Type } from '@fastify/type-provider-typebox';
-import { GLYPHS } from './glyphs.js';
 import type {
   CalendarsTable,
   EventsTable,
@@ -15,9 +14,13 @@ import type {
   SavedQueriesTable,
   TasksTable,
 } from './db.js';
+import { GLYPHS } from './glyphs.js';
 
-const Nullable = <T extends ReturnType<typeof Type.Unsafe>>(t: T) => Type.Union([t, Type.Null()]);
-const NStr = () => Nullable(Type.String());
+const Nullable = <T extends ReturnType<typeof Type.Unsafe>>(
+  t: T,
+  opts?: Parameters<typeof Type.Union>[1],
+) => Type.Union([t, Type.Null()], opts);
+const NStr = (opts?: Parameters<typeof Type.Union>[1]) => Nullable(Type.String(), opts);
 
 // The glyph picker is the SOURCE OF TRUTH (a.9): a glyph the UI can't offer can't be stored, so
 // an off-list one is a 400 rather than a silent surprise (that's how a ♥ nobody could select
@@ -40,26 +43,95 @@ export function parseHealth(s: string | null): string[] {
   }
 }
 
-// ---- entity JSON schemas ---------------------------------------------------
-export const TaskSchema = Type.Object({
-  id: Type.String(),
-  projectId: NStr(),
-  parentId: NStr(),
-  title: Type.String(),
-  done: Type.Boolean(),
-  due: NStr(),
-  reminder: NStr(),
-  labels: Type.Array(Type.String()),
-  recurrence: NStr(),
-  notes: Type.String(),
-  priority: Type.Integer(),
-  size: Type.Integer(),
-  assigneeId: NStr(),
-  createdAt: Type.String(),
-  completedAt: NStr(),
-  updatedAt: Type.String(),
-  readableId: NStr(),
+// ---- shared response / param schemas (reused across routes for the OpenAPI spec) ----
+export const ErrorSchema = Type.Object(
+  {
+    error: Type.String({ description: 'Human-readable error message.' }),
+    field: Type.Optional(
+      Type.String({ description: 'The offending input field, on validation errors.' }),
+    ),
+  },
+  {
+    // never strip an error body — some routes attach extra context beyond `error`/`field`
+    additionalProperties: true,
+    description: 'Error response body.',
+    examples: [{ error: 'not found' }],
+  },
+);
+export const IdParamSchema = Type.Object({
+  id: Type.String({ description: 'The entity id (a client-generated UUID).' }),
 });
+export const OkSchema = Type.Object(
+  { ok: Type.Boolean() },
+  { description: 'Simple success acknowledgement.', examples: [{ ok: true }] },
+);
+export const UserSchema = Type.Object(
+  {
+    id: Type.String(),
+    username: Type.String(),
+    email: Type.String(),
+    theme: Type.String(),
+    week_start: Type.Integer({ description: '0=Sun … 6=Sat.' }),
+    sort_prefs: Type.Unknown({ description: 'Per-view sort preferences, or null.' }),
+    fib_sizing: Type.Boolean({ description: 'Whether task sizes use the fibonacci scale.' }),
+    notes_root_name: Type.String({ description: "Display name for the vault root ('' = hidden)." }),
+    calendars_all_name: Type.String({
+      description: "Display name for the all-calendars row ('' = hidden).",
+    }),
+    is_admin: Type.Boolean(),
+  },
+  { description: 'The authenticated user (public projection; never includes the password hash).' },
+);
+
+// ---- entity JSON schemas ---------------------------------------------------
+export const TaskSchema = Type.Object(
+  {
+    id: Type.String(),
+    projectId: NStr(),
+    parentId: NStr(),
+    title: Type.String(),
+    done: Type.Boolean(),
+    due: NStr(),
+    reminder: NStr(),
+    labels: Type.Array(Type.String()),
+    recurrence: NStr(),
+    notes: Type.String(),
+    priority: Type.Integer({
+      description: 'Loose importance, 1 (very low) … 5 (very high); 0 = unset.',
+    }),
+    size: Type.Integer({ description: 'Effort estimate (fibonacci-ish); 0 = unset.' }),
+    assigneeId: NStr(),
+    createdAt: Type.String(),
+    completedAt: NStr(),
+    updatedAt: Type.String(),
+    readableId: NStr({ description: 'Short human id like `t_0042`, allocated on first save.' }),
+  },
+  {
+    description:
+      'A to-do item. `recurrence` is a small phrase (e.g. `every mon,thu`); `labels` are label ids.',
+    examples: [
+      {
+        id: '8f3a1c2e-1111-4a2b-9c3d-000000000001',
+        projectId: '2b86d80b-ccde-45bd-99ad-d84b20411bd7',
+        parentId: null,
+        title: 'Water the plants',
+        done: false,
+        due: '2026-07-20',
+        reminder: null,
+        labels: ['home'],
+        recurrence: 'every mon,thu',
+        notes: '',
+        priority: 3,
+        size: 2,
+        assigneeId: null,
+        createdAt: '2026-07-15T09:00:00.000Z',
+        completedAt: null,
+        updatedAt: '2026-07-15T09:00:00.000Z',
+        readableId: 't_0042',
+      },
+    ],
+  },
+);
 export const ProjectSchema = Type.Object({
   id: Type.String(),
   parentId: NStr(),
@@ -368,26 +440,55 @@ export function rowToSavedQuery(row: SavedQueriesTable) {
 }
 
 // ---- events (D2) -----------------------------------------------------------
-export const EventSchema = Type.Object({
-  id: Type.String(),
-  ownerId: Type.String(),
-  creatorId: Type.String(),
-  assigneeId: NStr(),
-  calendarId: NStr(),
-  title: Type.String(),
-  notes: Type.String(),
-  location: NStr(),
-  allDay: Type.Boolean(),
-  startAt: Type.String(),
-  endAt: NStr(),
-  recurrence: NStr(),
-  reminder: NStr(),
-  labels: Type.Array(Type.String()),
-  position: Type.Integer(),
-  createdAt: Type.String(),
-  updatedAt: Type.String(),
-  readableId: NStr(),
-});
+export const EventSchema = Type.Object(
+  {
+    id: Type.String(),
+    ownerId: Type.String(),
+    creatorId: Type.String(),
+    assigneeId: NStr(),
+    calendarId: NStr(),
+    title: Type.String(),
+    notes: Type.String(),
+    location: NStr(),
+    allDay: Type.Boolean(),
+    startAt: Type.String(),
+    endAt: NStr(),
+    recurrence: NStr(),
+    reminder: NStr(),
+    labels: Type.Array(Type.String()),
+    position: Type.Integer(),
+    createdAt: Type.String(),
+    updatedAt: Type.String(),
+    readableId: NStr(),
+  },
+  {
+    description:
+      'A calendar event. `startAt`/`endAt` are ISO timestamps (or `YYYY-MM-DD` when `allDay`); ' +
+      '`recurrence` is a phrase like `weekly on tue`.',
+    examples: [
+      {
+        id: 'e1a2…',
+        ownerId: 'u_1',
+        creatorId: 'u_1',
+        assigneeId: null,
+        calendarId: '4d5e6f70-1111-2222-3333-444444444444',
+        title: 'Dentist',
+        notes: '',
+        location: '123 Main St',
+        allDay: false,
+        startAt: '2026-07-21T14:30:00.000Z',
+        endAt: '2026-07-21T15:00:00.000Z',
+        recurrence: null,
+        reminder: null,
+        labels: [],
+        position: 0,
+        createdAt: '2026-07-15T09:00:00.000Z',
+        updatedAt: '2026-07-15T09:00:00.000Z',
+        readableId: 'e_0007',
+      },
+    ],
+  },
+);
 export const EventCreateSchema = Type.Object({
   id: Type.Optional(Type.String()),
   title: Type.String(),
@@ -503,19 +604,41 @@ export const LinkListSchema = Type.Array(LinkResolvedSchema);
 export const LinkQuerySchema = Type.Object({ type: LinkTypeSchema, id: Type.String() });
 
 // ---- notes (file-backed; DB shadows the .md) -------------------------------
-export const NoteSchema = Type.Object({
-  id: Type.String(),
-  ownerId: Type.String(),
-  path: Type.String(),
-  folderId: NStr(),
-  title: Type.String(),
-  body: Type.String(), // read from disk, not stored in the DB
-  reviewAt: NStr(),
-  labels: Type.Array(Type.String()),
-  createdAt: Type.String(),
-  updatedAt: Type.String(),
-  readableId: NStr(),
-});
+export const NoteSchema = Type.Object(
+  {
+    id: Type.String(),
+    ownerId: Type.String(),
+    path: Type.String(),
+    folderId: NStr(),
+    title: Type.String(),
+    body: Type.String(), // read from disk, not stored in the DB
+    reviewAt: NStr(),
+    labels: Type.Array(Type.String()),
+    createdAt: Type.String(),
+    updatedAt: Type.String(),
+    readableId: NStr(),
+  },
+  {
+    description:
+      'A markdown note. `body` is read live from the vault file (not stored in the DB); `path` is ' +
+      'relative to the vault root and `folderId` is derived from its directory.',
+    examples: [
+      {
+        id: '45957642-4ace-4243-8c9e-b89f420e1c76',
+        ownerId: 'u_1',
+        path: 'Garden/Tomato care log.md',
+        folderId: '0ea5…',
+        title: 'Tomato care log',
+        body: '# Tomatoes\n\nWater deeply twice a week.\n',
+        reviewAt: null,
+        labels: ['garden'],
+        createdAt: '2026-07-15T09:00:00.000Z',
+        updatedAt: '2026-07-15T09:00:00.000Z',
+        readableId: 'n_0011',
+      },
+    ],
+  },
+);
 export const NoteCreateSchema = Type.Object({
   title: Type.String(),
   body: Type.Optional(Type.String()),

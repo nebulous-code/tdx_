@@ -31,8 +31,9 @@ function loadEngines() {
   ensureWindow();
   execFile('recurrence.js'); // -> window.Rec
   execFile('query.js');      // -> window.Q (uses global Rec)
+  execFile('query-rebind.js'); // -> window.QueryRebind (uses global Q)
   execFile('create.js');     // -> window.CL (the creation language; pure, clock injected)
-  return { Rec: globalThis.Rec, Q: globalThis.Q, CL: globalThis.CL };
+  return { Rec: globalThis.Rec, Q: globalThis.Q, CL: globalThis.CL, QueryRebind: globalThis.QueryRebind };
 }
 
 // Tier 2 — the reactive store and its smart rules.
@@ -42,6 +43,7 @@ function loadStore() {
   execFile('glyphs.js');          // -> window.GLYPHS (data.js reads it at load time)
   execFile('recurrence.js');
   execFile('query.js');
+  execFile('query-rebind.js');    // -> window.QueryRebind (uses global Q)
   execFile('create.js');          // -> window.CL (data.js's clCtx/clGhost need it)
   execFile('data.js');            // -> window.store; uses Vue/Rec/Q/CL/GLYPHS
   return {

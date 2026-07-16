@@ -1,8 +1,15 @@
 // routes/projects.ts — project CRUD with If-Match concurrency + archive cascade.
 
+import { Type } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
 import { accessLevel, denyStatus } from '../authz.js';
-import { ProjectCreateSchema, ProjectUpdateSchema } from '../schemas.js';
+import {
+  ErrorSchema,
+  IdParamSchema,
+  ProjectCreateSchema,
+  ProjectSchema,
+  ProjectUpdateSchema,
+} from '../schemas.js';
 import { PreconditionFailed, etag } from '../services/concurrency.js';
 import { archiveProject, createProject, getProject, updateProject } from '../services/projects.js';
 import { denyAccess, ifMatchOf } from './_access.js';
@@ -10,7 +17,16 @@ import { denyAccess, ifMatchOf } from './_access.js';
 export default async function projectRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     '/api/projects',
-    { preHandler: app.requireWrite, schema: { body: ProjectCreateSchema } },
+    {
+      preHandler: app.requireWrite,
+      schema: {
+        summary: 'Create a project',
+        description: 'Create a project (a node in the task tree). Requires **write** scope.',
+        tags: ['Projects'],
+        body: ProjectCreateSchema,
+        response: { 201: ProjectSchema, 400: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema },
+      },
+    },
     async (request, reply) => {
       const body = request.body as { parentId?: string | null };
       if (body.parentId) {
@@ -30,17 +46,47 @@ export default async function projectRoutes(app: FastifyInstance): Promise<void>
     },
   );
 
-  app.get('/api/projects/:id', { preHandler: app.authenticate }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    if (await denyAccess(app, request, reply, 'project', id, 'read')) return;
-    const project = await getProject(app.db, id);
-    if (!project) return reply.code(404).send({ error: 'not found' });
-    return reply.header('etag', etag(project.updatedAt)).send(project);
-  });
+  app.get(
+    '/api/projects/:id',
+    {
+      preHandler: app.authenticate,
+      schema: {
+        summary: 'Get a project',
+        tags: ['Projects'],
+        params: IdParamSchema,
+        response: { 200: ProjectSchema, 403: ErrorSchema, 404: ErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (await denyAccess(app, request, reply, 'project', id, 'read')) return;
+      const project = await getProject(app.db, id);
+      if (!project) return reply.code(404).send({ error: 'not found' });
+      return reply.header('etag', etag(project.updatedAt)).send(project);
+    },
+  );
 
   app.put(
     '/api/projects/:id',
-    { preHandler: app.requireWrite, schema: { body: ProjectUpdateSchema } },
+    {
+      preHandler: app.requireWrite,
+      schema: {
+        summary: 'Update a project',
+        description:
+          'Partial update. Requires **write** scope. Honors `If-Match`; a stale write returns **412** ' +
+          'with the current entity under `current`.',
+        tags: ['Projects'],
+        params: IdParamSchema,
+        body: ProjectUpdateSchema,
+        response: {
+          200: ProjectSchema,
+          400: ErrorSchema,
+          403: ErrorSchema,
+          404: ErrorSchema,
+          412: ErrorSchema,
+        },
+      },
+    },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       if (await denyAccess(app, request, reply, 'project', id, 'write')) return;
@@ -62,10 +108,24 @@ export default async function projectRoutes(app: FastifyInstance): Promise<void>
     },
   );
 
-  app.delete('/api/projects/:id', { preHandler: app.requireWrite }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    if (await denyAccess(app, request, reply, 'project', id, 'write')) return;
-    await archiveProject(app.db, id);
-    return reply.code(204).send();
-  });
+  app.delete(
+    '/api/projects/:id',
+    {
+      preHandler: app.requireWrite,
+      schema: {
+        summary: 'Delete (archive) a project',
+        description:
+          'Archives the project and cascades to its subtree. Requires **write** scope. 204 on success.',
+        tags: ['Projects'],
+        params: IdParamSchema,
+        response: { 204: Type.Null(), 403: ErrorSchema, 404: ErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (await denyAccess(app, request, reply, 'project', id, 'write')) return;
+      await archiveProject(app.db, id);
+      return reply.code(204).send();
+    },
+  );
 }

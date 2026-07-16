@@ -87,7 +87,7 @@ window.QueryBar = {
           ] },
         // the category group swaps by app (projects / calendars / folders) but writes the
         // GENERIC cross-app `category:` field, so one chip (e.g. "gym") spans all three apps.
-        { key:'category', label:this.catLabel, chips:this.catItems.map(c=>({field:'category',value:c.name,text:c.name,glyph:c.glyph,color:this.store.resolveColor(c.color),exclusive:true})) },
+        { key:'category', label:this.catLabel, chips:this.catItems.map(c=>({field:'category',value:c.name,text:c.name,glyph:c.glyph,color:this.store.resolveColor(c.color),cat:true})) },
         { key:'flags', label:'flags', chips:[
             { compl:'open', text:'open' }, { compl:'done', text:'completed' },
             {field:'recurring',value:'true',text:'↻ recurring',exclusive:true,sepBefore:true},
@@ -129,12 +129,13 @@ window.QueryBar = {
       }
       return rows;
     },
-    chipOn(c){ return c.compl ? this.store.completion[c.compl] : c.isType ? this.hasType(c.value) : c.dueDay ? this.hasDueDay(c.value) : this.has(c.field,c.value); },
+    chipOn(c){ return c.compl ? this.store.completion[c.compl] : c.isType ? this.hasType(c.value) : c.dueDay ? this.hasDueDay(c.value) : c.cat ? this.hasCat(c.value) : this.has(c.field,c.value); },
     chipToggle(c){
       if(c.compl) this.store.toggleCompletion(c.compl);
       else if(c.isType) this.toggleType(c.value);
       else if(c.dueDay) this.toggleDueWeekday(c.value);
       else if(c.untag) this.toggleUntagged();
+      else if(c.cat) this.toggleCat(c.value);
       else if(c.exclusive) this.toggleExclusive(c.field,c.value);
       else if(c.field==='label'){
         // selecting a #label clears the mutually-exclusive "no tag" filter, in one update
@@ -196,6 +197,19 @@ window.QueryBar = {
       const val=ORDER.filter(x=>set.has(x)).join(',');
       const terms=this.terms.filter(t=>t.field!=='type');   // collapse to a single type: term
       if(val) terms.push({field:'type', value:val, neg:false}); // none selected → drop type: entirely
+      this.setTerms(terms);
+    },
+    // ---- category selector (multi-select: one comma-joined category: term spanning the
+    //      app's projects/calendars/folders; values are slugged like project/label) ----
+    catValues(){ const t=this.terms.find(t=>t.field==='category' && !t.neg); return t ? t.value.split(',').map(s=>Q.slug(s)).filter(Boolean) : []; },
+    hasCat(v){ return this.catValues().includes(Q.slug(v)); },
+    toggleCat(v){
+      const s=Q.slug(v);
+      const set=new Set(this.catValues());
+      set.has(s) ? set.delete(s) : set.add(s);
+      const val=[...set].join(',');
+      const terms=this.terms.filter(t=>t.field!=='category');   // collapse to a single category: term
+      if(val) terms.push({field:'category', value:val, neg:false});
       this.setTerms(terms);
     },
     // ---- weekday window (due:<letters>) ----

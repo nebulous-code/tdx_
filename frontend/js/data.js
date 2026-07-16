@@ -843,7 +843,7 @@
     store.setView({ kind:'project', id:p.id, title:p.name, query:'' });
   };
   store.openLabelView = (l) => {
-    store.setView({ kind:'query', id:'label_'+l.id, title:'#'+l.name, query:'label:'+l.name+' status:open' });
+    store.setView({ kind:'query', id:'label_'+l.id, title:'#'+l.name, query:'label:'+Q.slug(l.name)+' status:open' });
   };
 
   // Flat, ordered list of every navigable sidebar row (views, then the project

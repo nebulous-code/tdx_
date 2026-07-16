@@ -1,7 +1,14 @@
 // routes/calendars.ts — calendar CRUD with If-Match concurrency. Owner-only.
 
+import { Type } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
-import { CalendarCreateSchema, CalendarUpdateSchema } from '../schemas.js';
+import {
+  CalendarCreateSchema,
+  CalendarSchema,
+  CalendarUpdateSchema,
+  ErrorSchema,
+  IdParamSchema,
+} from '../schemas.js';
 import {
   archiveCalendar,
   createCalendar,
@@ -14,7 +21,16 @@ import { denyAccess, ifMatchOf } from './_access.js';
 export default async function calendarRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     '/api/calendars',
-    { preHandler: app.requireWrite, schema: { body: CalendarCreateSchema } },
+    {
+      preHandler: app.requireWrite,
+      schema: {
+        summary: 'Create a calendar',
+        description: 'Create a calendar to group events. Requires **write** scope.',
+        tags: ['Calendars'],
+        body: CalendarCreateSchema,
+        response: { 201: CalendarSchema, 400: ErrorSchema },
+      },
+    },
     async (request, reply) => {
       const calendar = await createCalendar(
         app.db,
@@ -25,17 +41,47 @@ export default async function calendarRoutes(app: FastifyInstance): Promise<void
     },
   );
 
-  app.get('/api/calendars/:id', { preHandler: app.authenticate }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    if (await denyAccess(app, request, reply, 'calendar', id, 'read')) return;
-    const calendar = await getCalendar(app.db, request.user!.id, id);
-    if (!calendar) return reply.code(404).send({ error: 'not found' });
-    return reply.header('etag', etag(calendar.updatedAt)).send(calendar);
-  });
+  app.get(
+    '/api/calendars/:id',
+    {
+      preHandler: app.authenticate,
+      schema: {
+        summary: 'Get a calendar',
+        tags: ['Calendars'],
+        params: IdParamSchema,
+        response: { 200: CalendarSchema, 403: ErrorSchema, 404: ErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (await denyAccess(app, request, reply, 'calendar', id, 'read')) return;
+      const calendar = await getCalendar(app.db, request.user!.id, id);
+      if (!calendar) return reply.code(404).send({ error: 'not found' });
+      return reply.header('etag', etag(calendar.updatedAt)).send(calendar);
+    },
+  );
 
   app.put(
     '/api/calendars/:id',
-    { preHandler: app.requireWrite, schema: { body: CalendarUpdateSchema } },
+    {
+      preHandler: app.requireWrite,
+      schema: {
+        summary: 'Update a calendar',
+        description:
+          'Partial update. Requires **write** scope. Honors `If-Match`; a stale write returns **412** ' +
+          'with the current entity under `current`.',
+        tags: ['Calendars'],
+        params: IdParamSchema,
+        body: CalendarUpdateSchema,
+        response: {
+          200: CalendarSchema,
+          400: ErrorSchema,
+          403: ErrorSchema,
+          404: ErrorSchema,
+          412: ErrorSchema,
+        },
+      },
+    },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       if (await denyAccess(app, request, reply, 'calendar', id, 'write')) return;
@@ -60,10 +106,23 @@ export default async function calendarRoutes(app: FastifyInstance): Promise<void
     },
   );
 
-  app.delete('/api/calendars/:id', { preHandler: app.requireWrite }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    if (await denyAccess(app, request, reply, 'calendar', id, 'write')) return;
-    await archiveCalendar(app.db, request.user!.id, id);
-    return reply.code(204).send();
-  });
+  app.delete(
+    '/api/calendars/:id',
+    {
+      preHandler: app.requireWrite,
+      schema: {
+        summary: 'Delete (archive) a calendar',
+        description: 'Requires **write** scope. Returns 204 on success.',
+        tags: ['Calendars'],
+        params: IdParamSchema,
+        response: { 204: Type.Null(), 403: ErrorSchema, 404: ErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (await denyAccess(app, request, reply, 'calendar', id, 'write')) return;
+      await archiveCalendar(app.db, request.user!.id, id);
+      return reply.code(204).send();
+    },
+  );
 }

@@ -12,6 +12,7 @@
     "migrate": "tsx src/db.ts --migrate",
     "migrate:legacy": "tsx scripts/migrate-from-legacy.ts",
     "seed:dev": "tsx scripts/seed-dev.ts",
+    "export:openapi": "tsx scripts/export-openapi.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check src test scripts",
     "format": "biome format --write src test scripts"

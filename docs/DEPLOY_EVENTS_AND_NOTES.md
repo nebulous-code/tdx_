@@ -130,13 +130,16 @@ Scope it as its own pass after the box is updated — like the Playwright suite,
 
 ---
 
-## Bugs to fix before shipping (not gates, but wanted before release)
+## Release-adjacent bugs — two FIXED, one reclassified (ship with this release)
 
-Not release dependencies — the container can be upgraded without them — but these are things to clear before calling the release done. All three are already tracked in the `tdx_` project on tdx; they're surfaced here because this release is what makes them matter (or makes them worse).
+- **Renaming a project/calendar/folder/label breaks queries** — FIXED, client-side (`frontend/js/query-rebind.js`): a rename now rewrites the affected saved-query tokens in the store, which ride the same diff-sync as the rename. Exact-slug only, with a "fully-freed" guard so a same-named survivor's filter is never clobbered.
+- **Multi-value categorizer search** — FIXED: `folder:`, `calendar:`, and `category:` now accept comma-lists (`folder:inbox,grocery`), mirroring `label:`, in both parity-locked engines (`query.ts` + `query.js`). The query builder's project/calendar/folder chips are multi-select too (`query-bar.js`), so it's reachable by clicking, not just typing.
 
-- **Renaming a project/calendar/folder/label breaks queries.** Saved queries reference their categorizer by *name*, so renaming one silently breaks every query that filters on it. Today it's a project-only bug; **this release widens the blast radius** by adding calendars and folders as new shared-name categorizers, so the same break now spans four entity types. The fix is a generic rename-propagation pass that rewrites the affected filters when a project/calendar/folder/label is renamed. This is the highest-value of the three.
-- **Note query doesn't support multiple-folder search.** `folder:inbox,grocery` isn't supported, even though the comma-list form works for other filters. A parser gap in the notes feature this release ships.
-- **Calendar date styling.** The calendar/date controls still render with the browser's default format and styling instead of the app's own CSS — cosmetic, but it's the new headline app so it should match the rest of the UI.
+Alongside these, the name→token **slug** was changed from "delete separators" to "per-character underscore, trimmed" (`Inbox (base)` → `inbox__base`) so name boundaries survive.
+
+> **One-time post-deploy step (from the slug change):** the saved view **`TJ Inspection Due`** filters on `project:tjinspection`, which no longer matches under the new slug (now `tj_inspection`). After deploy, open that view and re-save it (re-clicking the project chip writes the correct token), or edit the token to `project:tj_inspection`. It's the only prod saved query affected — checked against the live data; nothing else needs touching.
+
+**The third item — "calendar/date styling" — was reclassified as a deferred feature, not shipped.** It turned out not to be a bug: the date/time fields are already amber-themed and the formatting is already custom. The only genuinely browser-default piece is the native date-picker **popup**, which no CSS can style (and which isn't keyboard-navigable). Matching that popup to the CRT/amber aesthetic means building a **custom date-picker component** — a real new feature, not a fix. It was pulled into this list only because it looked like a "calendar" item, but the native date dropdown predates the calendar app (it's been on tasks all along). Deferred as a future feature; no styling change ships in this release.
 
 ---
 

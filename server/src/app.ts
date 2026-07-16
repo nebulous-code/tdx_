@@ -64,7 +64,49 @@ export async function buildApp(opts: AppOpts = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: opts.logger ?? true }).withTypeProvider<TypeBoxTypeProvider>();
 
   await app.register(fastifySwagger, {
-    openapi: { info: { title: 'tdx API', version: '0.0.0', description: 'D1 backend' } },
+    openapi: {
+      info: {
+        title: 'tdx API',
+        version: '1.0.0',
+        description:
+          'The tdx productivity API: **tasks**, **events** (calendar), and **notes** (a file-backed ' +
+          'vault), unified by a shared query language (`POST /api/query`) and cross-app categorizers ' +
+          '(a project / calendar / folder matched by name). Every resource is scoped to the ' +
+          'authenticated user.\n\n' +
+          '**Authentication** — two interchangeable credentials, accepted on every non-public route:\n' +
+          '- **Session cookie** (`tdx_session`): from `POST /api/auth/login`; browser flow, full scope.\n' +
+          '- **Bearer token** (`Authorization: Bearer tdx_pat_…`): a scoped personal access token from ' +
+          '`POST /api/auth/tokens`; for agents/integrations. A `read`-only token cannot write.\n\n' +
+          'Writes additionally require **write** scope; admin routes require an **admin** account — ' +
+          "OpenAPI can't express that structurally, so each such operation notes it in its description.",
+      },
+      components: {
+        securitySchemes: {
+          cookieAuth: { type: 'apiKey', in: 'cookie', name: 'tdx_session' },
+          bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'tdx_pat' },
+        },
+      },
+      // default: authentication required (either credential). Public routes override with `security: []`.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }],
+      tags: [
+        { name: 'Auth', description: 'Login/logout, the current session, and account settings.' },
+        { name: 'Tokens', description: 'Personal access tokens (PATs) for agents/integrations.' },
+        { name: 'Admin', description: 'Admin-only operations (require an admin account).' },
+        { name: 'Bootstrap', description: 'One-shot fetch of the whole account (all entities).' },
+        { name: 'Query', description: 'The unified query language across tasks/events/notes.' },
+        { name: 'Tasks', description: 'To-do items: due dates, recurrence, labels, subtasks.' },
+        { name: 'Events', description: 'Calendar events, including recurring expansion.' },
+        { name: 'Notes', description: 'Markdown notes in a file-backed vault; folder-scoped.' },
+        { name: 'Projects', description: 'The task project tree.' },
+        { name: 'Calendars', description: 'Named calendars that group events.' },
+        { name: 'Folders', description: 'Vault folders that group notes.' },
+        { name: 'Labels', description: 'Tags shared across tasks/events/notes.' },
+        { name: 'Saved Queries', description: 'Named, saved query views.' },
+        { name: 'Links', description: 'Explicit links between entities.' },
+        { name: 'Backups', description: 'Scheduled backup config + actions (admin).' },
+        { name: 'Health', description: 'Liveness probe.' },
+      ],
+    },
   });
   await app.register(fastifySwaggerUi, { routePrefix: '/docs' });
 
@@ -96,7 +138,10 @@ export async function buildApp(opts: AppOpts = {}): Promise<FastifyInstance> {
     '/health',
     {
       schema: {
-        description: 'Liveness probe',
+        summary: 'Liveness probe',
+        description: 'Unauthenticated health check. Returns 200 while the server is up.',
+        tags: ['Health'],
+        security: [], // public
         response: {
           200: Type.Object({
             status: Type.Literal('ok'),

@@ -54,7 +54,9 @@
     );
     return new Set(match.map(p => p.id));
   }
-  function slug(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,''); }
+  // non-alphanumerics -> one underscore each (boundaries preserved), then trim edge underscores.
+  // e.g. "Inbox (base)" -> "inbox__base", "TJ Inspection" -> "tj_inspection". Idempotent.
+  function slug(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'_').replace(/^_+|_+$/g,''); }
   // match a categorizer NAME against a query value (exact slug, or substring) — the
   // cross-app category:/calendar:/folder: join key (mirrors resolveProjects' name arm)
   function catNameMatch(name, value){ const have=slug(name), want=slug(value); return have===want || (want.length>0 && have.includes(want)); }
@@ -146,15 +148,16 @@
         // generic cross-app categorizer: project (task) / calendar (event) / folder (note),
         // matched by NAME so one token (category:gym) spans all three apps. Events/notes
         // carry their category name; a plain task falls back to resolving its project.
-        if(task.category != null) res = catNameMatch(task.category, t.value);
-        else { const ids = resolveProjects(t.value, ctx); res = ids.has(task.projectId); }
+        // comma-list: match if ANY listed name matches (mirrors label:)
+        if(task.category != null) res = t.value.split(',').some(v => catNameMatch(task.category, v));
+        else res = t.value.split(',').some(v => resolveProjects(v, ctx).has(task.projectId));
         break;
       }
       case 'calendar':
-        res = task.kind==='event' && catNameMatch(task.category, t.value);   // events only
+        res = task.kind==='event' && t.value.split(',').some(v => catNameMatch(task.category, v));   // events only
         break;
       case 'folder':
-        res = task.kind==='note' && catNameMatch(task.category, t.value);    // notes only
+        res = task.kind==='note' && t.value.split(',').some(v => catNameMatch(task.category, v));    // notes only
         break;
       case 'label': {
         const wants = t.value.split(',').map(slug);

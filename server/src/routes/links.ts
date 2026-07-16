@@ -3,8 +3,16 @@
 // endpoint via the shared denyAccess guard; rel validity is enforced by the
 // service (canonical alphabetical pair-name). Owner-scoped.
 
+import { Type } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
-import { LinkCreateSchema, LinkListSchema, LinkQuerySchema } from '../schemas.js';
+import {
+  ErrorSchema,
+  IdParamSchema,
+  LinkCreateSchema,
+  LinkListSchema,
+  LinkQuerySchema,
+  LinkResolvedSchema,
+} from '../schemas.js';
 import {
   InvalidLink,
   type LinkType,
@@ -17,7 +25,18 @@ import { denyAccess } from './_access.js';
 export default async function linkRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     '/api/links',
-    { preHandler: app.requireWrite, schema: { body: LinkCreateSchema } },
+    {
+      preHandler: app.requireWrite,
+      schema: {
+        summary: 'Create a link',
+        description:
+          'Create an undirected link between two entities (task/event/note). Requires **write** scope; ' +
+          'both endpoints must be visible to the caller. An invalid pairing returns 400.',
+        tags: ['Links'],
+        body: LinkCreateSchema,
+        response: { 201: LinkResolvedSchema, 400: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema },
+      },
+    },
     async (request, reply) => {
       const { aType, aId, bType, bId, data } = request.body as {
         aType: LinkType;
@@ -49,7 +68,13 @@ export default async function linkRoutes(app: FastifyInstance): Promise<void> {
     '/api/links',
     {
       preHandler: app.authenticate,
-      schema: { querystring: LinkQuerySchema, response: { 200: LinkListSchema } },
+      schema: {
+        summary: "List an entity's links",
+        description: 'All links attached to the entity identified by `type` + `id`.',
+        tags: ['Links'],
+        querystring: LinkQuerySchema,
+        response: { 200: LinkListSchema, 403: ErrorSchema, 404: ErrorSchema },
+      },
     },
     async (request, reply) => {
       const { type, id } = request.query as { type: LinkType; id: string };
@@ -58,9 +83,22 @@ export default async function linkRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  app.delete('/api/links/:id', { preHandler: app.requireWrite }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    await deleteLink(app.db, request.user!.id, id);
-    return reply.code(204).send();
-  });
+  app.delete(
+    '/api/links/:id',
+    {
+      preHandler: app.requireWrite,
+      schema: {
+        summary: 'Delete a link',
+        description: 'Requires **write** scope. 204 on success.',
+        tags: ['Links'],
+        params: IdParamSchema,
+        response: { 204: Type.Null() },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      await deleteLink(app.db, request.user!.id, id);
+      return reply.code(204).send();
+    },
+  );
 }

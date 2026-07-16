@@ -108,14 +108,14 @@ window.AppSidebar = {
       if(!b) return '';
       const tip = 'The top of your vault — notes that aren’t in any folder. Rename it (or blank it out to hide it) in preferences (@). It can’t hold folders: every folder already lives inside it.';
       return b.clash
-        ? tip + ' A real folder shares this name, so folder:'+b.name.replace(/ \(base\)$/,'')+' finds THAT folder — rename one of them.'
+        ? tip + ' A real folder shares this name, so folder:'+Q.slug(b.name.replace(/ \(base\)$/,''))+' finds THAT folder — rename one of them.'
         : tip;
     }
   },
   methods: {
     glyphColor(sv){ return sv.color ? this.store.resolveColor(sv.color) : (sv.system ? '' : 'var(--amber)'); },
-    isLabelView(l){ return this.store.view.kind==='query' && this.store.view.query==='label:'+l.name+' status:open'; },
-    labelCount(l){ return this.store.queryCount('label:'+l.name+' status:open'); },
+    isLabelView(l){ return this.store.view.kind==='query' && this.store.view.query==='label:'+Q.slug(l.name)+' status:open'; },
+    labelCount(l){ return this.store.queryCount('label:'+Q.slug(l.name)+' status:open'); },
     openLabel(l){ this.store.openLabelView(l); }
   }
 };

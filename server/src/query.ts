@@ -98,9 +98,12 @@ function resolveProjects(value: string, ctx: Ctx): Set<string> {
 // matcher asks ("do these two names collide?") instead of re-deriving it; the base-directory
 // name check (n.16) relies on that. Parity-locked with frontend/js/query.js.
 function slug(s: string | null | undefined): string {
+  // non-alphanumerics -> one underscore each (boundaries preserved), then trim edge underscores.
+  // e.g. "Inbox (base)" -> "inbox__base", "TJ Inspection" -> "tj_inspection". Idempotent.
   return String(s || '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '');
+    .replace(/[^a-z0-9]/g, '_')
+    .replace(/^_+|_+$/g, '');
 }
 // match a categorizer NAME against a query value (exact slug, or substring) — the
 // cross-app `category:`/`calendar:`/`folder:` join key (mirrors resolveProjects' name arm)
@@ -225,20 +228,20 @@ function evalTerm(task: Task, t: Term, ctx: Ctx): boolean {
       // generic cross-app categorizer: project (task) / calendar (event) / folder (note),
       // matched by NAME so one token (`category:gym`) spans all three apps. Events/notes
       // carry their category name; a plain task falls back to resolving its project.
-      if (task.category != null) res = catNameMatch(task.category, t.value);
-      else {
-        const ids = resolveProjects(t.value, ctx);
-        res = ids.has(task.projectId as string);
-      }
+      // comma-list: match if ANY listed name matches (mirrors label:)
+      if (task.category != null)
+        res = t.value.split(',').some((v) => catNameMatch(task.category, v));
+      else
+        res = t.value.split(',').some((v) => resolveProjects(v, ctx).has(task.projectId as string));
       break;
     }
     case 'calendar':
       // type-specific: only events have a calendar (a plain task / note never matches)
-      res = task.kind === 'event' && catNameMatch(task.category, t.value);
+      res = task.kind === 'event' && t.value.split(',').some((v) => catNameMatch(task.category, v));
       break;
     case 'folder':
       // type-specific: only notes have a folder
-      res = task.kind === 'note' && catNameMatch(task.category, t.value);
+      res = task.kind === 'note' && t.value.split(',').some((v) => catNameMatch(task.category, v));
       break;
     case 'label': {
       const wants = t.value.split(',').map(slug);
