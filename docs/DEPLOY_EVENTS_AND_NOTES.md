@@ -56,17 +56,14 @@ On the new image's first boot, `applyMigrations` (server/src/db.ts) runs every `
 
 ---
 
-## 🛑 Blockers — do these before merging to `main`
+## Blockers before merging to `main`
 
-### 1. Mount the vault (or notes are lost on every redeploy)
-Notes are **file-backed**. With no `VAULT_DIR` and no volume, the vault lands inside the container's ephemeral layer and Watchtower's next auto-pull **deletes every note**. No notes exist yet, so nothing is lost *today* — but the moment the notes frontend ships and you create one, it's on borrowed time. Add to `compose.yaml`:
-```yaml
-    environment:
-      VAULT_DIR: /vault
-    volumes:
-      - ./vault:/vault          # host path on a backed-up dataset (like ./data)
-```
-Create the host dir first. This is a ~10-minute change and it is the highest-severity item here.
+Two of the three are now **landed on this branch**; the rehearsal (Blocker 2) is the one remaining gate, and it's a host-side dry-run rather than a code change.
+
+### ✅ 1. Mount the vault — LANDED (`compose.yaml`)
+Notes are **file-backed**. With no `VAULT_DIR` and no volume, the vault lands inside the container's ephemeral layer and Watchtower's next auto-pull **deletes every note** (confirmed: with `VAULT_DIR` unset, `vaultBase()` falls back to `/app/server/data/vault` *inside* the container). `compose.yaml` now sets `VAULT_DIR=/vault` and mounts `./vault:/vault`, mirroring the `./data` and `./backups` volumes.
+
+**Still a host step:** create the host-side vault dir and, as with `./data`/`./backups`, point it at a durable, backed-up dataset before the first deploy. The vault is **not** covered by the DB backup service — it has its own git snapshot (see [`VAULT_BACKUP.md`](VAULT_BACKUP.md)).
 
 ### 2. Rehearse migrations 002 → 011 on a COPY of the live DB
 ```sh
@@ -79,19 +76,18 @@ cd server && DB_PATH=/tmp/tdx-rehearsal.db npx tsx -e "import('./src/db.js').the
 ```
 This is where a real-data surprise (an unexpected glyph, a name collision, a constraint) surfaces **on a copy**, not on prod. Do not skip it.
 
-### 3. Add a container healthcheck
-Watchtower auto-deploys `:latest` with nothing verifying the app actually came up. A crash-loop is silent. Add to `server/Dockerfile` (or `compose.yaml`):
+### ✅ 3. Container healthcheck — LANDED (`server/Dockerfile`)
+Watchtower auto-deploys `:latest` with nothing verifying the app actually came up, so a crash-loop (e.g. a migration throwing at boot) would be silent. `server/Dockerfile` now carries a `HEALTHCHECK` that probes `/health` (already served by `app.ts`), with a `--start-period=15s` so boot + `applyMigrations` finish before failures count:
 ```dockerfile
-HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
-  CMD node -e "fetch('http://localhost:'+ (process.env.PORT||3000) +'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
+  CMD node -e "fetch('http://localhost:'+(process.env.PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 ```
-The `/health` endpoint already exists (`app.ts`).
 
 ---
 
 ## The deploy runbook (this release)
 
-1. **Land the three blockers above** on this branch (vault volume, healthcheck; rehearsal is a dry-run, not a commit).
+1. **Blockers:** the vault volume and healthcheck are already landed on this branch. Before this step, create the host vault dir (Blocker 1) and run the migration rehearsal (Blocker 2) — the rehearsal is a host-side dry-run, not a commit.
 2. **Back up prod's DB** out-of-band: `cp .../data/tdx.db …/tdx.pre-events-notes.db`. (The backup service also snapshots it, but take an explicit named copy.)
 3. **Pause Watchtower** so the deploy is deliberate, not a surprise mid-work: `docker stop watchtower` (or drop the container's watchtower label).
 4. **Merge to `main`.** CI runs both test suites, builds the image (migrations 001–011 baked in), pushes `:latest` + `:<sha>`.
@@ -106,11 +102,11 @@ The `/health` endpoint already exists (`app.ts`).
 
 ---
 
-## Release solidity — the tests to add (not blocking, but do it soon)
+## Release solidity — Playwright smokes (✅ landed)
 
-The **entire Vue UI layer is untested** — zero component/browser/e2e tests. The golden suite covers the engines (`Rec`, `Q`, `CL`, store rules, sync-diff) well, but every component, drawer, the `KbForm` keyboard model, the calendar, the note editor is verified only by hand. The frontend functions-coverage floor sits at an honest-but-low **52%** for exactly this reason.
+The golden suite covers the engines (`Rec`, `Q`, `CL`, store rules, sync-diff) well, but the Vue UI layer — every component, drawer, the `KbForm` keyboard model, the calendar, the note editor — was verified only by hand (the frontend functions-coverage floor sits at an honest-but-low **52%** for exactly this reason).
 
-**Recommendation:** stand up **Playwright** with a handful of critical-path smokes — login → create & recur a task → create an event via the builder → create a note → the core keyboard loops. This is the long-deferred "Tier 3" (`docs/PARITY_HARNESS.md`), and it's the highest-leverage safety net before trusting hands-off auto-deploy. Add it as a third CI job gating `build-push`.
+**Now in place:** a **Playwright** suite (`server/e2e/`, chromium) of critical-path smokes — login, create a task, run a query, create an event via the drawer, create a note, a full-reload persistence round-trip, completing a recurring task spawns the next occurrence, and the core keyboard loop (`j`/`k` cursor → `e` opens the drawer → `esc` closes). It boots the real app against a throwaway seeded DB/vault. This is the long-deferred "Tier 3" (`docs/PARITY_HARNESS.md`). A **`test-e2e`** CI job now runs it on every push/PR and gates `build-push` alongside `test-server` and `test-frontend`.
 
 ---
 

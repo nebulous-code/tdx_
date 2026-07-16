@@ -22,6 +22,9 @@ services:
       - PORT=3000
       - HOST=0.0.0.0
       - DB_PATH=/data/tdx.db
+      # Notes are file-backed .md under here; it MUST be a persisted volume (below) or a
+      # Watchtower redeploy wipes the ephemeral container layer and every note with it.
+      - VAULT_DIR=/vault
       # Set to your local timezone so created/completed date stamps are local.
       - TZ=America/New_York
       # Cookie-signing secret, substituted from the repo-root .env (gitignored).
@@ -29,6 +32,10 @@ services:
       - SESSION_SECRET=${SESSION_SECRET:?set SESSION_SECRET in the repo-root .env}
     volumes:
       - ./data:/data            # SQLite file persists across rebuilds
+      # The notes vault (file-backed .md, one subdir per owner). Like ./data, point the
+      # HOST side at a durable, backed-up dataset. The DB backup service does NOT cover
+      # this — the vault has its own git snapshot (see docs/VAULT_BACKUP.md).
+      - ./vault:/vault
       # Scheduled backups land here (admin → account → backups in the UI). Point the
       # HOST side at a durable, offsite-replicated location — e.g. a ZFS dataset:
       #   - /tank/backups/tdx:/backups
