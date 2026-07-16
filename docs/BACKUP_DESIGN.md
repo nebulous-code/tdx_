@@ -3,6 +3,8 @@
 Status: **implemented**. This doc is both the design and the operational reference
 (see §8 for the restore runbook).
 
+> **Scope:** this covers the **database** backup. The notes vault (the file *content*) has a companion git-based backup that shares this same scheduler and enable switch — design in [`VAULT_BACKUP.md`](VAULT_BACKUP.md), restore in [`../RESTORE.md`](../RESTORE.md) §4.
+
 ## 1. Goal
 
 Scheduled, hands-off backups of the production SQLite database, configured from the

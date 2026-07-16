@@ -3,9 +3,17 @@
 // → 412 with the current entity). Request bodies are TypeBox-validated; responses
 // are built by the shared mappers (validated by the bootstrap/query schemas).
 
+import { Type } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
 import { accessLevel, denyStatus } from '../authz.js';
-import { AssignSchema, TaskCreateSchema, TaskUpdateSchema } from '../schemas.js';
+import {
+  AssignSchema,
+  ErrorSchema,
+  IdParamSchema,
+  TaskCreateSchema,
+  TaskSchema,
+  TaskUpdateSchema,
+} from '../schemas.js';
 import { PreconditionFailed, etag } from '../services/concurrency.js';
 import { completeTask } from '../services/recurrence.js';
 import { archiveTask, assignTask, createTask, getTask, updateTask } from '../services/tasks.js';
@@ -14,7 +22,17 @@ import { denyAccess, ifMatchOf } from './_access.js';
 export default async function taskRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     '/api/tasks',
-    { preHandler: app.requireWrite, schema: { body: TaskCreateSchema } },
+    {
+      preHandler: app.requireWrite,
+      schema: {
+        summary: 'Create a task',
+        description:
+          'Create a to-do item. Requires **write** scope. `id` may be a client-supplied UUID.',
+        tags: ['Tasks'],
+        body: TaskCreateSchema,
+        response: { 201: TaskSchema, 400: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema },
+      },
+    },
     async (request, reply) => {
       const body = request.body as { projectId?: string | null };
       if (body.projectId) {
@@ -34,17 +52,48 @@ export default async function taskRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  app.get('/api/tasks/:id', { preHandler: app.authenticate }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    if (await denyAccess(app, request, reply, 'task', id, 'read')) return;
-    const task = await getTask(app.db, id);
-    if (!task) return reply.code(404).send({ error: 'not found' });
-    return reply.header('etag', etag(task.updatedAt)).send(task);
-  });
+  app.get(
+    '/api/tasks/:id',
+    {
+      preHandler: app.authenticate,
+      schema: {
+        summary: 'Get a task',
+        description: 'Fetch a single task by id. Sends an `ETag` for optimistic concurrency.',
+        tags: ['Tasks'],
+        params: IdParamSchema,
+        response: { 200: TaskSchema, 403: ErrorSchema, 404: ErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (await denyAccess(app, request, reply, 'task', id, 'read')) return;
+      const task = await getTask(app.db, id);
+      if (!task) return reply.code(404).send({ error: 'not found' });
+      return reply.header('etag', etag(task.updatedAt)).send(task);
+    },
+  );
 
   app.put(
     '/api/tasks/:id',
-    { preHandler: app.requireWrite, schema: { body: TaskUpdateSchema } },
+    {
+      preHandler: app.requireWrite,
+      schema: {
+        summary: 'Update a task',
+        description:
+          "Partial update. Requires **write** scope. Send `If-Match` with the task's `ETag`; a stale " +
+          'write returns **412** with the current entity under `current`.',
+        tags: ['Tasks'],
+        params: IdParamSchema,
+        body: TaskUpdateSchema,
+        response: {
+          200: TaskSchema,
+          400: ErrorSchema,
+          403: ErrorSchema,
+          404: ErrorSchema,
+          412: ErrorSchema,
+        },
+      },
+    },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       if (await denyAccess(app, request, reply, 'task', id, 'write')) return;
@@ -66,26 +115,73 @@ export default async function taskRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  app.delete('/api/tasks/:id', { preHandler: app.requireWrite }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    if (await denyAccess(app, request, reply, 'task', id, 'write')) return;
-    await archiveTask(app.db, id);
-    return reply.code(204).send();
-  });
+  app.delete(
+    '/api/tasks/:id',
+    {
+      preHandler: app.requireWrite,
+      schema: {
+        summary: 'Delete (archive) a task',
+        description: 'Soft-archive a task. Requires **write** scope. Returns 204 on success.',
+        tags: ['Tasks'],
+        params: IdParamSchema,
+        response: { 204: Type.Null(), 403: ErrorSchema, 404: ErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (await denyAccess(app, request, reply, 'task', id, 'write')) return;
+      await archiveTask(app.db, id);
+      return reply.code(204).send();
+    },
+  );
 
-  // complete: marks done and, if recurring, spawns the next occurrence + a fresh
-  // unchecked subtask subtree. Returns { task, created }.
-  app.post('/api/tasks/:id/complete', { preHandler: app.requireWrite }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    if (await denyAccess(app, request, reply, 'task', id, 'write')) return;
-    const result = await completeTask(app.db, id);
-    if (!result) return reply.code(404).send({ error: 'not found' });
-    return result;
-  });
+  app.post(
+    '/api/tasks/:id/complete',
+    {
+      preHandler: app.requireWrite,
+      schema: {
+        summary: 'Complete a task',
+        description:
+          'Mark done. If the task recurs, this spawns the next occurrence and a fresh unchecked subtask ' +
+          'subtree. Requires **write** scope. Returns `{ task, created }`.',
+        tags: ['Tasks'],
+        params: IdParamSchema,
+        response: {
+          200: Type.Object(
+            {},
+            {
+              additionalProperties: true,
+              description: 'The completed task plus any spawned occurrences: `{ task, created }`.',
+            },
+          ),
+          403: ErrorSchema,
+          404: ErrorSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (await denyAccess(app, request, reply, 'task', id, 'write')) return;
+      const result = await completeTask(app.db, id);
+      if (!result) return reply.code(404).send({ error: 'not found' });
+      return result;
+    },
+  );
 
   app.post(
     '/api/tasks/:id/assign',
-    { preHandler: app.requireWrite, schema: { body: AssignSchema } },
+    {
+      preHandler: app.requireWrite,
+      schema: {
+        summary: 'Assign a task',
+        description:
+          'Set or clear the assignee (`assigneeId: null` clears). Requires **write** scope.',
+        tags: ['Tasks'],
+        params: IdParamSchema,
+        body: AssignSchema,
+        response: { 200: TaskSchema, 400: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema },
+      },
+    },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       if (await denyAccess(app, request, reply, 'task', id, 'write')) return;

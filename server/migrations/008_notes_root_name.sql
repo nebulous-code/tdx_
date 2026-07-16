@@ -1,0 +1,21 @@
+-- 008: the NAME the user gives the vault's base directory (audit n.16).
+--
+-- A note at the top of the vault has folder_id = NULL. That is not "unassigned" — folders are
+-- DERIVED from the vault's directories (reconcileFolders walks the dirs; folderIdForPath is
+-- `dirname(rel) === '.' -> null`, reasserted on every scan), so NULL *is* the root directory,
+-- and it is already a writable destination (folderBaseRel(null) -> ''). The root doesn't need
+-- to be created; it needs a NAME, so the notes nav can show it as a folder and `folder:<name>`
+-- can address it.
+--
+-- Why a user preference and not a constant: "root" is a technical word, "inbox" is what tasks
+-- already call its project-less home (so the two apps agree, and the cross-app categorizer can
+-- match them by name), and someone else may want neither. The app just paints this name over
+-- the '' directory.
+--
+--   'Inbox' (default) — lands on existing rows, so the feature is ON after this migration.
+--   ''                — HIDDEN: the row disappears from the nav and root notes behave exactly
+--                       as they did before this feature. The off-switch is the status quo.
+--
+-- NOT a folders row: a synthetic folder would fight reconcileFolders and the
+-- idx_folders_path unique index (the root's path is '').
+ALTER TABLE users ADD COLUMN notes_root_name TEXT NOT NULL DEFAULT 'Inbox';

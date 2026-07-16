@@ -203,3 +203,15 @@ Palette: ↑/↓ navigate, Enter executes, Esc closes. Always intercept `⌘K` e
 - Introduce a second font for body text.
 - Animate routine state changes.
 - Let glow bloom on dense data (counts, tags, table-like meta).
+
+---
+
+## 12. Vocabulary — query vs search
+
+Two distinct retrieval systems; keep them distinct in UI copy, help, and code names.
+
+- **Query** — the repeatable, *categorical* predicate language over an item's **metadata** (`type:`, `status:`, `due:`, `label:`, `project:`/`calendar:`/`folder:`, …). Echoed in cyan as machine-readable "code." The visual **chip builder** and the raw text box are two front-ends to the **same** language — call both "query." A query deliberately does **not** free-text-search item content. Queries are saved as smart views.
+- **Search** (`/`) — a quick, throwaway, **live text find** across all item types (title + body). Not categorical, not repeatable, not saved — the opposite end of the spectrum from query. Returns mixed types; each result shows its app's deep-nav icon so you can tell type at a glance.
+- **"Filter"** — **retired** as user-facing vocabulary. It means the same thing as "query"; fold any remaining user-facing "filter" wording (the `?` help "filter" tab, the `⊞ filter` button, the `f`/`F` hints) into "query." Internal code names (`focusPane:'filter'`, `filterKey`, …) can be renamed opportunistically.
+
+(A future hand-authored `search:<text>` query predicate could bridge the two for power users, but it's deep backlog and out of the chip builder — not tracked.)

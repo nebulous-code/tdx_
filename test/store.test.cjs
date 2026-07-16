@@ -4,6 +4,7 @@
    against the frozen clock), so it doubles as the fixture. Each mutating test
    takes a fresh store (uid counter reset) for isolation + stable ids. */
 const { test } = require('node:test');
+const assert = require('node:assert');
 const { freezeClock } = require('./support/clock.cjs');
 freezeClock();
 const { loadStore, freshStore, execFile } = require('./support/load.cjs');
@@ -89,14 +90,53 @@ test('store: visibleRoots — filter + sort + completion', () => {
   golden('store.visibleRoots', out);
 });
 
-test('store: searchRoots ranking', () => {
+// `store.searchRoots` — a client-side, task-only, relevance-ranked matcher — was DELETED in
+// da7dac6, when the `/` find became a server-backed cross-type query (store.runSearch ->
+// store.runQuery -> /api/query). This test kept calling it and had been red ever since.
+// What's left client-side is the QUERY runSearch builds and its stale-response guard, so
+// that's what we pin now. The matching itself is the unified engine's job and is tested in
+// server/test/unified-query.test.ts.
+test('store: runSearch builds a text-only query (a stray `due:` stays TEXT, never a field)', async () => {
   const store = freshStore();
-  const out = ['review', 'ch.', 'rotate', 't1'].map((term) => {
+  const asked = [];
+  store.runQuery = async (q) => { asked.push(q); return [{ type: 'task', id: 't1' }]; };
+
+  const out = [];
+  for (const term of ['review', 'ch.', 'rotate the keys', 'due:today', 'say "hi"']) {
     store.searchTerm = term;
-    store.completion = { open: true, done: false };
-    return { term, ids: store.searchRoots().map((t) => t.id) };
-  });
-  golden('store.searchRoots', out);
+    await store.runSearch();
+    out.push({ term, query: asked[asked.length - 1] });
+  }
+  // an empty box asks NOTHING and clears the results
+  store.searchTerm = '   ';
+  await store.runSearch();
+  assert.equal(asked.length, out.length, 'a blank find must not hit the query engine');
+  assert.deepEqual(store.searchResults, []);
+
+  golden('store.runSearch', out);
+});
+
+test('store: runSearch — a stale response never overwrites a newer one', async () => {
+  const store = freshStore();
+  // the first call resolves LAST (a slow keystroke landing after a fast one)
+  let release;
+  const slow = new Promise((r) => { release = r; });
+  let call = 0;
+  store.runQuery = async () => {
+    call++;
+    if (call === 1) { await slow; return [{ type: 'task', id: 'STALE' }]; }
+    return [{ type: 'task', id: 'FRESH' }];
+  };
+
+  store.searchTerm = 'st';
+  const first = store.runSearch();          // in flight
+  store.searchTerm = 'stale';
+  await store.runSearch();                  // supersedes it
+  release();
+  await first;
+
+  assert.deepEqual(store.searchResults.map((i) => i.id), ['FRESH'],
+    'the older response must be dropped by the _searchSeq guard');
 });
 
 test('store: toggleDone recurrence spawn', () => {

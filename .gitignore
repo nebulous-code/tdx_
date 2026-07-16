@@ -14,11 +14,19 @@ __pycache__/
 data/
 dist/
 build/
+.backups/
+.backups/*
 
 # env / secrets
 .env
 .env.*
 !.env.example
+
+# playwright e2e artifacts
+server/test-results/
+server/playwright-report/
+server/.playwright/
+server/blob-report/
 
 # os / editor
 .DS_Store

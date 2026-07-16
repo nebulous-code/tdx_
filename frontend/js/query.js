@@ -54,7 +54,12 @@
     );
     return new Set(match.map(p => p.id));
   }
-  function slug(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,''); }
+  // non-alphanumerics -> one underscore each (boundaries preserved), then trim edge underscores.
+  // e.g. "Inbox (base)" -> "inbox__base", "TJ Inspection" -> "tj_inspection". Idempotent.
+  function slug(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'_').replace(/^_+|_+$/g,''); }
+  // match a categorizer NAME against a query value (exact slug, or substring) — the
+  // cross-app category:/calendar:/folder: join key (mirrors resolveProjects' name arm)
+  function catNameMatch(name, value){ const have=slug(name), want=slug(value); return have===want || (want.length>0 && have.includes(want)); }
 
   function dueDelta(task){ // days from today to due (negative = overdue). null if no due.
     if(!task.due) return null;
@@ -64,6 +69,39 @@
     if(!task.reminder) return null;
     // reminder may be a 'YYYY-MM-DDTHH:MM' timestamp; query filters are day-grained.
     return Rec.daysBetween(today(), Rec.parseYMD(task.reminder.slice(0,10)));
+  }
+  // created/edited are full timestamps (often UTC) — resolve their LOCAL calendar day so a
+  // non-UTC zone near midnight doesn't read them off by one. (due/reminder are date-only.)
+  function createdDelta(task){
+    if(!task.createdAt) return null;
+    return Rec.daysBetween(today(), Rec.startOfDay(new Date(task.createdAt)));
+  }
+  function editedDelta(task){
+    if(!task.updatedAt) return null;
+    return Rec.daysBetween(today(), Rec.startOfDay(new Date(task.updatedAt)));
+  }
+  // true calendar-aligned ranges (this/last/next week|month) — distinct from the
+  // day-window due:week/due:month. Returns true|false when `value` is a calendar
+  // keyword (matched against `dateStr`), or null when it isn't one.
+  function calMatch(dateStr, value, weekStart){
+    const t = today();
+    const y = t.getFullYear(), m = t.getMonth();
+    let range = null;
+    if(value==='this-month') range = [new Date(y, m, 1), new Date(y, m+1, 0)];
+    else if(value==='next-month') range = [new Date(y, m+1, 1), new Date(y, m+2, 0)];
+    else if(value==='last-month') range = [new Date(y, m-1, 1), new Date(y, m, 0)];
+    else if(value==='this-week' || value==='last-week' || value==='next-week'){
+      const ws = weekStart==null ? 1 : weekStart;
+      const back = (t.getDay() - ws + 7) % 7;
+      const start = Rec.addDays(t, -back);
+      const off = value==='last-week' ? -7 : value==='next-week' ? 7 : 0;
+      const s = Rec.addDays(start, off);
+      range = [s, Rec.addDays(s, 6)];
+    }
+    if(!range) return null;
+    if(!dateStr) return false;
+    const ymd = dateStr.length > 10 ? Rec.ymd(new Date(dateStr)) : dateStr.slice(0,10);
+    return ymd >= Rec.ymd(range[0]) && ymd <= Rec.ymd(range[1]);
   }
 
   function cmpDate(delta, op){ // op like "<7d", "<=3d", ">0d", "=0d"
@@ -106,6 +144,21 @@
         res = ids.has(task.projectId);
         break;
       }
+      case 'category': {
+        // generic cross-app categorizer: project (task) / calendar (event) / folder (note),
+        // matched by NAME so one token (category:gym) spans all three apps. Events/notes
+        // carry their category name; a plain task falls back to resolving its project.
+        // comma-list: match if ANY listed name matches (mirrors label:)
+        if(task.category != null) res = t.value.split(',').some(v => catNameMatch(task.category, v));
+        else res = t.value.split(',').some(v => resolveProjects(v, ctx).has(task.projectId));
+        break;
+      }
+      case 'calendar':
+        res = task.kind==='event' && t.value.split(',').some(v => catNameMatch(task.category, v));   // events only
+        break;
+      case 'folder':
+        res = task.kind==='note' && t.value.split(',').some(v => catNameMatch(task.category, v));    // notes only
+        break;
       case 'label': {
         const wants = t.value.split(',').map(slug);
         res = labelsOf.some(lid => {
@@ -132,7 +185,23 @@
         else if(t.value==='week') res = d!==null && d>=0 && d<=7;
         else if(t.value==='month') res = d!==null && d>=0 && d<=31;
         else if(/^[mtwrfsu]+$/.test(t.value)) res = !!task.due && dueWindow(weekdaySet(t.value), ctx.weekStart).includes(task.due.slice(0,10));
-        else res = cmpDate(d, t.value);
+        else { const cm = calMatch(task.due, t.value, ctx.weekStart); res = cm!==null ? cm : cmpDate(d, t.value); }
+        break;
+      }
+      case 'created': {
+        const d = createdDelta(task);
+        if(t.value==='none') res = d===null;
+        else if(t.value==='set') res = d!==null;
+        else if(t.value==='today') res = d===0;
+        else { const cm = calMatch(task.createdAt, t.value, ctx.weekStart); res = cm!==null ? cm : cmpDate(d, t.value); }
+        break;
+      }
+      case 'edited': {
+        const d = editedDelta(task);
+        if(t.value==='none') res = d===null;
+        else if(t.value==='set') res = d!==null;
+        else if(t.value==='today') res = d===0;
+        else { const cm = calMatch(task.updatedAt, t.value, ctx.weekStart); res = cm!==null ? cm : cmpDate(d, t.value); }
         break;
       }
       case 'reminder': {

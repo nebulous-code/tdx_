@@ -5,6 +5,8 @@
   "description": "Phase 0 characterization / golden-master tests that lock today's frontend engine behavior before the TypeScript backend rewrite (see docs/PARITY_HARNESS.md).",
   "scripts": {
     "test": "TZ=UTC node --test \"test/**/*.test.cjs\"",
-    "test:update": "TZ=UTC UPDATE_GOLDENS=1 node --test \"test/**/*.test.cjs\""
+    "test:update": "TZ=UTC UPDATE_GOLDENS=1 node --test \"test/**/*.test.cjs\"",
+    "test:coverage": "bash tools/test_coverage_frontend.sh",
+    "test:coverage:bump": "bash tools/test_coverage_frontend.sh --bump"
   }
 }

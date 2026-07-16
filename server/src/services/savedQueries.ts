@@ -5,6 +5,7 @@ import type { DB, SavedQueriesTable } from '../db.js';
 import { newId } from '../ids.js';
 import { rowToSavedQuery } from '../schemas.js';
 
+export type Display = 'auto' | 'grid' | 'list'; // how the view presents (e.1; migration 007)
 export interface SavedQueryCreateInput {
   id?: string;
   name: string;
@@ -13,6 +14,7 @@ export interface SavedQueryCreateInput {
   color?: string | null;
   pinned?: boolean;
   position?: number;
+  display?: Display;
 }
 export interface SavedQueryPatch {
   name?: string;
@@ -21,6 +23,7 @@ export interface SavedQueryPatch {
   color?: string | null;
   pinned?: boolean;
   position?: number;
+  display?: Display;
 }
 
 export async function getSavedQuery(db: DB, id: string) {
@@ -51,6 +54,7 @@ export async function createSavedQuery(db: DB, owner: string, input: SavedQueryC
       color: input.color ?? null,
       position: input.position ?? Number(m?.m ?? 0) + 1,
       pinned: input.pinned ? 1 : 0,
+      display: input.display ?? 'auto',
     })
     .execute();
   return (await getSavedQuery(db, id))!;
@@ -64,6 +68,7 @@ export async function updateSavedQuery(db: DB, id: string, patch: SavedQueryPatc
   if (patch.color !== undefined) set.color = patch.color;
   if (patch.pinned !== undefined) set.pinned = patch.pinned ? 1 : 0;
   if (patch.position !== undefined) set.position = patch.position;
+  if (patch.display !== undefined) set.display = patch.display;
   if (Object.keys(set).length)
     await db.updateTable('saved_queries').set(set).where('id', '=', id).execute();
   return getSavedQuery(db, id);

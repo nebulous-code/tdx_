@@ -24,7 +24,7 @@ before(async () => {
   ctx = await buildTestApp();
   app = ctx.app;
   ({ cookie } = await createAndLogin(app, ctx.db));
-  inboxId = (await bootstrap()).projects.find((p: { name: string }) => p.name === 'inbox').id;
+  inboxId = (await bootstrap()).projects.find((p: { name: string }) => p.name === 'Inbox').id;
 });
 after(async () => {
   await app.close();

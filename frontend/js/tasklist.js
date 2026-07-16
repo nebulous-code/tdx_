@@ -15,15 +15,16 @@ window.TaskRow = {
   props: ['store','task','depth'],
   template: `
   <div>
-    <div class="task" :class="{ done: task.done, sel: store.selectedTaskId===task.id, moving: store.taskMoveId===task.id }"
-         :style="{ paddingLeft: (12 + depth*22) + 'px' }"
+    <div class="task" data-testid="task-row" :class="{ done: task.done, sel: store.selectedTaskId===task.id, moving: store.taskMoveId===task.id }"
+         :style="rowStyle"
          @click="select">
       <span v-if="subs.length" class="twist-sub" @click.stop="task.collapsed=!task.collapsed">{{ task.collapsed ? '▸' : '▾' }}</span>
       <span v-else-if="depth>0" class="twist-sub mut">└</span>
       <span class="checkbox" :class="{ on: task.done }" @click.stop="store.toggleDone(task)">{{ task.done ? '✓' : '' }}</span>
       <div class="tmain">
-        <div class="ttitle">{{ task.title }}</div>
+        <div class="ttitle" data-testid="task-title">{{ task.title }}</div>
         <div class="tmeta">
+          <span v-if="task.readableId" class="m rid mut" title="readable id">{{ task.readableId }}</span>
           <span v-if="depth===0 && proj" class="m tproj">
             <span :style="{color: store.resolveColor(proj.color)}">{{ proj.glyph }}</span>{{ proj.name }}
           </span>
@@ -36,6 +37,7 @@ window.TaskRow = {
           <span v-for="lid in task.labels" :key="lid" class="tag">#{{ labelName(lid) }}</span>
         </div>
       </div>
+      <span v-if="depth===0 && proj" class="tcat-icon" :style="{ color: store.resolveColor(proj.color) }" :title="proj.name">{{ proj.glyph }}</span>
     </div>
     <template v-if="!task.collapsed">
       <task-row v-for="s in subs" :key="s.id" :store="store" :task="s" :depth="depth+1"></task-row>
@@ -46,6 +48,15 @@ window.TaskRow = {
     subs(){ return this.store.subtasks(this.task.id); },
     doneSubs(){ return this.subs.filter(s=>s.done).length; },
     proj(){ return this.store.projectById(this.task.projectId); },
+    // indent + a faint wash in the project color (root rows only) per §2.1
+    rowStyle(){
+      const s = { paddingLeft: (12 + this.depth*22) + 'px' };
+      if(this.depth===0 && this.proj){
+        const c = this.store.resolveColor(this.proj.color);
+        s.background = 'color-mix(in srgb, '+c+' 7%, transparent)';
+      }
+      return s;
+    },
     prioName(){ return this.store.priorityLabel(this.task.priority); },
     recShort(){ return Rec.compact(this.task.recurrence); },
     recFull(){ return Rec.summary(this.task.recurrence); },
@@ -86,7 +97,7 @@ window.TaskList = {
       <span class="prompt" :class="{ warn }" :data-tip="warnTip">{{ warn ? '⚠' : '+' }}</span>
       <span class="qa-caret">❯</span>
       <span class="qa-input-wrap">
-        <input ref="qa" v-model="draft" :placeholder="addPlaceholder" @keydown.enter.exact.prevent="commitAdd" @keydown.enter.shift.prevent="commitAddToNotes" @keydown.esc="escAdd" @keydown.tab="acceptTag" @keydown.right="acceptTag" />
+        <input ref="qa" data-testid="task-quickadd" v-model="draft" :placeholder="addPlaceholder" @keydown.enter.exact.prevent="commitAdd" @keydown.enter.shift.prevent="commitAddToNotes" @keydown.esc="escAdd" @keydown.tab="acceptTag" @keydown.right="acceptTag" />
         <span v-if="tagGhost" class="qa-ghost" aria-hidden="true"><span class="qa-ghost-pre">{{ draft }}</span>{{ tagGhost }}<span class="qa-ghost-hint"> →</span></span>
       </span>
       <span class="mut" style="font-size:11px;">↵ add</span>
@@ -125,7 +136,7 @@ window.TaskList = {
     },
     matched(){
       const ctx = this.store.ctx();
-      const q = this.store.currentQuery();
+      const q = this.store.taskQuery();   // type: stripped — client Q has no 'type' field
       let list = Q.run(q, ctx);
       if(!/status:done|is:done/.test(q)) list = list.filter(this.store.completionPass);
       return list;
@@ -146,16 +157,10 @@ window.TaskList = {
     },
     sortFieldLabel(){ const o=SORTS.find(o=>o.key===this.store.sortField); return o ? o.label : this.store.sortField; },
     sortDirSymbol(){ return this.store.sortDirs[this.store.sortField]==='desc' ? 'v' : '^'; },
-    // tag autofill: the trailing `#fragment` being typed (null if the draft doesn't end in one)
-    tagFragment(){ const m=/#([^\s#]*)$/.exec(this.draft); return m ? m[1] : null; },
-    // the grey completion of the first existing label whose name extends the fragment
-    tagGhost(){
-      const f=this.tagFragment;
-      if(f===null || f==='') return '';
-      const fl=f.toLowerCase();
-      const hit=this.store.sortedLabels().find(l=> l.name.toLowerCase()!==fl && l.name.toLowerCase().startsWith(fl));
-      return hit ? hit.name.slice(f.length) : '';
-    }
+    // autofill: the grey completion of the trailing token being typed — now ANY sigil the
+    // type accepts (`#tag`, `/project`, `$friday`), not just `#`. Without completion half
+    // the grammar is invisible.
+    tagGhost(){ return this.store.clGhost(this.draft, 'task'); }
   },
   methods: {
     cycleSort(){
@@ -176,15 +181,12 @@ window.TaskList = {
     addFromDraft(){
       const text = this.draft.trim();
       if(!text) return null;
-      const { title, labels, priority } = this.parseQuickAdd(text);
-      // inherit the current view's filters (status/due/labels/project) so the new
-      // task stays visible; merge any #tags typed in the box with the view's labels
-      const def = this.store.viewDefaults();
-      const merged = [...new Set([...(def.labels||[]), ...labels])];
-      const t = this.store.addTask({
-        title, labels: merged, priority,
-        projectId: def.projectId, due: def.due, done: def.done,
-      });
+      // The creation language (docs/CREATION_LANGUAGE.md): parse is pure and type-aware,
+      // apply resolves names → ids (creating labels) and merges the view's implied fields.
+      // TYPED BEATS IMPLIED — `$today` in a due:friday view means today; the view only
+      // fills what you left blank.
+      const parsed = CL.parse(text, { type:'task', known: this.store.clKnown });
+      const t = this.store.addTask(CL.apply('task', parsed, this.store.clCtx('task')));
       this.draft = '';
       this.store.selectedTaskId = t.id;
       return t;
@@ -199,18 +201,7 @@ window.TaskList = {
       this.store.pendingNotesFocus = true;
       this.store.detailOpen = true;
     },
-    parseQuickAdd(text){
-      const labels=[];
-      let priority=0;
-      let t = text;
-      // !N priority — single digit 0-5 not followed by another digit; otherwise left as text
-      t = t.replace(/(^|\s)!([0-5])(?!\d)/, (_,pre,n)=>{ priority=+n; return pre; });
-      // #label
-      t = t.replace(/#(\S+)/g, (_,n)=>{ const l=this.store.addLabel(n); labels.push(l.id); return ''; });
-      const title = t.replace(/\s+/g,' ').trim();
-      return { title: title||text, labels, priority };
-    },
-    // Tab / → completes the trailing #fragment with the grey ghost suggestion.
+    // Tab / → completes the trailing token with the grey ghost suggestion (#tag · /project · $date).
     // For → only when the caret is at the very end (don't hijack cursor movement);
     // when there's no ghost, fall through so Tab/→ keep their normal behavior.
     acceptTag(e){
@@ -234,5 +225,25 @@ window.TaskList = {
   },
   data(){ return {
     draft:'',
-  }; }
+  }; },
+  // The task list's half of the shared list cursor (a.2). Same interface the mixed list
+  // registers, so store.listSwap() — and therefore J/K in the open drawer — is ONE
+  // implementation rather than a task-shaped copy and a mixed-shaped copy.
+  mounted(){
+    this._unregCursor = this.store.registerListCursor({
+      rows: () => this.store.visibleRows(),
+      index: () => this.store.visibleRows().findIndex(t => t.id === this.store.selectedTaskId),
+      go: (i) => {
+        const t = this.store.visibleRows()[i];
+        if(!t) return;
+        this.store.selectedTaskId = t.id;
+        this.store.detailOpen = true;
+        this.$nextTick(() => {
+          const el = document.querySelector('.list-wrap .task.sel');
+          if(el && el.scrollIntoView) el.scrollIntoView({ block:'nearest' });
+        });
+      },
+    });
+  },
+  beforeUnmount(){ if(this._unregCursor) this._unregCursor(); }
 };

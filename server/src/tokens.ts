@@ -15,6 +15,8 @@ const SESSION_USER_COLS = [
   'week_start',
   'sort_prefs',
   'fib_sizing',
+  'notes_root_name',
+  'calendars_all_name',
   'is_admin',
 ] as const;
 

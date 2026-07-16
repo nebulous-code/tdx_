@@ -4,7 +4,7 @@
 
 import { hashPassword } from './auth.js';
 import type { DB } from './db.js';
-import { newId } from './ids.js';
+import { allocateReadableId, newId } from './ids.js';
 
 export interface NewUserInput {
   username: string;
@@ -39,6 +39,8 @@ export async function createUser(
       week_start: 1,
       sort_prefs: null,
       fib_sizing: 0,
+      notes_root_name: 'Inbox', // the vault's base directory shows as a folder by this name (n.16)
+      calendars_all_name: 'Everything', // the "all calendars" nav row shows by this name (e.10)
       is_admin: isAdmin ? 1 : 0,
       created_at: now,
       updated_at: now,
@@ -58,25 +60,38 @@ export async function seedUserDefaults(db: DB, ownerId: string): Promise<void> {
       id: newId(),
       owner_id: ownerId,
       parent_id: null,
-      name: 'inbox',
+      name: 'Inbox',
       color: '#ffb000',
-      glyph: '⌂',
+      glyph: '❯', // a.9: ⌂ left the picker, so the app can't use it either
       collapsed: 0,
       position: 0,
       archived: 0,
       health: '[]',
       created_at: now,
       updated_at: now,
+      readable_id: await allocateReadableId(db, ownerId, 'project'),
     })
     .execute();
 
+  // [name, glyph, query, position, pinned]. Every view carries an explicit `type:` so it's a
+  // reasonable, unambiguous default + surfaces only under its app (the per-app nav filters by
+  // type; a view with no type: is treated as Tasks-only). §2.4 seed views.
   const views: [string, string, string, number, number][] = [
-    ['Today', '☉', 'status:open due:today', 0, 0],
-    ['Open', '○', 'status:open', 1, 1],
-    ['Overdue', '!', 'status:overdue', 2, 1],
-    ['This week', '☰', 'status:open due:week', 3, 0],
-    ['Recurring', '↻', 'recurring:true status:open', 4, 0],
-    ['No date', '∅', 'due:none status:open', 5, 0],
+    ['Today', '☉', 'type:task status:open due:today', 0, 0],
+    ['Open', '○', 'type:task status:open', 1, 1],
+    ['Overdue', '!', 'type:task status:overdue', 2, 1],
+    ['This week', '☰', 'type:task status:open due:week', 3, 0],
+    ['Recurring', '↻', 'type:task recurring:true status:open', 4, 0],
+    ['No date', '∅', 'type:task due:none status:open', 5, 0],
+    // Events (calendar-month/week keywords from the §3.3 date model)
+    ['This week', '☰', 'type:event due:this-week', 6, 0],
+    ['This month', '◫', 'type:event due:this-month', 7, 0],
+    ['Next month', '»', 'type:event due:next-month', 8, 0],
+    // Notes (created/edited + review date)
+    ['Edited this week', '✎', 'type:note edited:>=-7d', 9, 0],
+    ['Created this week', '✦', 'type:note created:>=-7d', 10, 0],
+    ['To review', '◉', 'type:note due:today', 11, 0],
+    ['Untagged', '∅', 'type:note has:no-labels', 12, 0],
   ];
   for (const [name, glyph, query, position, pinned] of views) {
     await db
@@ -91,6 +106,10 @@ export async function seedUserDefaults(db: DB, ownerId: string): Promise<void> {
         color: null,
         position,
         pinned,
+        // 'auto' lets the app infer presentation (e.1): the events screen renders a
+        // DATE-RANGE view as a list (a grid is already a date filter) and keeps the grid
+        // otherwise. Toggle + `u` pins an explicit 'grid'/'list' on any view.
+        display: 'auto',
       })
       .execute();
   }

@@ -26,7 +26,12 @@
 <div id="app">
   <!-- auth gate: the whole app shell only renders once authenticated -->
   <login-screen v-if="!store.currentUser" @authed="onAuthed"></login-screen>
-  <div v-else class="shell" :class="{ 'detail-open': store.detailOpen, 'nav-collapsed': store.navCollapsed }">
+  <div v-else class="shell" data-testid="app-shell" :class="{ 'detail-open': store.detailOpen, 'nav-collapsed': store.navCollapsed, 'deepnav-collapsed': store.deepNavCollapsed }">
+
+    <!-- deep-nav app switcher (D2 2d). Owns its own toggle: the bottom-left > on mobile,
+         N on desktop. When open alongside the app nav it sits to the nav's left. -->
+    <deep-nav :store="store"></deep-nav>
+    <div class="scrim" :class="{ show: store.deepNavOpen }" @click="store.deepNavOpen=false"></div>
 
     <!-- top bar -->
     <header class="topbar">
@@ -37,7 +42,7 @@
       <div class="pin-flow">
         <template v-for="pv in store.pinnedViews()" :key="pv.id">
           <span class="dim pin-view" :class="{ active: store.view.kind==='query' && store.view.id===pv.id }"
-                @click="store.openQueryView(pv)" :title="pv.query">{{ store.queryCount(pv.query) }} {{ pv.name.toLowerCase() }}</span>
+                @click="store.openQueryView(pv)" :title="pv.query">{{ store.viewCountable(pv) ? store.queryCount(pv.query) + ' ' : '' }}{{ pv.name.toLowerCase() }}</span>
           <span class="sep">│</span>
         </template>
         <template v-for="pl in store.pinnedLabels()" :key="pl.id">
@@ -59,41 +64,97 @@
       @new-project="openProjectModal('new', $event)"
       @edit-project="openProjectModal('edit', null, $event)"
       @delete-project="deleteProject"
+      @new-calendar="openCalendarModal('new')"
+      @edit-calendar="openCalendarModal('edit', $event)"
+      @delete-calendar="deleteCalendar"
+      @new-folder="openFolderModal('new', $event)"
+      @edit-folder="openFolderModal('edit', null, $event)"
+      @delete-folder="deleteFolder"
       @edit-label="openLabelEdit"
       @delete-label="deleteLabel"></app-sidebar>
     <div class="scrim" :class="{ show: store.sidebarOpen }" @click="store.sidebarOpen=false"></div>
 
     <!-- main -->
-    <main class="main">
-      <query-bar ref="qbar" :store="store" @save-query="openSave"></query-bar>
-      <div class="view-title" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:5px 12px;border-bottom:1px solid var(--line);background:var(--bg);">
-        <span class="hi" style="font-family:var(--crt);font-size:18px;line-height:1;">{{ store.view.title }}</span>
-        <span class="mut view-q" style="font-size:11px;" v-if="store.currentQuery()">› {{ store.currentQuery() }}</span>
-        <span v-if="health" class="view-health">
-          <template v-if="healthGaps.length">
-            <template v-for="(s,i) in healthGaps" :key="s.key">
-              <span v-if="i>0" class="hb-sep">│</span>
-              <span class="hb-chip" :class="['hb-'+s.key, { active: store.healthFilter===s.key }]" @click="toggleHealth(s.key)"><span class="hb-icon">{{ s.icon }}</span> {{ s.count }} {{ s.label }}</span>
+    <!-- day-open: the day agenda holds the right edge, so the item drawers shift inboard (e.6) -->
+    <main class="main" :class="{ 'day-open': store.dayDetailOpen }">
+      <!-- the '/' cross-type find takes over the main area in any app (2E §3.4) -->
+      <template v-if="store.searchActive">
+        <search-list ref="searchList" :store="store"></search-list>
+      </template>
+      <template v-else-if="store.view.kind==='calendar'">
+        <query-bar ref="qbar" :store="store" @save-query="openSave" @toggle-query="toggleQueryPane"></query-bar>
+        <!-- e.1: an event view renders as the agenda LIST when its display resolves to list
+             (pinned on the view, or inferred for a date-range query) — same mixed-list the
+             cross-type results use, so there's one result surface, not two -->
+        <div v-if="!store.showsGrid()" class="cal-head">
+          <span class="cal-title">{{ store.view.title }}</span>
+          <span class="mut" style="font-size:11px;">› {{ store.currentQuery() }}</span>
+          <span class="grow"></span>
+          <span v-if="store.gridAllowed()" class="qbtn" @click="store.toggleDisplay()" title="show as a calendar (v)">▦ calendar <span class="mut">v</span></span>
+        </div>
+        <calendar-view v-if="store.showsGrid()" ref="cal" :store="store"></calendar-view>
+        <mixed-list v-else ref="mixed" :store="store"></mixed-list>
+      </template>
+      <template v-else-if="store.view.kind==='notes'">
+        <query-bar ref="qbar" :store="store" @save-query="openSave" @toggle-query="toggleQueryPane"></query-bar>
+        <mixed-list v-if="store.isMixedView()" ref="mixed" :store="store"></mixed-list>
+        <notes-view v-else ref="notes" :store="store" @enter-nav="enterSidebar"></notes-view>
+      </template>
+      <template v-else>
+        <query-bar ref="qbar" :store="store" @save-query="openSave" @toggle-query="toggleQueryPane"></query-bar>
+        <div class="view-title" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:5px 12px;border-bottom:1px solid var(--line);background:var(--bg);">
+          <span class="hi" style="font-family:var(--crt);font-size:18px;line-height:1;">{{ store.view.title }}</span>
+          <span class="mut view-q" style="font-size:11px;" v-if="store.currentQuery()">› {{ store.currentQuery() }}</span>
+          <span v-if="health" class="view-health">
+            <template v-if="healthGaps.length">
+              <template v-for="(s,i) in healthGaps" :key="s.key">
+                <span v-if="i>0" class="hb-sep">│</span>
+                <span class="hb-chip" :class="['hb-'+s.key, { active: store.healthFilter===s.key }]" @click="toggleHealth(s.key)"><span class="hb-icon">{{ s.icon }}</span> {{ s.count }} {{ s.label }}</span>
+              </template>
+              <span v-if="store.healthFilter" class="hb-clear" @click="store.healthFilter=null" title="clear filter (esc)">✕</span>
             </template>
-            <span v-if="store.healthFilter" class="hb-clear" @click="store.healthFilter=null" title="clear filter (esc)">✕</span>
-          </template>
-          <span v-else class="hb-healthy"><span class="hb-check">✓</span> healthy</span>
-        </span>
-      </div>
-      <task-list ref="list" :store="store"></task-list>
+            <span v-else class="hb-healthy"><span class="hb-check">✓</span> healthy</span>
+          </span>
+          <span class="grow"></span>
+          <!-- e.5: once the grid honors type:, a dated-task view can BE a calendar. Same toggle
+               as the events header; hidden when the query includes notes (nothing to place). -->
+          <span v-if="store.gridAllowed()" class="qbtn" @click="store.toggleDisplay()"
+                :title="store.showsGrid() ? 'show as a list (v)' : 'show these on a calendar (v)'">
+            {{ store.showsGrid() ? '☰ list' : '▦ calendar' }} <span class="mut">v</span>
+          </span>
+        </div>
+        <calendar-view v-if="store.showsGrid()" ref="cal" :store="store"></calendar-view>
+        <task-list v-else-if="!store.isMixedView()" ref="list" :store="store"></task-list>
+        <mixed-list v-else ref="mixed" :store="store"></mixed-list>
+      </template>
+      <!-- The task drawer is always mounted and slides via .detail/.detail.hidden. The other three
+           are v-if, so they'd pop in with no animation — <Transition name="drawer"> gives them the
+           same slide, driven by the same .detail transform+transition. Each drawer now RE-SEEDS
+           itself on a store change (watchers) instead of being :key-remounted: a remount reads as
+           leave+enter, which would flicker the drawer on every J/K swap. -->
       <task-detail ref="detail" :store="store"></task-detail>
+      <transition name="drawer">
+        <event-detail v-if="store.eventDetailOpen" :store="store" @close="store.eventDetailOpen=false"></event-detail>
+      </transition>
+      <transition name="drawer">
+        <note-detail v-if="store.noteDetailOpen" :store="store" @close="store.noteDetailOpen=false"></note-detail>
+      </transition>
+      <transition name="drawer">
+        <day-detail v-if="store.dayDetailOpen" ref="dayDetail" :store="store" @shift-day="shiftDay"></day-detail>
+      </transition>
     </main>
 
     <!-- status bar -->
     <footer class="statusbar">
+      <span class="mobile-only qbtn" style="padding:1px 7px;" @click="store.deepNavOpen=!store.deepNavOpen" title="apps">&gt;</span>
       <template v-if="store.searchActive">
         <span class="search-prompt">/</span>
         <input ref="search" class="searchbar" v-model="store.searchTerm" spellcheck="false"
-               placeholder="search title + notes…"
+               placeholder="find tasks · events · notes…"
                @blur="commitSearch"
                @keydown.enter.stop.prevent="commitSearch" @keydown.esc.stop.prevent="commitSearch" />
         <span class="search-x" @mousedown.prevent="clearSearch" title="clear search">✕</span>
-        <span class="mut">{{ store.visibleRoots().length }} match{{ store.visibleRoots().length===1?'':'es' }}</span>
+        <span class="mut">{{ store.searchResults.length }} match{{ store.searchResults.length===1?'':'es' }}</span>
       </template>
       <template v-else>
         <span class="s-ready" @click="refreshApp" title="tap to refresh"><span class="spark">●</span> READY</span>
@@ -118,6 +179,8 @@
 
   <!-- modals -->
   <project-modal v-if="projectModal" :store="store" :model="projectModal" @close="projectModal=null"></project-modal>
+  <calendar-modal v-if="calendarModal" :store="store" :model="calendarModal" @close="calendarModal=null"></calendar-modal>
+  <folder-modal v-if="folderModal" :store="store" :model="folderModal" @close="folderModal=null"></folder-modal>
   <save-query-modal v-if="saveModal" :store="store" :model="saveModal" @close="saveModal=null"></save-query-modal>
   <label-modal v-if="labelModal" :store="store" :model="labelModal" @close="labelModal=null"></label-modal>
   <help-modal v-if="helpOpen" @close="helpOpen=false"></help-modal>
@@ -167,20 +230,33 @@
 
   <!-- toasts -->
   <div class="toasts">
-    <div v-for="t in store.toasts" :key="t.id" class="toast">{{ t.msg }}</div>
+    <div v-for="t in store.toasts" :key="t.id" class="toast" data-testid="toast">{{ t.msg }}</div>
   </div>
 </div>
 
 <script src="js/vue.global.prod.js"></script>
+<script src="js/glyphs.js"></script>
 <script src="js/recurrence.js"></script>
 <script src="js/query.js"></script>
+<script src="js/query-rebind.js"></script>
+<script src="js/create.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/data.js"></script>
 <script src="js/kbform.js"></script>
 <script src="js/sidebar.js"></script>
 <script src="js/tasklist.js"></script>
+<script src="js/mixed-list.js"></script>
+<script src="js/search-list.js"></script>
+<script src="js/md-field.js"></script>
+<script src="js/note-detail.js"></script>
+<script src="js/day-detail.js"></script>
 <script src="js/recurrence-builder.js"></script>
 <script src="js/task-detail.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/deep-nav.js"></script>
+<script src="js/event-editor.js"></script>
+<script src="js/linked-items.js"></script>
+<!-- calendar.js + notes.js are lazy-loaded on first visit to their app (see app init) -->
 <script src="js/query-bar.js"></script>
 <script src="js/command-palette.js"></script>
 <script src="js/modals.js"></script>
@@ -190,15 +266,33 @@
 <script src="js/backup-screen.js"></script>
 <script src="js/sort-modal.js"></script>
 <script>
-const { createApp } = Vue;
+const { createApp, defineAsyncComponent } = Vue;
+// Lazy-load a module script once (for async route modules); resolves on execute.
+const _scriptCache = {};
+function loadScript(src){
+  if(!_scriptCache[src]) _scriptCache[src] = new Promise((res, rej)=>{
+    const s=document.createElement('script'); s.src=src; s.onload=res;
+    // drop the cached promise on failure so a later visit retries (don't strand the app blank)
+    s.onerror=()=>{ delete _scriptCache[src]; rej(new Error('failed to load '+src)); };
+    document.head.appendChild(s);
+  });
+  return _scriptCache[src];
+}
+// markdown-it + our renderer, loaded once and shared. NOT notes-only: task/event notes
+// render markdown too (§4.3, via md-field), so anything that renders a body pulls this in.
+window.loadMarkdown = () => loadScript('js/markdown-it.min.js')
+  .then(()=>loadScript('js/markdown-it-mark.min.js'))
+  .then(()=>loadScript('js/markdown-render.js'));
 // Endpoint base per store array (granular API).
-const SYNC_EP = { tasks:'/api/tasks', projects:'/api/projects', labels:'/api/labels', savedQueries:'/api/saved-queries' };
+const SYNC_EP = { tasks:'/api/tasks', projects:'/api/projects', calendars:'/api/calendars', folders:'/api/folders', labels:'/api/labels', savedQueries:'/api/saved-queries' };
 
 const app = createApp({
   data(){ return {
     store: window.store,
     paletteOpen: false,
     projectModal: null,
+    calendarModal: null,
+    folderModal: null,
     saveModal: null,
     clock: '',
     selIndex: 0,
@@ -213,24 +307,104 @@ const app = createApp({
     loaded: false,   // true once we've successfully loaded server state; gates writes
   }; },
   computed: {
+    // is the calendar grid the surface on screen? (watched above to close the day drawer with it)
+    gridShowing(){ return this.store.showsGrid(); },
     today(){ return new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'2-digit'}); },
     // project health bar (t_867) — rendered on the view-title row in project views
     healthProject(){ return (!this.store.searchActive && this.store.view.kind==='project') ? this.store.projectById(this.store.view.id) : null; },
     health(){ const p=this.healthProject; if(!p) return null; const en=Array.isArray(p.health)?p.health:[]; return en.length ? this.store.projectHealth(p.id) : null; },
-    healthGaps(){ return this.health ? this.health.filter(s=>s.count>0) : []; }
+    healthGaps(){ return this.health ? this.health.filter(s=>s.count>0) : []; },
+    // which "app" the current view belongs to — drives the deep-nav highlight + the URL
+    currentApp(){ const k=this.store.view.kind; return k==='calendar'?'events':k==='notes'?'notes':'tasks'; }
   },
   watch: {
+    // The day drawer belongs to the CALENDAR GRID. If the grid stops being the surface on screen
+    // (the display flips to the agenda list, the query broadens to a mixed list, the app changes),
+    // the drawer must go with it — otherwise it hangs around over a list it has nothing to do with,
+    // and its keys are unreachable because they're gated on showsGrid() (audit e.6).
+    gridShowing(v){ if(!v && this.store.dayDetailOpen) this.store.dayDetailOpen = false; },
     // the detail drawer is its own captured pane while open; restore the list when it closes
     'store.detailOpen'(v){
-      if(v){ this.store.focusPane='detail'; }
+      // the task drawer shares the right edge with the event/note drawers — opening it
+      // closes those (single-open invariant; the openers do the same in reverse).
+      if(v){ this.store.eventDetailOpen=false; this.store.noteDetailOpen=false; this.store.focusPane='detail'; }
       else if(this.store.focusPane==='detail'){ this.store.focusPane='list'; }
+      // closing the drawer on an unnamed DRAFT throws it away — a stray `i` must not leave an
+      // 'untitled' task behind (e.6). save() commits it first, so this is a no-op on a real save.
+      if(!v) this.store.discardDraftTask();
     },
     // the shell (with its bars) only exists once logged in — (re)attach the bar-height
     // observer when it mounts so the mobile overlays track the live bar sizes
-    'store.currentUser'(u){ if(u) this.$nextTick(()=>this._observeBars && this._observeBars()); }
+    'store.currentUser'(u){ if(u) this.$nextTick(()=>this._observeBars && this._observeBars()); },
+    // keep the URL hash in sync with the active app (bookmarkable + back/forward work)
+    currentApp(app){ this.syncHash(app); }
   },
   methods: {
     toggleHealth(key){ this.store.healthFilter = this.store.healthFilter===key ? null : key; },
+    // switch between the calendar screen and the last task view (or the top saved view)
+    toggleCalendar(){
+      if(this.store.view.kind==='calendar'){ const top=this.store.savedQueries[0]; if(top) this.store.openQueryView(top, 'tasks'); }
+      else this.store.openCalendar();
+    },
+    // ---- app router (hash ↔ active app). app-level only: #/tasks #/events #/notes,
+    // so a refresh lands back on the same app and back/forward move between apps.
+    syncHash(app){ const want='#/'+app; if(location.hash!==want) location.hash=want; },
+    routeFromHash(){
+      const m=(location.hash||'').match(/^#\/(tasks|events|notes)/);
+      const app=m?m[1]:'tasks';
+      if(app===this.currentApp) return;                 // already there → no-op (also breaks the loop)
+      if(app==='events') this.store.openCalendar();
+      else if(app==='notes') this.store.openNotes();
+      else { const top=this.store.savedQueries[0]; if(top) this.store.openQueryView(top, 'tasks'); }
+      // setView's dirty-guard may defer/cancel the switch (async confirm); re-assert the
+      // hash to whatever the view actually is now, so Back+cancel doesn't desync the URL.
+      this.syncHash(this.currentApp);
+    },
+    // N: toggle the deep-nav rail AND the keyboard cursor in it (2E §4.4). First N opens +
+    // focuses; a second N closes + unfocuses (the "closing again = N twice" the doc describes).
+    // If the rail is showing but NOT focused, N focuses it (rather than closing).
+    toggleDeepNav(){
+      const mobile = window.matchMedia('(max-width: 860px)').matches;
+      const showing = mobile ? this.store.deepNavOpen : !this.store.deepNavCollapsed;
+      if(showing && this.store.focusPane==='deepnav'){
+        if(mobile) this.store.deepNavOpen=false; else this.store.deepNavCollapsed=true;
+        this.store.focusPane='list';
+      } else {
+        this.enterDeepNav();
+      }
+    },
+    // reveal the rail + drop the keyboard cursor onto the current app
+    enterDeepNav(){
+      this.store.deepNavCollapsed=false;
+      if(window.matchMedia('(max-width: 860px)').matches) this.store.deepNavOpen=true;
+      const i=['tasks','events','notes'].indexOf(this.currentApp);
+      this.store.deepNavCursor = i<0 ? 0 : i;
+      this.store.focusPane='deepnav';
+    },
+    exitDeepNav(){ this.store.focusPane='list'; },   // Esc: drop focus, leave the rail visible
+    switchApp(app){
+      if(app===this.currentApp) return;   // already here → Enter just dives into the nav (no view reset)
+      if(app==='tasks'){ const top=this.store.savedQueries[0]; if(top) this.store.openQueryView(top, 'tasks'); }
+      else if(app==='events') this.store.openCalendar();
+      else if(app==='notes') this.store.openNotes();
+    },
+    // keyboard while the app rail is focused: j/k between apps · enter/space switch + dive
+    // into that app's nav · l dive into the active app's nav (rail stays open) · esc drops focus
+    deepNavKey(e){
+      const apps=['tasks','events','notes'];
+      switch(e.key){
+        case 'j': case 'ArrowDown': e.preventDefault(); this.store.deepNavCursor=Math.min(apps.length-1, this.store.deepNavCursor+1); break;
+        case 'k': case 'ArrowUp':   e.preventDefault(); this.store.deepNavCursor=Math.max(0, this.store.deepNavCursor-1); break;
+        case 'Enter': case ' ': {   // switch to the cursor's app, then land at the top of its nav
+          e.preventDefault();
+          this.switchApp(apps[this.store.deepNavCursor]);
+          this.$nextTick(()=>this.enterSidebar());
+          break;
+        }
+        case 'l': case 'ArrowRight': e.preventDefault(); this.enterSidebar(); break;   // into the active app's nav (no switch)
+        case 'Escape': e.preventDefault(); this.exitDeepNav(); break;
+      }
+    },
     openPalette(){ this.paletteOpen=true; },
     // tap "READY" to reload — useful as a PWA where there's no refresh button. Flush
     // any pending debounced save first so a refresh never drops unsaved edits.
@@ -241,6 +415,39 @@ const app = createApp({
     newTask(){ this.$nextTick(()=>{ this.$refs.list && this.$refs.list.focusAdd(); }); },
     openProjectModal(mode, parentId, project){
       this.projectModal = { mode, parentId: parentId||null, project: project||null };
+    },
+    openCalendarModal(mode, calendar){
+      this.calendarModal = { mode, calendar: calendar||null };
+    },
+    // H/L in the open agenda = previous / next day (e.8). The CALENDAR owns the cursor, so we
+    // move IT and then re-point the drawer — moving only store.dayDetailYmd would strand the
+    // grid cursor on the old date (Esc would drop you back on the wrong day). moveCursor()
+    // already handles a month boundary: it syncs year/month and reloads that month's events.
+    shiftDay(d){
+      const cal=this.$refs.cal; if(!cal) return;
+      cal.moveCursor(d);
+      cal.openDay();          // dayDetailYmd = the new cursor → the drawer's ymd watcher resets it
+    },
+    openFolderModal(mode, parentId, folder){
+      this.folderModal = { mode, parentId: parentId||null, folder: folder||null };
+    },
+    async deleteCalendar(c){
+      if(await this.store.askConfirm('Delete calendar "'+c.name+'"? Its events will be archived.')){
+        const ok = await this.store.softDeleteCalendar(c.id);
+        if(ok){
+          if(this.store.view.kind==='calendar' && this.store.view.calendarId===c.id) this.store.openCalendar();
+          this.store.toast('✓ deleted');
+        }
+      }
+    },
+    async deleteFolder(f){
+      if(await this.store.askConfirm('Delete folder "'+f.name+'"? (only works when it\'s empty)')){
+        const ok = await this.store.softDeleteFolder(f.id);
+        if(ok){
+          if(this.store.view.kind==='notes' && this.store.view.folderId===f.id) this.store.openNotes();
+          this.store.toast('✓ deleted');
+        }
+      }
     },
     openSave(query){ this.saveModal = { mode:'new', query: query||'' }; },
     openViewEdit(sv){ this.saveModal = { mode:'edit', view: sv }; },
@@ -294,16 +501,23 @@ const app = createApp({
       this.promptState=null; r(val || null);
     },
     openAccount(){ this.accountOpen = true; },
-    // ---- search ('/'): live free-text across all tasks ----
-    openSearch(){ this.store.searchActive = true; this.$nextTick(()=>{ this.$refs.search && this.$refs.search.focus(); }); },
-    commitSearch(){   // Enter: drop into the results list, cursor on the first match
-      const rows = this.store.visibleRows();
-      if(rows.length) this.store.selectedTaskId = rows[0].id;
+    // ---- search ('/'): text-only live find across tasks + events + notes (§3.4) ----
+    openSearch(){ this.store.searchActive = true; this.store.runSearch(); this.$nextTick(()=>{ this.$refs.search && this.$refs.search.focus(); }); },
+    commitSearch(){   // Enter / blur: leave the input so j/k drive the results list
+      if(this.$refs.searchList) this.$refs.searchList.sel = 0;
       if(this.$refs.search) this.$refs.search.blur();
     },
     clearSearch(){   // Esc: forget the term and restore the underlying view
-      this.store.searchActive = false; this.store.searchTerm = '';
+      this.store.searchActive = false; this.store.searchTerm = ''; this.store.searchResults = [];
       if(this.$refs.search) this.$refs.search.blur();
+    },
+    // j/k through the find results · enter opens the hit · / re-focuses the input
+    searchKey(e){
+      const s=this.$refs.searchList; if(!s) return;
+      if(e.key==='j'||e.key==='ArrowDown'){ e.preventDefault(); s.kbMove(1); }
+      else if(e.key==='k'||e.key==='ArrowUp'){ e.preventDefault(); s.kbMove(-1); }
+      else if(e.key==='Enter'){ e.preventDefault(); s.kbActivate(); }
+      else if(e.key==='i'){ e.preventDefault(); this.$refs.search && this.$refs.search.focus(); }
     },
     // ---- keyboard ----
     onKey(e){
@@ -329,7 +543,7 @@ const app = createApp({
       }
       if(this.promptState) return;   // the prompt input handles its own enter/esc
       // KbForm-driven modals are takeovers: each owns the keyboard while open
-      if(this.accountOpen || this.backupOpen || this.sortOpen || this.projectModal || this.saveModal || this.labelModal || this.helpOpen) return;
+      if(this.accountOpen || this.backupOpen || this.sortOpen || this.projectModal || this.saveModal || this.labelModal || this.helpOpen || this.store.eventDetailOpen || this.store.noteDetailOpen) return;
       const tag=(e.target.tagName||'').toLowerCase();
       const typing = tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable;
       // ⌘K / Ctrl+K everywhere
@@ -346,6 +560,10 @@ const app = createApp({
           if(this.$refs.detail && (this.$refs.detail.recurActive || this.$refs.detail.subMoveId)){ this.$refs.detail.kbKey(e); return; }
           const a=document.activeElement; if(a && a.blur) a.blur(); this.store.detailOpen=false; return;
         }
+        // the day-schedule drawer is closable from ANY state (audit e.6). It used to be reachable
+        // only through dayKey, which is gated on showsGrid() — so if the grid stopped being the
+        // active surface, Esc could never close it and the ✕ was the only way out.
+        if(this.store.dayDetailOpen){ e.preventDefault(); this.store.dayDetailOpen=false; return; }
         // a task detail opened from search closes first (above); a second Esc clears the search
         if(this.store.searchActive){ e.preventDefault(); this.clearSearch(); return; }
         // clear an active project health-bar filter (list-level transient, like search)
@@ -367,8 +585,10 @@ const app = createApp({
         const inRecur = this.$refs.detail && this.$refs.detail.recurActive;
         const inSubMove = this.$refs.detail && this.$refs.detail.subMoveId;
         if(!inRecur && !inSubMove){
-          if(e.key==='J'){ e.preventDefault(); this.detailSwap(1); return; }
-          if(e.key==='K'){ e.preventDefault(); this.detailSwap(-1); return; }
+          // J/K walk the list UNDER the drawer via the shared cursor (a.2) — so a task shown from
+          // a MIXED list swaps through that list, not through the task tree behind it
+          if(e.key==='J'){ e.preventDefault(); this.store.listSwap(1); return; }
+          if(e.key==='K'){ e.preventDefault(); this.store.listSwap(-1); return; }
           if(e.key==='u'){ e.preventDefault(); this.$refs.detail && this.$refs.detail.duplicate(); return; }
           if(e.key==='d'){ e.preventDefault(); this.$refs.detail && this.$refs.detail.del(); return; }
         }
@@ -382,19 +602,81 @@ const app = createApp({
       if(e.key==='@' && !typing){ e.preventDefault(); this.openAccount(); return; }
       // 'S' (shift+s) opens the sort-preferences popup
       if(e.key==='S' && !typing){ e.preventDefault(); this.sortOpen=true; return; }
+      // 'C' (shift+c) toggles the calendar screen
+      if(e.key==='C' && !typing){ e.preventDefault(); this.toggleCalendar(); return; }
+      // N toggles the deep-nav app rail (works from any app, like C); n stays the in-app nav
+      if(e.key==='N' && !typing){ e.preventDefault(); this.toggleDeepNav(); return; }
       // '/' opens the bottom-bar search (free-text across all tasks)
       if(e.key==='/' && !typing){ e.preventDefault(); this.openSearch(); return; }
       if(typing || this.paletteOpen) return;
 
-      // filter builder: F collapses the panel, f focuses into it (from any window)
-      if(e.key==='F'){ e.preventDefault(); this.toggleBuilder(); return; }
-      if(e.key==='f'){ e.preventDefault(); this.toggleFilterFocus(); return; }
-      // n toggles the sidebar nav column (parallel to f/F for the filter)
+      // '/' cross-type find: once the term is committed (input blurred), j/k/enter drive
+      // the results list — takes precedence over every app's own keys.
+      if(this.store.searchActive){ this.searchKey(e); return; }
+
+      // The query builder + the focused panes work in EVERY app (Tasks/Events/Notes),
+      // so these are handled before the per-app native keys below.
+      // query: Q collapses the builder panel, q focuses into it (from any window)
+      if(e.key==='Q'){ e.preventDefault(); this.toggleBuilder(); return; }
+      if(e.key==='q'){ e.preventDefault(); this.toggleQueryFocus(); return; }
+      // n toggles the sidebar nav column (parallel to q/Q for the query builder)
       if(e.key==='n'){ e.preventDefault(); this.toggleNav(); return; }
 
-      // each pane has its own navigation while focused
+      // each pane has its own navigation while focused (app rail · per-app nav · query bar)
+      if(this.store.focusPane==='deepnav'){ this.deepNavKey(e); return; }
       if(this.store.focusPane==='side'){ this.sidebarKey(e); return; }
-      if(this.store.focusPane==='filter'){ this.filterKey(e); return; }
+      if(this.store.focusPane==='query'){ this.queryKey(e); return; }
+
+      // 'v' flips between the calendar grid and the list — on Events AND Tasks, since a dated
+      // task view can be a calendar too (e.5). Presentation, not a query: `u` pins it to a view.
+      if(e.key==='v' && !this.store.dayDetailOpen &&
+         (this.store.currentApp()==='events' || this.store.currentApp()==='tasks')){
+        e.preventDefault(); this.store.toggleDisplay(); return;
+      }
+      // the grid owns the keys whenever it's the thing on screen (either app) — see below
+      if(!this.store.showsGrid()){
+        // a query broadened beyond the app's own type → the flat mixed list;
+        // an events view whose display resolves to 'list' renders there too (e.1)
+        if(this.store.isMixedView() || this.store.eventsAsList()){ this.mixedKey(e); return; }
+      }
+
+      // calendar: a focused-day cursor. Routed through here (not a private listener) so it
+      // inherits the modal gate above — keys don't leak to the grid behind an open menu.
+      if(this.store.showsGrid()){
+        // the day-schedule drawer (§4.2) owns the keys while it's open (an event opened FROM
+        // it makes onKey bail at the modal-takeover guard above, so the event drawer wins; on
+        // Esc the event closes and the day drawer resumes here)
+        if(this.store.dayDetailOpen){ const dd=this.$refs.dayDetail; if(dd) dd.dayKey(e); return; }
+        const cal=this.$refs.cal;
+        if(cal){
+          // `I` = the FULL editor. It creates the thing the app you're IN is about: an event on
+          // Events, a task due that day on Tasks (e.5 — the grid is a tasks surface now, so it
+          // must not make an event there). It also OPENS THE DAY DRAWER for that day (e.6): when
+          // you're dropping something onto a day you want to see what's already scheduled there.
+          //
+          // This used to be `i`. `i` now focuses the QUICK-ADD BAR (e.9), matching tasks and notes
+          // where `i` is always the bar — lowercase is the quick way, uppercase is the big version,
+          // the same split j/J · h/H · e/E already use here. The drawer is still the only place a
+          // TIMED event can be made (the bar has no time token yet), so it keeps a key of its own.
+          const create = ()=>{
+            cal.openDay();                                   // day context first, so it's behind the new item
+            if(this.store.currentApp()==='tasks') this.store.startDraftTask({ due:cal.cursor });   // draft, not a persisted 'untitled' (e.6)
+            else cal.newEvent(cal.cursor);
+          };
+          const map={ h:()=>cal.moveCursor(-1), l:()=>cal.moveCursor(1), k:()=>cal.moveCursor(-7), j:()=>cal.moveCursor(7),
+            H:()=>cal.moveMonth(-1), L:()=>cal.moveMonth(1), K:()=>cal.moveMonthKeepCell(-1), J:()=>cal.moveMonthKeepCell(1),
+            // e = the day's agenda · E = the agenda PLUS the day's item, when the view you're
+            // looking at has exactly one on that day (e.7). `e` used to be dead here: it was
+            // reserved for "this item's detail" (§4.2), but the grid's cursor is a DAY, not an item.
+            i:()=>cal.focusAdd(), I:create,                                     // i = quick-add bar · I = full editor (e.9)
+            e:()=>cal.openDay(), E:()=>cal.openDayItem(), t:()=>cal.today() };   // t = jump to today (audit e.4)
+          const fn=map[e.key]; if(fn){ e.preventDefault(); fn(); }
+        }
+        return;
+      }
+      // notes: routed to the module so it inherits this handler's modal/typing gate
+      // (insert-mode typing already returned at line 444; this fires only in normal/list)
+      if(this.store.view.kind==='notes'){ if(this.$refs.notes && this.$refs.notes.onKey) this.$refs.notes.onKey(e); return; }
 
       // subtask move mode (m): j/k reorder the held subtask among its siblings;
       // m/enter/esc drop it. selectedTaskId stays on it, so .sel / .moving track it.
@@ -469,14 +751,9 @@ const app = createApp({
     scrollSelIntoView(){
       this.$nextTick(()=>{ const el=document.querySelector('.list-wrap .task.sel'); if(el) el.scrollIntoView({block:'nearest'}); });
     },
-    // J/K from the captured detail pane: swap to the prev/next visible task, keeping the drawer open
-    detailSwap(dir){
-      const rows=this.store.visibleRows();
-      let idx=rows.findIndex(t=>t.id===this.store.selectedTaskId);
-      if(idx<0) return;
-      idx=Math.max(0, Math.min(rows.length-1, idx+dir));
-      if(rows[idx]){ this.store.selectedTaskId=rows[idx].id; this.scrollSelIntoView(); }
-    },
+    // (detailSwap removed — J/K now go through store.listSwap, the one shared list cursor (a.2),
+    //  which the task list and the mixed list each register. TaskList registers the logic that
+    //  used to live here.)
     // ---- sidebar keyboard navigation ----
     enterSidebar(){
       this.store.navCollapsed=false;   // h/← always reveals the nav before entering
@@ -487,9 +764,19 @@ const app = createApp({
       let id=this.store.sideFocusId;
       if(!items.some(i=>i.id===id)){
         const v=this.store.view;
+        const ck=this.store.categoryKind();
+        // are we on a category view (a project / a specific calendar / a specific folder)?
+        const onCategory=(v.kind==='project') || (v.kind==='calendar'&&v.calendarId) || (v.kind==='notes'&&v.folderId);
+        const catId=v.calendarId ?? v.folderId ?? v.id;
+        // the UNFILTERED events view (calendarId null) is the "all calendars" row (e.10) — it's
+        // not a category view, so match it explicitly or `h` lands on a query row instead
+        const onAllCalendars = v.kind==='calendar' && !v.calendarId;
         const cur=items.find(i =>
-          (v.kind==='project' && i.kind==='project' && i.id===v.id) ||
-          (v.kind==='query'   && i.kind!=='project' && i.kind!=='head' && i.id===v.id));
+          // the synthetic rows carry their own kind (n.16 / e.10), so match them by id as well —
+          // otherwise `h` out of one lands on the first query row instead of on the row itself
+          (onCategory && (i.kind===ck || i.kind==='baseFolder') && i.id===catId) ||
+          (onAllCalendars && i.kind==='allCalendars') ||
+          (!onCategory && !onAllCalendars && i.kind==='query' && i.id===v.id));   // a saved view (any app) by id
         id=cur ? cur.id : (items.find(i=>i.kind!=='head') || items[0]).id;
       }
       this.store.sideFocusId=id;
@@ -498,45 +785,76 @@ const app = createApp({
       this.scrollSideIntoView();
     },
     exitSidebar(){ this.store.focusPane='list'; this.store.sidebarOpen=false; this.store.moveId=null; },
-    // show/hide the whole sidebar nav column; if we hide it while focused there,
-    // drop keyboard focus back to the task list
+    // n = GO TO the app nav; n again (while you're in it) = close it. Same model as N/the app
+    // rail (toggleDeepNav), so both left-hand drawers behave identically (audit a.6).
+    //
+    // The old rule branched on VISIBLE vs HIDDEN, so `n` on a visible-but-unfocused nav (the
+    // normal state) just collapsed it — you had to press n twice to land in it. Branching on
+    // "am I IN it?" makes one press do the useful thing and the second press close it.
+    // Entering also lands the cursor on the view/project/calendar/folder you're currently on.
     toggleNav(){
-      if(this.store.navCollapsed){
-        // expanding: reveal and drop the cursor into the nav (like h/←)
-        this.enterSidebar();
+      const mobile = window.matchMedia('(max-width: 860px)').matches;
+      const showing = mobile ? this.store.sidebarOpen : !this.store.navCollapsed;
+      if(showing && this.store.focusPane==='side'){
+        if(mobile) this.store.sidebarOpen = false; else this.store.navCollapsed = true;
+        this.exitSidebar();                 // hand the keyboard back to the list
       } else {
-        // collapsing: hide and, if we were navigating it, fall back to the list
-        this.store.navCollapsed = true;
-        this.store.sidebarOpen = false;
-        if(this.store.focusPane==='side') this.exitSidebar();
+        this.enterSidebar();                // reveal if hidden, then drop the cursor in
       }
     },
-    // ---- filter builder keyboard navigation ----
-    enterFilter(){
+    // ---- query builder keyboard navigation ----
+    enterQuery(){
       this.store.builderOpen=true;
-      this.store.focusPane='filter';
-      this.$nextTick(()=>{ const qb=this.$refs.qbar; if(qb){ qb.kbInit(); qb.kbFocusRow('status'); } });
+      this.store.focusPane='query';
+      this.$nextTick(()=>{ const qb=this.$refs.qbar; if(qb){ qb.kbInit(); qb.kbFocusRow('type'); } });
     },
-    exitFilter(){
+    exitQuery(){
       this.store.focusPane='list';
       if(!this.store.selectedTaskId){ const r=this.store.visibleRoots(); if(r.length) this.store.selectedTaskId=r[0].id; }
     },
-    toggleFilterFocus(){ if(this.store.focusPane==='filter') this.exitFilter(); else this.enterFilter(); },
+    toggleQueryFocus(){ if(this.store.focusPane==='query') this.exitQuery(); else this.enterQuery(); },
+    // the ⊞ query button (mouse) — the same action as the q key, routed through enterQuery so the
+    // pane actually gets focus and its save/update/clear controls appear (audit a.3). Closing also
+    // collapses the builder, since exitQuery alone would leave the panel open but its buttons gone.
+    toggleQueryPane(){
+      if(this.store.focusPane==='query' || this.store.builderOpen){
+        this.store.builderOpen=false;
+        if(this.store.focusPane==='query') this.exitQuery();
+      } else this.enterQuery();
+    },
     toggleBuilder(){
       this.store.builderOpen=!this.store.builderOpen;
-      if(!this.store.builderOpen && this.store.focusPane==='filter') this.exitFilter();
+      if(!this.store.builderOpen && this.store.focusPane==='query') this.exitQuery();
     },
-    filterKey(e){
+    queryKey(e){
       const qb=this.$refs.qbar; if(!qb) return;
       switch(e.key){
         case 'i': e.preventDefault(); qb.focus(); return;        // into the raw query editor (from anywhere)
-        case 's': e.preventDefault(); qb.save(); return;         // save as smart view
-        case 'x': e.preventDefault(); qb.clearQuery(); return;   // clear the query
-        case 'Escape': e.preventDefault(); this.exitFilter(); return;
-        case 'Enter': e.preventDefault(); this.exitFilter(); return;  // apply & view results
+        case 's': e.preventDefault(); qb.save(); return;         // save as a NEW smart view
+        case 'u': e.preventDefault(); qb.update(); return;       // update the active saved view in place
+        // c = clear. Safe to reuse here: the tasks list's own `c` (show/hide completed) lives in
+        // the focusPane==='list' branch, and this pane returns long before that.
+        case 'c': e.preventDefault(); qb.clearQuery(); return;   // clear the query
+        case 'Escape': e.preventDefault(); this.exitQuery(); return;
+        case 'Enter': e.preventDefault(); this.exitQuery(); return;  // apply & view results
+      }
+      // h at the LEFT EDGE of a chip group walks out into the app nav — the same "h at the edge"
+      // rule the task list and the recurrence sub-pane use. Anywhere else, h still moves a cell.
+      if((e.key==='h' || e.key==='ArrowLeft') && qb.kbCell===0){
+        e.preventDefault(); this.enterSidebar(); return;
       }
       // j/k between groups · h/l within a group · space toggles — handled by KbForm
       qb.kbKey(e);
+    },
+    // mixed-type results list keyboard (first cut; full parity + drawers are §4)
+    mixedKey(e){
+      const m=this.$refs.mixed; if(!m) return;
+      switch(e.key){
+        case 'j': case 'ArrowDown': e.preventDefault(); m.kbMove(1); break;
+        case 'k': case 'ArrowUp':   e.preventDefault(); m.kbMove(-1); break;
+        case 'l': case 'ArrowRight': case 'e': case 'Enter': e.preventDefault(); m.kbActivate(); break;
+        case 'h': case 'ArrowLeft': e.preventDefault(); this.enterSidebar(); break;
+      }
     },
     sidebarKey(e){
       const items=this.store.sideItems();
@@ -544,13 +862,39 @@ const app = createApp({
       let idx=items.findIndex(i=>i.id===this.store.sideFocusId);
       if(idx<0) idx=0;
 
+      // the per-app "category" kind (project / calendar / folder) + a test for it
+      const cat = this.store.categoryKind();
+      const isCat = (k)=> k==='project' || k==='calendar' || k==='folder';
+      // The two SYNTHETIC rows — the vault's base directory (n.16) and "all calendars" (e.10) —
+      // are not category rows: they can't be renamed here (each is a preference), deleted (one is
+      // the vault, the other is the absence of a filter), given children, or reordered. Their
+      // verbs point at preferences instead of dying silently. Their own `kind` is what makes the
+      // category verbs inert by construction rather than by a guard someone can forget.
+      const SYNTH = { baseFolder:'folder', allCalendars:'calendar' };
+      const isBase = (it)=> !!it && !!SYNTH[it.kind];
+      const baseToast = (it)=> this.store.toast(
+        (it && it.kind==='allCalendars' ? 'all calendars' : 'base directory')
+        + ' — rename or hide it in preferences (@)');
       // which section the focused row belongs to — drives a/A "add the right kind"
-      const sectionOf=(it)=> !it ? 'project'
+      const sectionOf=(it)=> !it ? cat
         : it.kind==='head'  ? it.section
         : it.kind==='query' ? 'query'
         : it.kind==='label' ? 'label'
-        : 'project';
+        : SYNTH[it.kind] || it.kind;   // a synthetic row lives in its category's section; a/A make a REAL one
       const addLabelPrompt=()=> this.store.askPrompt('New label name').then(nm=>{ if(nm && nm.trim()) this.store.addLabel(nm.trim()); });
+      // open the new/edit modal for whichever category kind is given
+      const newCat=(kind, parentId)=> kind==='calendar' ? this.openCalendarModal('new')
+        : kind==='folder' ? this.openFolderModal('new', parentId)
+        : this.openProjectModal('new', parentId);
+      const editCat=(kind, node)=> kind==='calendar' ? this.openCalendarModal('edit', node)
+        : kind==='folder' ? this.openFolderModal('edit', null, node)
+        : this.openProjectModal('edit', null, node);
+      const deleteCat=(kind, node)=> kind==='calendar' ? this.deleteCalendar(node)
+        : kind==='folder' ? this.deleteFolder(node)
+        : this.deleteProject(node);
+      const moveCat=(kind, node, dir)=> kind==='calendar' ? this.store.moveCalendar(node, dir)
+        : kind==='folder' ? this.store.moveFolder(node, dir)
+        : this.store.moveProject(node, dir);
 
       // move mode: j/k reorder the held item; m/enter/esc drop it
       if(this.store.moveId){
@@ -558,7 +902,7 @@ const app = createApp({
         const reorder=(dir)=>{
           if(!moved) return;
           if(moved.kind==='query') this.store.moveView(moved.ref, dir);
-          else if(moved.kind==='project') this.store.moveProject(moved.ref, dir);
+          else if(isCat(moved.kind)) moveCat(moved.kind, moved.ref, dir);
           this.scrollSideIntoView();
         };
         switch(e.key){
@@ -587,13 +931,14 @@ const app = createApp({
           e.preventDefault();
           const it=items[idx];
           if(it && it.kind==='head'){ if(this.store.navSections[it.section]) this.toggleSection(it.section); break; }  // l expands a collapsed section
-          if(it && it.kind==='project' && it.ref.collapsed && this.store.childProjects(it.ref.id).length){ it.ref.collapsed=false; break; }  // expand a collapsed parent
+          if(it && isCat(it.kind) && it.ref.collapsed && this.store.catChildren(it.kind, it.ref.id).length){ it.ref.collapsed=false; break; }  // expand a collapsed parent
           this.store.openSideItem(it); this.exitSidebar(); break;
         }
         case 'e': {
           e.preventDefault();
           const it=items[idx];
-          if(it.kind==='project') this.openProjectModal('edit', null, it.ref);
+          if(isBase(it)) baseToast(it);                      // renamed in preferences, not here
+          else if(isCat(it.kind)) editCat(it.kind, it.ref);
           else if(it.kind==='query') this.openViewEdit(it.ref);
           else if(it.kind==='label') this.openLabelEdit(it.ref);
           break;
@@ -601,9 +946,10 @@ const app = createApp({
         case 'x': {   // delete the focused view / label / project
           e.preventDefault();
           const it=items[idx];
-          if(it.kind==='query') this.deleteView(it.ref);
+          if(isBase(it)) baseToast(it);                      // you can't delete the vault
+          else if(it.kind==='query') this.deleteView(it.ref);
           else if(it.kind==='label') this.deleteLabel(it.ref);
-          else if(it.kind==='project') this.deleteProject(it.ref);
+          else if(isCat(it.kind)) deleteCat(it.kind, it.ref);
           break;
         }
         case 'u': {   // dUplicate the focused project
@@ -627,8 +973,14 @@ const app = createApp({
           const sect=sectionOf(it);
           if(sect==='query') this.openSave('');
           else if(sect==='label') addLabelPrompt();
-          else if(it && it.kind==='project') this.openProjectModal('new', it.ref.id);  // subproject under the focused project
-          else this.openProjectModal('new', null);                                     // projects header → top-level
+          // `a` = "add a child HERE", and the base directory can't have children — every folder is
+          // already inside it, so a child of the root just IS a top-level folder. Say so; `A` does it.
+          else if(isBase(it)) this.store.toast(it.kind==='allCalendars'
+            ? 'all calendars isn’t a calendar — A adds a real one'
+            : 'the base directory can’t hold folders — A adds a top-level one');
+          // a nestable category row → add a child under it; else top-level of the section kind
+          else if(it && (it.kind==='project'||it.kind==='folder')) newCat(it.kind, it.ref.id);
+          else newCat(sect, null);
           break;
         }
         case 'A': {   // add a top-level item in the focused section
@@ -636,13 +988,13 @@ const app = createApp({
           const sect=sectionOf(items[idx]);
           if(sect==='query') this.openSave('');
           else if(sect==='label') addLabelPrompt();
-          else this.openProjectModal('new', null);
+          else newCat(sect, null);
           break;
         }
         case 'm': {   // enter move mode on the focused view / project
           e.preventDefault();
           const it=items[idx];
-          if(it && (it.kind==='query' || it.kind==='project')){
+          if(it && (it.kind==='query' || isCat(it.kind))){
             this.store.sideFocusId=it.id; this.store.moveId=it.id;
             this.store.toast('↕ move mode · j/k reorder · esc to drop');
           }
@@ -651,20 +1003,30 @@ const app = createApp({
         case 'Tab': {  // collapse / expand the focused item's section
           e.preventDefault();
           const it=items[idx];
-          if(it) this.toggleSection(it.kind==='head' ? it.section : it.kind);
+          if(it) this.toggleSection(sectionOf(it));   // a synthetic row belongs to its category's section, not a section of its own
           break;
         }
         case 'h': case 'ArrowLeft': {
-          // walk up / collapse the tree — never leaves the nav (use esc for that)
+          // Walk up / collapse the tree; h only leaves for the app rail when there is NOTHING
+          // LEFT TO COLLAPSE (§4.4). On a section header that means: collapse the section first,
+          // and only jump out on a second h, once it's already collapsed (audit n.10). This is
+          // the mirror of `case 'l'` above, which expands a collapsed header.
           e.preventDefault();
           const it=items[idx];
           if(!it) break;
-          if(it.kind==='head'){ this.toggleSection(it.section); break; }   // toggle the section (like Tab)
-          if(it.kind==='project'){
-            if(!it.ref.collapsed && this.store.childProjects(it.ref.id).length){ it.ref.collapsed=true; this.scrollSideIntoView(); break; }  // collapse expanded parent (stay on it)
-            this.store.sideFocusId = it.ref.parentId || 'head_project';   // up: parent project, else the projects header
+          if(it.kind==='head'){
+            if(!this.store.navSections[it.section]){ this.toggleSection(it.section); break; }   // still open → collapse it, stay put
+            this.enterDeepNav();                                                                // nothing left to collapse → app rail
+            break;
+          }
+          if(isCat(it.kind)){
+            if(!it.ref.collapsed && this.store.catChildren(it.kind, it.ref.id).length){ it.ref.collapsed=true; this.scrollSideIntoView(); break; }  // collapse expanded parent (stay on it)
+            this.store.sideFocusId = it.ref.parentId || ('head_'+it.kind);   // up: parent, else the section header
             this.scrollSideIntoView(); break;
           }
+          // a SYNTHETIC row (base directory · all calendars) belongs to its category's section —
+          // it used to fall through to head_query, sending the cursor to the wrong header entirely
+          if(isBase(it)){ this.store.sideFocusId = 'head_'+sectionOf(it); this.scrollSideIntoView(); break; }
           this.store.sideFocusId = (it.kind==='label') ? 'head_label' : 'head_query';   // view/label → its section header
           this.scrollSideIntoView(); break;
         }
@@ -689,6 +1051,8 @@ const app = createApp({
     applyState(s){
       this._suppress = true;
       if(s.projects){ this.store.projects.splice(0, this.store.projects.length, ...s.projects); }
+      if(s.calendars){ this.store.calendars.splice(0, this.store.calendars.length, ...s.calendars); }
+      if(s.folders){ this.store.folders.splice(0, this.store.folders.length, ...s.folders); }
       if(s.tasks){ this.store.tasks.splice(0, this.store.tasks.length, ...s.tasks); }
       if(s.labels){ this.store.labels.splice(0, this.store.labels.length, ...s.labels); }
       if(s.savedQueries){ this.store.savedQueries.splice(0, this.store.savedQueries.length, ...s.savedQueries); }
@@ -701,15 +1065,18 @@ const app = createApp({
       // holding sample/stale data, and pushing that would clobber the server.
       if(!this.loaded) return;
       const prev = this._lastSaved || window.Sync.empty();
+      // rename propagation: rewrite saved-query tokens for any entity renamed since the last
+      // sync, BEFORE snapshotting, so the rewrite rides the same diff (see query-rebind.js).
+      window.QueryRebind.reconcile(prev, this.store);
       const curr = window.Sync.snapshot(this.store);
       const d = window.Sync.diff(prev, curr);
       // ordered: create parents first (projects/labels/views, then tasks in store
       // order so a task's parent precedes it), then updates, then deletes (children
       // before parents). Tasks are only removed via the archive path, not here.
       const ops = [];
-      for(const t of ['projects','labels','savedQueries','tasks']) for(const id of d[t].creates) ops.push({ type:t, action:'create', id });
-      for(const t of ['projects','labels','savedQueries','tasks']) for(const id of d[t].updates) ops.push({ type:t, action:'update', id });
-      for(const t of ['tasks','savedQueries','labels','projects']) for(const id of d[t].deletes) ops.push({ type:t, action:'delete', id });
+      for(const t of ['projects','calendars','folders','labels','savedQueries','tasks']) for(const id of d[t].creates) ops.push({ type:t, action:'create', id });
+      for(const t of ['projects','calendars','folders','labels','savedQueries','tasks']) for(const id of d[t].updates) ops.push({ type:t, action:'update', id });
+      for(const t of ['tasks','savedQueries','labels','folders','calendars','projects']) for(const id of d[t].deletes) ops.push({ type:t, action:'delete', id });
       if(!ops.length) return;
       for(const op of ops){
         const ok = await this.syncOp(op, curr);
@@ -749,7 +1116,8 @@ const app = createApp({
           // default to the top sidebar view (view isn't persisted) — honors the
           // user's saved-query order rather than always landing on "Today"
           const top = this.store.savedQueries[0];
-          if(top) this.store.openQueryView(top);
+          if(top) this.store.openQueryView(top, 'tasks');   // boot: explicitly the Tasks app (a.7)
+          this.routeFromHash();   // honor the URL on load/refresh (#/events, #/notes)
           return;
         }
         this.store.toast('load failed ('+res.status+') — read only');
@@ -783,7 +1151,7 @@ const app = createApp({
     async startSession(){
       if(!this._keysAttached){ document.addEventListener('keydown', this.onKey); this._keysAttached = true; }
       if(!this._watchAttached){
-        this.$watch(()=>JSON.stringify([this.store.tasks,this.store.projects,this.store.labels,this.store.savedQueries]),
+        this.$watch(()=>JSON.stringify([this.store.tasks,this.store.projects,this.store.calendars,this.store.folders,this.store.labels,this.store.savedQueries]),
           ()=>{ if(this._suppress) return; clearTimeout(this._save); this._save=setTimeout(this.persist,300); });
         this._watchAttached = true;
       }
@@ -791,6 +1159,7 @@ const app = createApp({
     },
     clearLocalState(){
       this.store.tasks.splice(0); this.store.projects.splice(0);
+      this.store.calendars.splice(0); this.store.folders.splice(0);
       this.store.labels.splice(0); this.store.savedQueries.splice(0);
     },
     onAccountSaved(user){ this.store.currentUser = user; window.applyTheme(user.theme); this.store.applySortPrefs(user.sort_prefs); },
@@ -826,6 +1195,147 @@ const app = createApp({
     // soft-delete hooks (callable from child components, like saveNow)
     this.store.softDeleteProject = (id) => this.mutateDelete('/api/projects/'+id);
     this.store.softDeleteTask    = (id) => this.mutateDelete('/api/tasks/'+id);
+    // calendars archive (cascade events); folders delete only when empty (server
+    // returns 4xx → mutateDelete toasts + skips the resync, store stays consistent).
+    this.store.softDeleteCalendar = (id) => this.mutateDelete('/api/calendars/'+id);
+    this.store.softDeleteFolder   = (id) => this.mutateDelete('/api/folders/'+id);
+    // ---- events (D2): the calendar talks to the granular API directly (events
+    // aren't in the snapshot diff-sync). Refetch the visible range after a mutate.
+    this.store.fetchEvents = async (from, to) => {
+      this.store.calFrom = from; this.store.calTo = to;
+      try{
+        const res = await fetch('/api/events?from='+from+'&to='+to, { credentials:'include' });
+        if(res.status===401){ this.handleAuthExpired(); return; }
+        if(res.ok){ const j = await res.json(); this.store.events.splice(0, this.store.events.length, ...j.occurrences); }
+      }catch(e){ this.store.toast('offline — events not loaded'); }
+    };
+    this.store.saveEvent = async (ev) => {
+      // calendarId was missing here: the drawer's calendar picker sent it, the API accepts it
+      // (EventCreateSchema), but it never made it into the body — so choosing a calendar did nothing.
+      const body = { title:ev.title, startAt:ev.startAt, endAt:ev.endAt||null, allDay:!!ev.allDay,
+        location:ev.location||null, recurrence:ev.recurrence||null, notes:ev.notes||'', reminder:ev.reminder||null,
+        calendarId:ev.calendarId||null };
+      // Labels were dropped on the floor here (e.9): the server has always accepted them
+      // (EventCreateSchema.labels) but no client ever sent them, so a #tag on an event would be
+      // CREATED and then never attached. The calendar quick-add is the first producer of them.
+      //
+      // Only when SUPPLIED — never `ev.labels || []`. The server reads `labels !== undefined` on a
+      // PUT as "replace them", and the event DRAWER carries no labels at all, so an unconditional
+      // send would make every drawer save wipe an event's tags.
+      if(ev.labels !== undefined) body.labels = ev.labels;
+      const ok = await this.apiSend(ev.id?'PUT':'POST', ev.id?('/api/events/'+ev.id):'/api/events', body);
+      if(ok && this.store.calFrom) await this.store.fetchEvents(this.store.calFrom, this.store.calTo);
+      return ok;
+    };
+    this.store.deleteEvent = async (id) => {
+      const ok = await this.apiSend('DELETE', '/api/events/'+id, null);
+      if(ok && this.store.calFrom) await this.store.fetchEvents(this.store.calFrom, this.store.calTo);
+      return ok;
+    };
+    // ---- links (D2 2b): the generic entity graph. event↔task edges, talked to
+    // directly like events. fetchLinks returns the resolved list; create/delete
+    // return ok and the caller refetches.
+    this.store.fetchLinks = async (type, id) => {
+      try{
+        const res = await fetch('/api/links?type='+type+'&id='+encodeURIComponent(id), { credentials:'include' });
+        if(res.status===401){ this.handleAuthExpired(); return []; }
+        if(res.ok) return await res.json();
+      }catch(e){ this.store.toast('offline — links not loaded'); }
+      return [];
+    };
+    this.store.createLink = (a, b) =>
+      this.apiSend('POST', '/api/links', { aType:a.type, aId:a.id, bType:b.type, bId:b.id });
+    this.store.deleteLink = (id) => this.apiSend('DELETE', '/api/links/'+id, null);
+    // open the event editor for a given event id (used by the task drawer's linked
+    // events) — fetch the full series, then hand it to the global event-detail drawer.
+    this.store.openEvent = async (id) => {
+      try{
+        const res = await fetch('/api/events/'+id, { credentials:'include' });
+        if(res.status===401){ this.handleAuthExpired(); return; }
+        if(res.ok) this.store.editEvent(await res.json());
+        else this.store.toast('event not found');
+      }catch(e){ this.store.toast('offline — event not loaded'); }
+    };
+    // ---- notes (D2 2c): file-backed, talked to directly like events/links.
+    this.store.fetchNotes = async () => {
+      try{
+        const r = await fetch('/api/notes', { credentials:'include' });
+        if(r.status===401){ this.handleAuthExpired(); return []; }
+        if(r.ok){ this.store.noteCache = await r.json(); return this.store.noteCache; }   // cache → store.resolveLink
+      }catch(e){ this.store.toast('offline — notes not loaded'); }
+      return [];
+    };
+    this.store.getNote = async (id) => {
+      try{
+        const r = await fetch('/api/notes/'+id, { credentials:'include' });
+        if(r.status===401){ this.handleAuthExpired(); return null; }
+        if(r.ok) return await r.json();
+      }catch(e){ this.store.toast('offline — note not loaded'); }
+      return null;
+    };
+    // returns the saved note (needs the body, not just ok) — POST creates, PUT updates
+    this.store.saveNote = async (n) => {
+      const method = n.id ? 'PUT' : 'POST';
+      const url = n.id ? '/api/notes/'+n.id : '/api/notes';
+      try{
+        const r = await fetch(url, { method, credentials:'include',
+          headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ title:n.title, body:n.body, folderId:n.folderId, reviewAt:n.reviewAt, labels:n.labels }) });
+        if(r.status===401){ this.handleAuthExpired(); return null; }
+        if(r.ok) return await r.json();
+        this.store.toast('save failed ('+r.status+')');
+      }catch(e){ this.store.toast('offline — change not saved'); }
+      return null;
+    };
+    this.store.deleteNote = (id) => this.apiSend('DELETE', '/api/notes/'+id, null);
+    this.store.searchNotes = async (q) => {
+      try{
+        const r = await fetch('/api/notes/search?q='+encodeURIComponent(q), { credentials:'include' });
+        if(r.ok) return await r.json();
+      }catch(e){ /* offline — empty results */ }
+      return [];
+    };
+    this.store.syncNotes = async () => {
+      try{
+        const r = await fetch('/api/notes/sync', { method:'POST', credentials:'include' });
+        if(r.status===401){ this.handleAuthExpired(); return null; }
+        if(r.ok) return await r.json();
+      }catch(e){ this.store.toast('offline — sync failed'); }
+      return null;
+    };
+    // open a note from anywhere (e.g. a link chip on a task/event): switch to the
+    // notes app and tell it which note to open (NotesView consumes pendingNoteId)
+    this.store.openNote = (id) => { this.store.pendingNoteId = id; this.store.openNotes(); };
+    // unified query (tasks+events+notes) — powers tdx-query embeds in notes
+    this.store.runQuery = async (query) => {
+      try{
+        const r = await fetch('/api/query', { method:'POST', credentials:'include',
+          headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ query }) });
+        if(r.status===401){ this.handleAuthExpired(); return []; }
+        if(r.ok) return (await r.json()).items;
+        if(r.status===400){ const b = await r.json().catch(()=>null); this.store.toast(b && b.error ? b.error : 'invalid query'); return []; }
+      }catch(e){ /* offline — empty */ }
+      return [];
+    };
+    // distinct event series for the task-drawer's "link an event" picker. Events
+    // aren't all in the store (only the calendar's visible range), so read a wide
+    // window and dedupe recurring occurrences down to one entry per series.
+    this.store.fetchEventList = async () => {
+      const from = Rec.ymd(Rec.addDays(new Date(), -365));
+      const to   = Rec.ymd(Rec.addDays(new Date(),  365));
+      try{
+        const res = await fetch('/api/events?from='+from+'&to='+to, { credentials:'include' });
+        if(res.status===401){ this.handleAuthExpired(); return []; }
+        if(res.ok){
+          const seen = new Set(); const out = [];
+          for(const o of (await res.json()).occurrences){
+            if(!seen.has(o.id)){ seen.add(o.id); out.push({ id:o.id, title:o.title, startAt:o.startAt, readableId:o.readableId }); }
+          }
+          this.store.eventCache = out;   // cache → store.resolveLink
+          return out;
+        }
+      }catch(e){ this.store.toast('offline — events not loaded'); }
+      return [];
+    };
     // app-styled confirm / prompt (Promise-based) usable from any component
     this.store.askConfirm=(msg)=> new Promise((res)=>{ this.confirmState={ msg, resolve:res }; });
     this.store.askChoice=(msg)=> new Promise((res)=>{ this.choiceState={ msg, resolve:res }; });   // 'cancel' | 'no' | 'yes'
@@ -852,6 +1362,14 @@ const app = createApp({
       if(sb) this._barRO.observe(sb);
       this._measureBars();
     };
+    // app router: back/forward + manual hash edits switch apps
+    this._onHash=()=>this.routeFromHash();
+    window.addEventListener('hashchange', this._onHash);
+    // refresh / close-tab guard: any editor with unsaved work (the notes editor via
+    // store.dirtyCheck, or a stacked modal via the dirty-checker registry) triggers
+    // the browser's native "leave site?" prompt so edits aren't silently lost
+    this._beforeUnload=(e)=>{ if(this.store.isAnyDirty && this.store.isAnyDirty()){ e.preventDefault(); e.returnValue=''; } };
+    window.addEventListener('beforeunload', this._beforeUnload);
     window.addEventListener('pagehide', this._flush);
     this._onVis=()=>{ if(document.visibilityState==='hidden') this._flush(); };
     document.addEventListener('visibilitychange', this._onVis);
@@ -897,12 +1415,29 @@ const app = createApp({
 app.component('app-sidebar', window.AppSidebar);
 app.component('tree-row', window.TreeRow);
 app.component('task-list', window.TaskList);
+app.component('mixed-list', window.MixedList);
+app.component('search-list', window.SearchList);
+app.component('md-field', window.MdField);
+app.component('note-detail', window.NoteDetail);
+app.component('day-detail', window.DayDetail);
 app.component('task-row', window.TaskRow);
 app.component('recurrence-builder', window.RecurrenceBuilder);
 app.component('task-detail', window.TaskDetail);
+app.component('deep-nav', window.DeepNav);
+app.component('linked-items', window.LinkedItems);
+// the calendar grid + notes module lazy-load the first time you open their app
+// (the event editor stays eager — it opens from task links too)
+app.component('calendar-view', defineAsyncComponent(() => loadScript('js/calendar.js').then(() => window.CalendarView)));
+app.component('notes-view', defineAsyncComponent(() =>
+  window.loadMarkdown()
+    .then(() => loadScript('js/notes.js'))
+    .then(() => window.NotesView)));
+app.component('event-detail', window.EventDetail);
 app.component('query-bar', window.QueryBar);
 app.component('command-palette', window.CommandPalette);
 app.component('project-modal', window.ProjectModal);
+app.component('calendar-modal', window.CalendarModal);
+app.component('folder-modal', window.FolderModal);
 app.component('save-query-modal', window.SaveQueryModal);
 app.component('label-modal', window.LabelModal);
 app.component('help-modal', window.HelpModal);

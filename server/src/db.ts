@@ -29,6 +29,8 @@ export interface UsersTable {
   week_start: number;
   sort_prefs: string | null;
   fib_sizing: number;
+  notes_root_name: string; // the user's name for the vault's base directory ('' = hidden) — n.16
+  calendars_all_name: string; // the user's name for the "all calendars" nav row ('' = hidden) — e.10
   is_admin: number;
   created_at: string;
   updated_at: string;
@@ -55,6 +57,7 @@ export interface ProjectsTable {
   health: string;
   created_at: string;
   updated_at: string;
+  readable_id: string | null;
 }
 
 export interface TasksTable {
@@ -77,6 +80,104 @@ export interface TasksTable {
   created_at: string;
   completed_at: string | null;
   updated_at: string;
+  readable_id: string | null;
+}
+
+export interface EventsTable {
+  id: string;
+  owner_id: string;
+  creator_id: string;
+  assignee_id: string | null;
+  calendar_id: string | null;
+  title: string;
+  notes: string;
+  location: string | null;
+  all_day: number;
+  start_at: string;
+  end_at: string | null;
+  recurrence: string | null;
+  reminder: string | null;
+  position: number;
+  archived: number;
+  created_at: string;
+  updated_at: string;
+  readable_id: string | null;
+}
+
+export interface NotesTable {
+  id: string;
+  owner_id: string;
+  path: string;
+  folder_id: string | null;
+  title: string;
+  mtime: string;
+  frontmatter: string | null;
+  review_at: string | null;
+  tombstoned: number;
+  created_at: string;
+  updated_at: string;
+  readable_id: string | null;
+}
+
+export interface CalendarsTable {
+  id: string;
+  owner_id: string;
+  name: string;
+  color: string;
+  glyph: string;
+  position: number;
+  archived: number;
+  created_at: string;
+  updated_at: string;
+  readable_id: string | null;
+}
+
+export interface FoldersTable {
+  id: string;
+  owner_id: string;
+  parent_id: string | null;
+  name: string;
+  path: string;
+  color: string;
+  glyph: string;
+  collapsed: number;
+  position: number;
+  archived: number;
+  created_at: string;
+  updated_at: string;
+  readable_id: string | null;
+}
+
+export interface EventLabelsTable {
+  event_id: string;
+  label_id: string;
+}
+
+export interface NoteLabelsTable {
+  note_id: string;
+  label_id: string;
+}
+
+export interface NoteLinksTable {
+  id: string;
+  owner_id: string;
+  origin_note_id: string;
+  target_type: string;
+  target_id: string;
+  rel: string;
+  created_at: string;
+}
+
+export interface LinksTable {
+  id: string;
+  owner_id: string;
+  t1_type: string;
+  t1_id: string;
+  t2_type: string;
+  t2_id: string;
+  rel: string;
+  data: string | null;
+  created_at: string;
 }
 
 export interface LabelsTable {
@@ -101,6 +202,7 @@ export interface SavedQueriesTable {
   color: string | null;
   position: number;
   pinned: number;
+  display: string; // 'auto' | 'grid' | 'list' — how the view presents (e.1); see migration 007
 }
 
 export interface GrantsTable {
@@ -138,6 +240,12 @@ export interface ApiTokensTable {
   revoked_at: string | null;
 }
 
+export interface IdCountersTable {
+  owner_id: string;
+  entity_type: string;
+  next_seq: number;
+}
+
 export interface BackupConfigTable {
   id: number;
   enabled: number;
@@ -148,6 +256,9 @@ export interface BackupConfigTable {
   last_status: string | null;
   last_error: string | null;
   next_run_at: string | null;
+  vault_last_status: string | null; // git-vault backup health — 012, distinct from the DB backup's status
+  vault_last_error: string | null;
+  vault_last_run_at: string | null;
 }
 
 export interface Database_ {
@@ -155,14 +266,23 @@ export interface Database_ {
   sessions: SessionsTable;
   projects: ProjectsTable;
   tasks: TasksTable;
+  events: EventsTable;
+  notes: NotesTable;
+  calendars: CalendarsTable;
+  folders: FoldersTable;
+  note_links: NoteLinksTable;
+  links: LinksTable;
   labels: LabelsTable;
   task_labels: TaskLabelsTable;
+  event_labels: EventLabelsTable;
+  note_labels: NoteLabelsTable;
   saved_queries: SavedQueriesTable;
   grants: GrantsTable;
   groups: GroupsTable;
   group_members: GroupMembersTable;
   api_tokens: ApiTokensTable;
   backup_config: BackupConfigTable;
+  id_counters: IdCountersTable;
 }
 
 export type Sqlite = Database.Database;

@@ -10,7 +10,7 @@ window.CommandPalette = {
         <input ref="input" v-model="q" placeholder="type a command or jump to…"
                @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)"
                @keydown.enter.prevent="exec" @keydown.esc.prevent="$emit('close')" />
-        <span class="mut" style="font-size:11px;">esc</span>
+        <span class="mut" style="font-size:11px;">⎋</span>
       </div>
       <div class="palette-list" ref="list">
         <template v-for="(grp,gi) in grouped" :key="gi">

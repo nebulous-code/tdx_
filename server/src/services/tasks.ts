@@ -4,7 +4,7 @@
 
 import type { Kysely, Updateable } from 'kysely';
 import type { DB, Database_, TasksTable } from '../db.js';
-import { newId } from '../ids.js';
+import { allocateReadableId, newId } from '../ids.js';
 import { type TaskJson, rowToTask } from '../schemas.js';
 import { checkIfMatch } from './concurrency.js';
 
@@ -120,6 +120,7 @@ export async function createTask(db: DB, owner: string, input: TaskCreateInput):
         created_at: now,
         completed_at: done ? now : null,
         updated_at: now,
+        readable_id: await allocateReadableId(trx, owner, 'task'),
       })
       .execute();
     if (input.labels?.length) await setTaskLabels(trx, owner, id, input.labels);
@@ -170,19 +171,19 @@ export async function assignTask(
   id: string,
   assigneeId: string | null,
 ): Promise<TaskJson | null | 'badAssignee'> {
-  if (assigneeId) {
-    const u = await db
-      .selectFrom('users')
-      .select('id')
-      .where('id', '=', assigneeId)
-      .executeTakeFirst();
+  // Normalize the "unassign" case to NULL: the route schema's `string | null` union gets
+  // ajv-coerced so a JSON `null` arrives as '', which is not a valid user id and would trip
+  // the assignee_id FK. Treat any empty value as "clear the assignee".
+  const aid = assigneeId || null;
+  if (aid) {
+    const u = await db.selectFrom('users').select('id').where('id', '=', aid).executeTakeFirst();
     if (!u) return 'badAssignee';
   }
   const row = await db.selectFrom('tasks').select('id').where('id', '=', id).executeTakeFirst();
   if (!row) return null;
   await db
     .updateTable('tasks')
-    .set({ assignee_id: assigneeId, updated_at: new Date().toISOString() })
+    .set({ assignee_id: aid, updated_at: new Date().toISOString() })
     .where('id', '=', id)
     .execute();
   return loadTask(db, id);

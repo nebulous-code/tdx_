@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import type { BackupConfigTable, Sqlite } from './db.js';
+import { snapshotVault } from './vault-git.js';
 
 export const BACKUP_RE = /^tdx-\d{8}-\d{6}\.db$/; // tdx-YYYYMMDD-HHmmss.db
 const STALE_MS = 25 * 60 * 60 * 1000; // missed-run threshold on boot (>25h)
@@ -174,6 +175,9 @@ export function createBackups(sqlite: Sqlite): Backups {
       copy.pragma('journal_mode = DELETE');
       copy.close();
       prune(cfg.dir, cfg.retention);
+      // git-snapshot the notes vault alongside the DB backup. Self-contained: records
+      // its own vault_last_* status and never throws, so it can't fail the DB backup.
+      await snapshotVault(sqlite, { reason: 'scheduled' });
       recordRun('ok', null, now);
       return { name };
     } catch (e) {

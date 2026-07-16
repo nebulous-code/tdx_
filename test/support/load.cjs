@@ -19,7 +19,7 @@ const FRONTEND = path.resolve(__dirname, '../../frontend/js');
 
 function execFile(name) {
   const code = fs.readFileSync(path.join(FRONTEND, name), 'utf8');
-  vm.runInThisContext(code, { filename: 'frontend/js/' + name });
+  vm.runInThisContext(code, { filename: path.join(FRONTEND, name) });
 }
 
 function ensureWindow() {
@@ -31,20 +31,26 @@ function loadEngines() {
   ensureWindow();
   execFile('recurrence.js'); // -> window.Rec
   execFile('query.js');      // -> window.Q (uses global Rec)
-  return { Rec: globalThis.Rec, Q: globalThis.Q };
+  execFile('query-rebind.js'); // -> window.QueryRebind (uses global Q)
+  execFile('create.js');     // -> window.CL (the creation language; pure, clock injected)
+  return { Rec: globalThis.Rec, Q: globalThis.Q, CL: globalThis.CL, QueryRebind: globalThis.QueryRebind };
 }
 
 // Tier 2 — the reactive store and its smart rules.
 function loadStore() {
   ensureWindow();
   execFile('vue.global.prod.js'); // -> global Vue (reactive is pure/Proxy, no DOM)
+  execFile('glyphs.js');          // -> window.GLYPHS (data.js reads it at load time)
   execFile('recurrence.js');
   execFile('query.js');
-  execFile('data.js');            // -> window.store; uses Vue/Rec/Q
+  execFile('query-rebind.js');    // -> window.QueryRebind (uses global Q)
+  execFile('create.js');          // -> window.CL (data.js's clCtx/clGhost need it)
+  execFile('data.js');            // -> window.store; uses Vue/Rec/Q/CL/GLYPHS
   return {
     store: globalThis.store,
     Rec: globalThis.Rec,
     Q: globalThis.Q,
+    CL: globalThis.CL,
     Vue: globalThis.Vue,
   };
 }

@@ -11,6 +11,9 @@
     "test": "node --import tsx --test \"test/**/*.test.ts\"",
     "migrate": "tsx src/db.ts --migrate",
     "migrate:legacy": "tsx scripts/migrate-from-legacy.ts",
+    "seed:dev": "tsx scripts/seed-dev.ts",
+    "export:openapi": "tsx scripts/export-openapi.ts",
+    "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "lint": "biome check src test scripts",
     "format": "biome format --write src test scripts"
@@ -30,6 +33,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "@playwright/test": "^1.61.1",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.0",
     "tsx": "^4.19.2",

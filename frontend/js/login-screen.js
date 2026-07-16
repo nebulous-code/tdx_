@@ -13,16 +13,16 @@ window.LoginScreen = {
       <form @submit.prevent="submit">
         <label class="login-field">
           <span class="login-label">user</span>
-          <input ref="user" v-model="username" autocomplete="username" autocapitalize="off"
+          <input ref="user" data-testid="login-username" v-model="username" autocomplete="username" autocapitalize="off"
                  spellcheck="false" :disabled="busy" />
         </label>
         <label class="login-field">
           <span class="login-label">pass</span>
-          <input type="password" v-model="password" autocomplete="current-password"
+          <input type="password" data-testid="login-password" v-model="password" autocomplete="current-password"
                  :disabled="busy" />
         </label>
         <div class="login-error" v-if="error">{{ error }}</div>
-        <button class="btn primary login-go" type="submit" :disabled="busy">
+        <button class="btn primary login-go" data-testid="login-submit" type="submit" :disabled="busy">
           {{ busy ? '…' : 'sign in ↵' }}
         </button>
       </form>

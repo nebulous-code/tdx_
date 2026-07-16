@@ -19,8 +19,10 @@
   const FIELDS = {
     tasks: ['title','projectId','parentId','done','due','reminder','recurrence','notes','priority','size','labels','position'],
     projects: ['name','parentId','color','glyph','collapsed','health','position'],
+    calendars: ['name','color','glyph','position'],
+    folders: ['name','parentId','color','glyph','collapsed','position'],
     labels: ['name','pinned'],
-    savedQueries: ['name','glyph','query','color','pinned','position'],
+    savedQueries: ['name','glyph','query','color','pinned','position','display'],   // display = grid/list/auto (e.1)
   };
   const ARRAY_FIELDS = new Set(['labels','health']);
 
@@ -42,6 +44,8 @@
     return {
       tasks: indexEntities(store.tasks, FIELDS.tasks),
       projects: indexEntities(store.projects, FIELDS.projects),
+      calendars: indexEntities(store.calendars, FIELDS.calendars),
+      folders: indexEntities(store.folders, FIELDS.folders),
       labels: indexEntities(store.labels, FIELDS.labels),
       savedQueries: indexEntities(store.savedQueries, FIELDS.savedQueries),
     };
@@ -72,13 +76,15 @@
     return {
       tasks: diffType(prev.tasks, curr.tasks),
       projects: diffType(prev.projects, curr.projects),
+      calendars: diffType(prev.calendars, curr.calendars),
+      folders: diffType(prev.folders, curr.folders),
       labels: diffType(prev.labels, curr.labels),
       savedQueries: diffType(prev.savedQueries, curr.savedQueries),
     };
   }
 
   // empty snapshot (used to seed lastSaved before the first load)
-  function empty(){ return { tasks:{}, projects:{}, labels:{}, savedQueries:{} }; }
+  function empty(){ return { tasks:{}, projects:{}, calendars:{}, folders:{}, labels:{}, savedQueries:{} }; }
 
   window.Sync = { snapshot, diff, empty, FIELDS, _indexEntities: indexEntities, _eq: eq };
 

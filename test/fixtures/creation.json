@@ -1,0 +1,104 @@
+{
+  "_comment": "Creation-language corpus. The frozen clock is 2026-06-18, a THURSDAY (see support/clock.cjs) — every relative date below is anchored to it. `known` categories for the parse fixtures are the corpus projects (tdx-app, infra, home, house-upkeep, finance, health, reading, dev) plus the folders/calendars named in the per-type cases.",
+
+  "phrases": [
+    "Ship the recurrence builder",
+
+    "#label — a tag, anywhere in the line",
+    "Call mom #fun",
+    "Call #fun mom #errand",
+    "#fun",
+
+    "!N — priority, TASKS ONLY (a note has no such field)",
+    "Fix the build !2",
+    "Ship it !!!",
+    "Ten bangs !10",
+    "Priority zero !0 and five !5",
+
+    "$ — the date",
+    "Pay rent $today",
+    "Pay rent $tomorrow",
+    "Standup $friday",
+    "Standup $fri",
+    "Retro $next friday",
+    "Retro $next fri",
+    "Board meeting $2026-07-13",
+    "American first $6/7/2026",
+    "Only one reading $13/7/2026",
+    "Two-digit year $6/7/26",
+    "No year $12/25",
+    "Dots $6.7.2026",
+    "Dashes $6-7-2026",
+    "Not a date: pay Bob $5",
+    "Not a date $notaday",
+    "Never rolls over $2/31/2026",
+
+    "/ — the categorizer (project · folder · calendar)",
+    "Fix the flicker /tdx-app",
+    "Slug match /tdx",
+    "Unknown stays literal /nosuchthing",
+    "Bare slash / stays",
+
+    "{} — the body",
+    "Call the plumber {ask about the leak under the sink}",
+    "Unterminated {stays literal",
+    "Empty {}",
+
+    "everything at once",
+    "Call plumber /home #errand !2 $friday {ask about the leak}",
+    "Standup /home #fun $tomorrow {agenda: ship it}"
+  ],
+
+  "types": ["task", "note", "event"],
+
+  "categories": {
+    "project": ["tdx-app", "infra", "home", "house-upkeep", "finance", "health", "reading", "dev"],
+    "folder": ["Work", "Journal", "Reading"],
+    "calendar": ["Personal", "Work"]
+  },
+
+  "applyCases": [
+    {
+      "why": "typed beats implied: $today wins over a due:friday view",
+      "type": "task",
+      "text": "Ship it $today",
+      "defaults": { "labels": [], "date": "2026-06-19", "category": "p_tdx" }
+    },
+    {
+      "why": "the view fills what you left blank",
+      "type": "task",
+      "text": "Ship it",
+      "defaults": { "labels": ["l_urgent"], "date": "2026-06-19", "category": "p_tdx" }
+    },
+    {
+      "why": "labels UNION — the view's plus the typed ones",
+      "type": "task",
+      "text": "Ship it #quick",
+      "defaults": { "labels": ["l_urgent"] }
+    },
+    {
+      "why": "a status:done view creates it done (no symbol for this)",
+      "type": "task",
+      "text": "Already did it",
+      "defaults": { "labels": [], "done": true }
+    },
+    {
+      "why": "notes: date -> reviewAt, category -> folderId, body -> body",
+      "type": "note",
+      "text": "Standup /Work #fun $tomorrow {agenda}",
+      "defaults": { "labels": [] }
+    },
+    {
+      "why": "notes have no priority: !2 stays in the TITLE",
+      "type": "note",
+      "text": "Ship v2 !2",
+      "defaults": { "labels": [] }
+    },
+    {
+      "why": "events: date -> startAt, category -> calendarId, body -> notes",
+      "type": "event",
+      "text": "Retro /Work $next friday {bring the deck}",
+      "defaults": { "labels": [] }
+    }
+  ]
+}

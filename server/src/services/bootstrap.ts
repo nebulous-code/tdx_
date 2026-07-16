@@ -2,10 +2,20 @@
 // needs to render. The legacy readState shape, minus version/seq, per-owner.
 
 import type { DB } from '../db.js';
-import { type TaskJson, rowToLabel, rowToProject, rowToSavedQuery, rowToTask } from '../schemas.js';
+import {
+  type TaskJson,
+  rowToCalendar,
+  rowToFolder,
+  rowToLabel,
+  rowToProject,
+  rowToSavedQuery,
+  rowToTask,
+} from '../schemas.js';
 
 export interface Bootstrap {
   projects: ReturnType<typeof rowToProject>[];
+  calendars: ReturnType<typeof rowToCalendar>[];
+  folders: ReturnType<typeof rowToFolder>[];
   tasks: TaskJson[];
   labels: ReturnType<typeof rowToLabel>[];
   savedQueries: ReturnType<typeof rowToSavedQuery>[];
@@ -42,6 +52,22 @@ export async function readBootstrap(db: DB, ownerId: string): Promise<Bootstrap>
     .orderBy('position')
     .orderBy('id')
     .execute();
+  const calendars = await db
+    .selectFrom('calendars')
+    .selectAll()
+    .where('owner_id', '=', ownerId)
+    .where('archived', '=', 0)
+    .orderBy('position')
+    .orderBy('id')
+    .execute();
+  const folders = await db
+    .selectFrom('folders')
+    .selectAll()
+    .where('owner_id', '=', ownerId)
+    .where('archived', '=', 0)
+    .orderBy('position')
+    .orderBy('id')
+    .execute();
 
   // labels per (non-archived) task, in a single pass; deterministic by label_id
   const tls = await db
@@ -61,6 +87,8 @@ export async function readBootstrap(db: DB, ownerId: string): Promise<Bootstrap>
 
   return {
     projects: projects.map(rowToProject),
+    calendars: calendars.map(rowToCalendar),
+    folders: folders.map(rowToFolder),
     tasks: tasks.map((t) => rowToTask(t, byTask.get(t.id) ?? [])),
     labels: labels.map(rowToLabel),
     savedQueries: savedQueries.map(rowToSavedQuery),

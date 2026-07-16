@@ -1,0 +1,15 @@
+-- 007: how a saved view PRESENTS its results (2E / audit e.1).
+--
+-- Grid-vs-list is view metadata, NOT a query term: the query language stays parity-locked
+-- (query.ts ≡ query.js + goldens) and type-agnostic, so a `view:list` predicate would drag a
+-- presentation concern into an engine where it's meaningless for tasks and notes. This column
+-- sits alongside glyph/color/pinned — the other presentation metadata a view already carries.
+--
+--   'auto' (default) — the app infers: a DATE-RANGE query on the events screen renders as a
+--                      list (a calendar grid is already a date filter, so a date query fights
+--                      it); anything else keeps the grid.
+--   'grid' | 'list'  — an explicit override, pinned by the user (toggle, then `u` to update
+--                      the view in place).
+--
+-- Apps with only one presentation (tasks, notes) ignore this.
+ALTER TABLE saved_queries ADD COLUMN display TEXT NOT NULL DEFAULT 'auto';

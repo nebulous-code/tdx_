@@ -13,6 +13,11 @@ window.AccountScreen = {
     const theme = u.theme || 'amber';
     const weekStart = u.week_start ?? 1;
     const fibSizing = !!u.fib_sizing;
+    // the vault's base directory name (n.16) — '' means "hide it", which is a real choice, so
+    // `??` and not `||`: a user who blanks it must not have 'Inbox' silently restored
+    const baseDir = u.notes_root_name ?? 'Inbox';
+    // the "all calendars" nav row's name (e.10) — same '' = hidden rule, same `??`
+    const allCal = u.calendars_all_name ?? 'Everything';
     return {
       username: u.username || '',
       email: u.email || '',
@@ -20,11 +25,13 @@ window.AccountScreen = {
       theme,
       weekStart,
       fibSizing,
+      allCal,
+      baseDir,
       weekDays: [
         {v:0,n:'Sunday'},{v:1,n:'Monday'},{v:2,n:'Tuesday'},{v:3,n:'Wednesday'},
         {v:4,n:'Thursday'},{v:5,n:'Friday'},{v:6,n:'Saturday'},
       ],
-      init: { username: u.username || '', email: u.email || '', theme, weekStart, fibSizing },
+      init: { username: u.username || '', email: u.email || '', theme, weekStart, fibSizing, allCal, baseDir },
       kbAutofocus: false,   // start in nav, not in the username field
       themes: [
         { key:'amber',   name:'amber',   bg:'#0b0a07', accent:'#ffb000' },
@@ -77,6 +84,18 @@ window.AccountScreen = {
           </span>
           <span class="pin-check" :class="{on:fibSizing}">{{ fibSizing ? '✓' : '' }}</span>
         </div>
+        <div class="acct-row" :class="kbCls('allCal')" @click="$refs.allCal.focus()">
+          <span class="acct-label">all calendars</span>
+          <input ref="allCal" v-model="allCal" spellcheck="false" autocapitalize="off"
+                 placeholder="blank = hide the row" @focus="kbFocusRow('allCal')" />
+          <span class="info-tip" data-tip="The events app with no filter — every calendar at once. It shows as a row above your calendars, and it's the only way back to an unfiltered view from the keyboard. Leave it blank to hide it." @click.stop>ⓘ</span>
+        </div>
+        <div class="acct-row" :class="kbCls('baseDir')" @click="$refs.baseDir.focus()">
+          <span class="acct-label">base directory</span>
+          <input ref="baseDir" v-model="baseDir" spellcheck="false" autocapitalize="off"
+                 placeholder="blank = hide vault root" @focus="kbFocusRow('baseDir')" />
+          <span class="info-tip" data-tip="Notes at the top of your vault (not in any folder) show up under this name in the notes nav — and folder:&lt;name&gt; finds them. Leave it blank to hide that row entirely. It can't hold folders: every folder already lives inside it." @click.stop>ⓘ</span>
+        </div>
 
         <div v-if="isAdmin" class="acct-sep">admin</div>
         <div v-if="isAdmin" class="acct-row" :class="kbCls('backups')" @click="openBackups" style="cursor:pointer;">
@@ -113,7 +132,8 @@ window.AccountScreen = {
     dirty(){
       return this.username !== this.init.username || this.email !== this.init.email ||
         this.theme !== this.init.theme || this.weekStart !== this.init.weekStart ||
-        this.fibSizing !== this.init.fibSizing ||
+        this.fibSizing !== this.init.fibSizing || this.baseDir !== this.init.baseDir ||
+        this.allCal !== this.init.allCal ||
         !!this.oldPassword || !!this.newPassword || !!this.confirmPassword;
     }
   },
@@ -125,6 +145,8 @@ window.AccountScreen = {
         isOn:t=>this.theme===t.key, select:t=>this.selectTheme(t.key) },
       { id:'weekStart',       type:'input',  ref:'weekStart' },
       { id:'fibSizing',       type:'button', activate:()=>{ this.fibSizing=!this.fibSizing; } },
+      { id:'allCal',          type:'input',  ref:'allCal' },
+      { id:'baseDir',         type:'input',  ref:'baseDir' },
       { id:'backups',         type:'button', when:()=>this.isAdmin, activate:()=>this.openBackups() },
       { id:'oldPassword',     type:'input',  ref:'oldPassword' },
       { id:'newPassword',     type:'input',  ref:'newPassword' },
@@ -156,7 +178,10 @@ window.AccountScreen = {
     async save(){
       if(this.busy) return;
       this.error='';
-      const payload = { theme: this.theme, week_start: this.weekStart, fib_sizing: this.fibSizing ? 1 : 0 };
+      // notes_root_name: '' is meaningful (hide the base directory), so send it as typed. The
+      // server rejects a name that collides with a real folder — that 400 lands in this.error.
+      const payload = { theme: this.theme, week_start: this.weekStart, fib_sizing: this.fibSizing ? 1 : 0,
+        notes_root_name: this.baseDir.trim(), calendars_all_name: this.allCal.trim() };
       const uname = this.username.trim();
       if(!uname || uname.length>32){ this.error='username must be 1–32 characters'; return; }
       payload.username = uname;

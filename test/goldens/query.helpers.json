@@ -83,11 +83,11 @@
     },
     {
       "in": "My Project!",
-      "out": "myproject"
+      "out": "my_project"
     },
     {
       "in": "a-b-c",
-      "out": "abc"
+      "out": "a_b_c"
     },
     {
       "in": "  Spaces  ",

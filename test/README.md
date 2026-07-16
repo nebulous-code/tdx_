@@ -5,16 +5,23 @@ Golden-master (characterization) tests that lock today's frontend engine behavio
 ## Run
 
 ```sh
-npm test            # run all tiers, compare against goldens
-npm run test:update # regenerate goldens (after an INTENTIONAL behavior change)
+npm test                    # run all tiers, compare against goldens
+npm run test:update         # regenerate goldens (after an INTENTIONAL behavior change)
+npm run test:coverage       # + RATCHETING coverage gate — this is what CI runs
+npm run test:coverage:bump  # lock in a coverage improvement (floors only move up)
 ```
+
+**CI runs this suite on every push to every branch** (`.github/workflows/docker.yml`, job
+`test-frontend`), and it gates the image build alongside the server suite. It didn't used to:
+CI was server-only, so a store test deleted out from under itself in `da7dac6` stayed red for
+weeks. Floors live in `tools/coverage-floor-frontend.txt`.
 
 Both pin `TZ=UTC`; the suite freezes the clock to **2026-06-18** (`support/clock.cjs`), so results are identical on any machine or CI. No dependencies are installed — `node:test` is built in, Vue's vendored global build and the engines load via a `vm.runInThisContext` global shim (`support/load.cjs`), so **nothing in `frontend/` is modified**.
 
 ## What's covered
 
-- **Tier 1 — pure engines** (`rec.test.cjs`, `query.test.cjs`): `Rec` parse/stringify/summary/compact, `nextOccurrences`/`next`/`matches` with explicit from+anchor, date helpers; `Q` parse + build round-trip, `run` over the task corpus → matching ids, `dueDelta`/`slug`.
-- **Tier 2 — store smart rules** (`store.test.cjs`): completion-pill min-one rule, `viewDefaults`, `visibleRoots` (filter/sort/completion), `searchRoots` ranking, `toggleDone` recurrence spawn (due/reminder-gap/subtree clone), and the real `inferDueFromRecurrence` from `task-detail.js`.
+- **Tier 1 — pure engines** (`rec.test.cjs`, `query.test.cjs`, `create.test.cjs`): `Rec` parse/stringify/summary/compact, `nextOccurrences`/`next`/`matches` with explicit from+anchor, date helpers; `Q` parse + build round-trip, `run` over the task corpus → matching ids, `dueDelta`/`slug`; `CL` (the creation language) parse × apply across all three entity types, the human-date parser, and the rules that keep it honest — first-wins, the `$5` guard, and **parse must not create labels** (`store.addLabel` has a side effect and ghost-completion reparses every keystroke).
+- **Tier 2 — store smart rules** (`store.test.cjs`): completion-pill min-one rule, `viewDefaults`, `visibleRoots` (filter/sort/completion), `runSearch` (the text-only query it builds + its stale-response guard), `toggleDone` recurrence spawn (due/reminder-gap/subtree clone), and the real `inferDueFromRecurrence` from `task-detail.js`.
 - **Tier 3 — Playwright smokes:** deferred (need a browser + the running app); add ~5–10 later.
 
 ## Layout

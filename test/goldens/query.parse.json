@@ -412,6 +412,83 @@
     "rebuilt": "project:inbox"
   },
   {
+    "query": "category:work",
+    "terms": [
+      {
+        "field": "category",
+        "value": "work",
+        "neg": false
+      }
+    ],
+    "rebuilt": "category:work"
+  },
+  {
+    "query": "category:home",
+    "terms": [
+      {
+        "field": "category",
+        "value": "home",
+        "neg": false
+      }
+    ],
+    "rebuilt": "category:home"
+  },
+  {
+    "query": "category:inbox",
+    "terms": [
+      {
+        "field": "category",
+        "value": "inbox",
+        "neg": false
+      }
+    ],
+    "rebuilt": "category:inbox"
+  },
+  {
+    "query": "category:nope",
+    "terms": [
+      {
+        "field": "category",
+        "value": "nope",
+        "neg": false
+      }
+    ],
+    "rebuilt": "category:nope"
+  },
+  {
+    "query": "-category:work",
+    "terms": [
+      {
+        "field": "category",
+        "value": "work",
+        "neg": true
+      }
+    ],
+    "rebuilt": "-category:work"
+  },
+  {
+    "query": "calendar:work",
+    "terms": [
+      {
+        "field": "calendar",
+        "value": "work",
+        "neg": false
+      }
+    ],
+    "rebuilt": "calendar:work"
+  },
+  {
+    "query": "folder:home",
+    "terms": [
+      {
+        "field": "folder",
+        "value": "home",
+        "neg": false
+      }
+    ],
+    "rebuilt": "folder:home"
+  },
+  {
     "query": "label:urgent",
     "terms": [
       {
@@ -578,5 +655,159 @@
       }
     ],
     "rebuilt": "is:task status:open due:set"
+  },
+  {
+    "query": "created:today",
+    "terms": [
+      {
+        "field": "created",
+        "value": "today",
+        "neg": false
+      }
+    ],
+    "rebuilt": "created:today"
+  },
+  {
+    "query": "created:set",
+    "terms": [
+      {
+        "field": "created",
+        "value": "set",
+        "neg": false
+      }
+    ],
+    "rebuilt": "created:set"
+  },
+  {
+    "query": "created:none",
+    "terms": [
+      {
+        "field": "created",
+        "value": "none",
+        "neg": false
+      }
+    ],
+    "rebuilt": "created:none"
+  },
+  {
+    "query": "created:this-week",
+    "terms": [
+      {
+        "field": "created",
+        "value": "this-week",
+        "neg": false
+      }
+    ],
+    "rebuilt": "created:this-week"
+  },
+  {
+    "query": "created:this-month",
+    "terms": [
+      {
+        "field": "created",
+        "value": "this-month",
+        "neg": false
+      }
+    ],
+    "rebuilt": "created:this-month"
+  },
+  {
+    "query": "created:last-month",
+    "terms": [
+      {
+        "field": "created",
+        "value": "last-month",
+        "neg": false
+      }
+    ],
+    "rebuilt": "created:last-month"
+  },
+  {
+    "query": "created:<7d",
+    "terms": [
+      {
+        "field": "created",
+        "value": "<7d",
+        "neg": false
+      }
+    ],
+    "rebuilt": "created:<7d"
+  },
+  {
+    "query": "edited:today",
+    "terms": [
+      {
+        "field": "edited",
+        "value": "today",
+        "neg": false
+      }
+    ],
+    "rebuilt": "edited:today"
+  },
+  {
+    "query": "edited:this-week",
+    "terms": [
+      {
+        "field": "edited",
+        "value": "this-week",
+        "neg": false
+      }
+    ],
+    "rebuilt": "edited:this-week"
+  },
+  {
+    "query": "edited:this-month",
+    "terms": [
+      {
+        "field": "edited",
+        "value": "this-month",
+        "neg": false
+      }
+    ],
+    "rebuilt": "edited:this-month"
+  },
+  {
+    "query": "due:this-month",
+    "terms": [
+      {
+        "field": "due",
+        "value": "this-month",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:this-month"
+  },
+  {
+    "query": "due:next-month",
+    "terms": [
+      {
+        "field": "due",
+        "value": "next-month",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:next-month"
+  },
+  {
+    "query": "due:last-week",
+    "terms": [
+      {
+        "field": "due",
+        "value": "last-week",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:last-week"
+  },
+  {
+    "query": "due:this-week",
+    "terms": [
+      {
+        "field": "due",
+        "value": "this-week",
+        "neg": false
+      }
+    ],
+    "rebuilt": "due:this-week"
   }
 ]

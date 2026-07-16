@@ -31,8 +31,10 @@
     '#b6c948', // lime
     '#8a93a6', // slate
   ];
-  // ASCII / unicode glyph icons (monospace-safe)
-  const GLYPHS = ['❯','◆','▲','●','★','■','◈','⌘','⚙','§','¶','λ','Σ','∆','▒','☰','⎔','⊞','✦','⛁','♜','⌬','∴','▚','◇','✧','⊹','⌗','⟁','❖'];
+  // ASCII / unicode glyph icons (monospace-safe). The list lives in glyphs.js — it's the SOURCE
+  // OF TRUTH the server validates against (an off-list glyph is a 400), and a parity test keeps
+  // the two in step. Don't inline a literal here again.
+  const GLYPHS = window.GLYPHS;
 
   const labels = [
     { id:'l_urgent',  name:'urgent' },
@@ -49,7 +51,7 @@
     { id:'p_dev',    parentId:null,    name:'dev',          color:'#46d369', glyph:'λ',  collapsed:false },
     { id:'p_tdx',    parentId:'p_dev', name:'tdx-app',      color:'#3fd7d7', glyph:'◈',  collapsed:false },
     { id:'p_infra',  parentId:'p_dev', name:'infra',        color:'#5b8cff', glyph:'⊞',  collapsed:false },
-    { id:'p_home',   parentId:null,    name:'home',         color:'#ff9f43', glyph:'⌂',  collapsed:false },
+    { id:'p_home',   parentId:null,    name:'home',         color:'#ff9f43', glyph:'❯',  collapsed:false },
     { id:'p_house',  parentId:'p_home',name:'house-upkeep', color:'#ff6fae', glyph:'⚙',  collapsed:false },
     { id:'p_money',  parentId:'p_home',name:'finance',      color:'#b6c948', glyph:'§',  collapsed:false },
     { id:'p_health', parentId:null,    name:'health',       color:'#c78bff', glyph:'✦',  collapsed:false },
@@ -123,19 +125,24 @@
     { id:'sv_rec',     name:'Recurring', glyph:'↻', query:'recurring:true status:open',system:true,  pinned:false },
     { id:'sv_nodate',  name:'No date',   glyph:'∅', query:'due:none status:open',      system:true,  pinned:false },
     { id:'sv_urgent',  name:'Urgent',    glyph:'★', query:'label:urgent status:open',  system:false, pinned:false },
-    { id:'sv_quick',   name:'Quick wins',glyph:'⚡', query:'label:quick status:open',   system:false, pinned:false },
+    { id:'sv_quick',   name:'Quick wins',glyph:'✦', query:'label:quick status:open',   system:false, pinned:false },
   ];
 
   const store = reactive({
     labels, projects, tasks, savedQueries,
+    calendars: [],           // event categories (flat; mirror projects, no health/nesting)
+    folders: [],             // note categories (nested; each maps to a vault subdir)
     COLORS, GLYPHS,
     // ui state
     view: { kind:'query', id:'sv_today', title:'Today', query:'status:open due:today' },
     selectedTaskId: null,
+    draftTask: null,         // an unsaved new task, NOT in store.tasks until it has a name (e.6)
     detailOpen: false,
     completion: { open: true, done: false },   // which completion states the list includes (≥1 always on)
     searchActive: false,     // vim '/' free-text search is showing its results
     searchTerm: '',          // the current search string (remembered across view switches)
+    searchResults: [],       // cross-type find hits ({type,id,title,…}) for the search-list
+    _searchSeq: 0,           // guards against out-of-order async find responses
     healthFilter: null,      // a health-bar signal key while filtering a project view (transient)
     sortField: 'due',        // due | created | title | project | priority | size | tag
     // per-field direction. 'asc' = ^, 'desc' = v.
@@ -146,14 +153,33 @@
     builderOpen: false,
     sidebarOpen: false,      // mobile slide-in
     navCollapsed: false,     // desktop: hide the sidebar column (toggled with n)
-    navSections: { query:false, project:false, label:false },  // collapsed sidebar sections (Tab)
-    focusPane: 'list',       // 'list' | 'side' | 'filter' — which window the keyboard drives
+    deepNavCollapsed: false, // desktop: hide the app-switcher rail (toggled with N)
+    deepNavOpen: false,      // mobile: the rail's own slide-in (the > button), independent of the app nav
+    deepNavCursor: 0,        // keyboard cursor over the app rail (0 tasks · 1 events · 2 notes) when focusPane==='deepnav'
+    navSections: { query:false, project:false, calendar:false, folder:false, label:false },  // collapsed sidebar sections (Tab)
+    focusPane: 'list',       // 'list' | 'side' | 'query' | 'deepnav' — which window the keyboard drives
     sideFocusId: null,       // id of the keyboard-focused sidebar item
     moveId: null,            // id of the sidebar item being reordered (m = move mode)
     taskMoveId: null,        // id of the subtask being reordered in the task list (m = move mode)
     pendingNotesFocus: false,// set by quick-add Shift+Enter → detail opens focused in notes
     toasts: [],
     currentUser: null,       // { id, username, email } once authenticated; null = logged out
+    // ---- calendar / events (D2) ----
+    events: [],              // event occurrences for the calendar's visible range
+    // Notes and the full event series aren't in the store (they're fetched per-screen), but
+    // the markdown renderer needs to resolve [[t_0001]] / [[task:<uuid>]] links to a TITLE from
+    // anywhere a body renders. fetchNotes/fetchEventList fill these; resolveLink reads them.
+    noteCache: [],           // last-fetched note list (id, title, readableId, …)
+    eventCache: [],          // last-fetched event series (±1y window, deduped)
+    eventDetailOpen: false,  // the event editor drawer
+    editingEvent: null,      // the event being created/edited
+    noteDetailOpen: false,   // the note PEEK drawer (metadata + light edit; §4)
+    selectedNoteId: null,    // the note shown in the peek drawer
+    dayDetailOpen: false,    // the calendar day-schedule drawer (§4.2; stacks left of the event drawer)
+    dayDetailYmd: null,      // the day shown in the day-schedule drawer
+    calMatchIds: null,       // event-id set when a query predicate narrows the calendar (null = no filter); shared by grid + day drawer
+    displayOverride: null,   // 'grid'|'list' — the events screen's transient toggle (e.1); cleared on view change, pinned onto a view with `u`
+    calFrom: null, calTo: null,  // current calendar range (to refetch after a mutate)
   });
 
   // ---- derived helpers (plain functions; components call them) ----
@@ -179,6 +205,106 @@
     return out;
   };
   store.reparentProject = (p, parentId) => { p.parentId = parentId || null; };
+
+  // ---- per-app categories (D2 2E): calendars (events) + folders (notes) ----
+  // Which app the active view belongs to (calendar→events, notes→notes, else tasks).
+  store.currentApp = () => {
+    const k = store.view.kind;
+    return k==='calendar' ? 'events' : k==='notes' ? 'notes' : 'tasks';
+  };
+  // The nav "category" kind for the current app (project / calendar / folder).
+  store.categoryKind = () => {
+    const a = store.currentApp();
+    return a==='events' ? 'calendar' : a==='notes' ? 'folder' : 'project';
+  };
+  store.calendarById = (id) => store.calendars.find(c=>c.id===id);
+  store.folderById = (id) => store.folders.find(f=>f.id===id);
+  store.childFolders = (fid) => store.folders.filter(f=>f.parentId===fid);
+  store.folderTree = () => {
+    const out = [];
+    const walk = (f, depth) => { out.push({ f, depth }); store.childFolders(f.id).forEach(c=>walk(c, depth+1)); };
+    store.folders.filter(f=>!f.parentId).forEach(r=>walk(r, 0));
+    return out;
+  };
+  store.reparentFolder = (f, parentId) => { f.parentId = parentId || null; };
+  // ---- the vault's BASE DIRECTORY, as a folder (audit n.16) ------------------------------
+  // A note at the top of the vault has folderId === null. That's not "unassigned": folders are
+  // derived from the vault's DIRECTORIES, so null IS the root directory — already a real, writable
+  // destination. It didn't need creating, it needed a NAME. The user supplies one in preferences
+  // (default 'Inbox'; blank = hidden, which is exactly how notes behaved before this existed).
+  //
+  // It is SYNTHETIC and must never enter store.folders: the diff-sync watcher snapshots that array
+  // and would try to POST it as a real folder. It's also flat by nature — no children, no parent —
+  // because on disk every top-level folder ALREADY lives inside it.
+  store.BASE_FID = '__base__';   // a sentinel VIEW id; it never goes over the wire
+  store.rootFolder = () => {
+    const raw = ((store.currentUser && store.currentUser.notes_root_name) || '').trim();
+    if(!raw) return null;                                       // unnamed → the row is hidden
+    // a real folder by the same name makes `folder:<name>` ambiguous — the server resolves that
+    // in the data's favor, so say so here: the row is tagged, and the user can rename either one
+    const clash = store.folders.some(f => Q.slug(f.name) === Q.slug(raw));
+    return { id: store.BASE_FID, name: clash ? raw+' (base)' : raw, glyph:'❯', color:'system', synthetic:true, clash };
+  };
+  // ---- "all calendars": the unfiltered events view, as a nav row (audit e.10) --------------
+  // Every way into the events app applied a FILTER — each saved view carries a query, each
+  // calendar in the nav is a filter — so there was no entry meaning "show me everything". The
+  // unfiltered state already existed (store.openCalendar → calendarId:null); it just had no row
+  // and NO KEYBOARD PATH: the only caller was the ✕ on the filter chip, so a keyboard user who
+  // picked a calendar could never get back.
+  //
+  // NOT the notes base directory's twin. That row is a FILTER (notes with folderId === null);
+  // this one is the ABSENCE of a filter. So it needs no sentinel: openCalendar()'s view id IS
+  // 'calendar', and reusing it as the row id makes the sidebar's cursor-restore match for free.
+  store.ALL_CID = 'calendar';
+  store.allCalendars = () => {
+    const raw = ((store.currentUser && store.currentUser.calendars_all_name) || '').trim();
+    if(!raw) return null;                                       // unnamed → the row is hidden
+    return { id: store.ALL_CID, name: raw, glyph:'❖', color:'system', synthetic:true };
+  };
+  // generic category accessors so the sidebar + keyboard nav can treat
+  // project/calendar/folder uniformly (calendars are flat → no children).
+  store.catChildren = (kind, id) =>
+    kind==='project' ? store.childProjects(id) :
+    kind==='folder'  ? store.childFolders(id) : [];
+  store.catById = (kind, id) =>
+    kind==='project' ? store.projectById(id) :
+    kind==='calendar'? store.calendarById(id) : store.folderById(id);
+  store.catRoots = (kind) =>
+    kind==='project' ? store.projects.filter(p=>!p.parentId) :
+    kind==='calendar'? store.calendars :
+    store.folders.filter(f=>!f.parentId);
+  // count badge: open root tasks for a project; (events/notes load lazily, so
+  // calendars/folders return null → the nav omits the badge for them)
+  store.catCount = (kind, id) => kind==='project' ? store.projectCount(id) : null;
+  store.catActive = (kind, node) => {
+    const v = store.view;
+    if(kind==='project') return v.kind==='project' && v.id===node.id;
+    if(kind==='calendar') return v.kind==='calendar' && v.calendarId===node.id;
+    return v.kind==='notes' && v.folderId===node.id;   // the base row uses BASE_FID, so this covers it too
+  };
+  store.openCatView = (kind, node) =>
+    kind==='project' ? store.openProjectView(node) :
+    kind==='calendar'? store.openCalendarView(node) : store.openFolderView(node);
+  // a saved view belongs to the app(s) of its explicit type: tokens; a view with NO type:
+  // is a plain task query (status:/due:/… apply to tasks) → it belongs to the Tasks app only,
+  // so task filters don't clutter the Events/Notes nav. Drives the per-app views list.
+  store.viewMatchesApp = (sv, app) => {
+    const types = new Set();
+    for(const t of Q.parse(sv.query||'').terms)
+      if(t.field==='type' && !t.neg) for(const tok of String(t.value).split(',').map(s=>s.trim())) if(tok) types.add(tok);
+    if(!types.size) return app==='tasks';   // no type: → Tasks app only
+    return types.has(({ tasks:'task', events:'event', notes:'note' })[app]);
+  };
+  store.appQueries = () => store.savedQueries.filter(sv => store.viewMatchesApp(sv, store.currentApp()));
+  // the editable saved view backing the current query (the view itself, or — for a 'custom'
+  // draft edited off a saved view — its origin). null for system/seed views or a fresh query;
+  // drives the query bar's in-place Update action (§1).
+  store.activeSavedQuery = () => {
+    const v = store.view;
+    const id = store.savedQueries.some(s=>s.id===v.id) ? v.id : v.originId;
+    const sv = id ? store.savedQueries.find(s=>s.id===id) : null;
+    return (sv && !sv.system) ? sv : null;
+  };
   // ---- sort configuration (Shift+S popup; persisted as users.sort_prefs) ----
   const SORT_KEYS = ['due','created','title','project','priority','size','tag'];
   const DEFAULT_SORT_DIRS = { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', size:'desc', tag:'asc' };
@@ -205,14 +331,46 @@
     if(first) store.sortField = first;
   };
   store.subtasks = (tid) => store.tasks.filter(t=>t.parentId===tid);
-  store.taskById = (id) => store.tasks.find(t=>t.id===id);
+  // the uncommitted draft is findable by id too, so the detail drawer can edit it like any task
+  // (it just isn't in store.tasks yet — see startDraftTask)
+  store.taskById = (id) => (store.draftTask && store.draftTask.id===id) ? store.draftTask : store.tasks.find(t=>t.id===id);
 
   // count open tasks for a project incl. subprojects
   // exact: a project's count is its own open root tasks, not its subprojects'
   // (matches the project view / `project:` token, which no longer cascade)
   store.projectCount = (pid) =>
     store.tasks.filter(t=>!t.done && !t.parentId && t.projectId===pid).length;
-  store.queryCount = (q) => Q.run(q, store.ctx()).filter(t=>!t.parentId).length;
+  // count matching root TASKS for a query (the client Q engine is task-only). Strip type:
+  // first — the engine has no 'type' field, so an unstripped `type:task` would match nothing.
+  store.queryCount = (q) =>
+    Q.run(Q.build(Q.parse(q).terms.filter(t=>t.field!=='type')), store.ctx()).filter(t=>!t.parentId).length;
+  // whether a saved view is client-countable: only task/no-type views (events/notes need the
+  // server) — drives whether the nav shows a count badge for it.
+  store.viewCountable = (sv) => {
+    for(const t of Q.parse(sv.query||'').terms)
+      if(t.field==='type' && !t.neg) for(const tok of String(t.value).split(',').map(s=>s.trim()))
+        if(tok==='event' || tok==='note') return false;
+    return true;
+  };
+
+  // Resolve a link target for the markdown renderer (§5): either a TYPED uuid link
+  // ([[task:<uuid>]], type given) or a readable id ([[t_0001]], type null). Returns
+  // { type, id, title } or null. Reads the reactive caches, so a body re-renders on its
+  // own once fetchNotes/fetchEventList land. A cross-user ref (alice_t_0001) never
+  // resolves here — the client only holds your own items — so it renders as plain text.
+  store.resolveLink = (type, id) => {
+    if(!id) return null;
+    const hit = (t, o) => o ? { type:t, id:o.id, title:o.title || '' } : null;
+    if(type==='task')  return hit('task',  store.tasks.find(t=>t.id===id));
+    if(type==='event') return hit('event', store.eventCache.find(e=>e.id===id) || store.events.find(e=>e.id===id));
+    if(type==='note')  return hit('note',  store.noteCache.find(n=>n.id===id));
+    if(type) return null;
+    const rid = String(id).toLowerCase();
+    const byRid = (o) => (o.readableId||'').toLowerCase() === rid;
+    return hit('task',  store.tasks.find(byRid))
+        || hit('event', store.eventCache.find(byRid) || store.events.find(byRid))
+        || hit('note',  store.noteCache.find(byRid));
+  };
 
   // completion filter (open / completed pills + the list-head toggle). A task passes if
   // its completion state is currently included; ≥1 of {open, done} is always on.
@@ -259,34 +417,136 @@
     const v = store.view;
     return v.kind==='project' ? 'project:'+v.id : (v.query||'');
   };
-  // vim '/' search: title+notes substring across ALL tasks (ignores the active
-  // view), respecting the completed toggle, including subtasks (surfacing parents),
-  // relevance-ordered. Drives both the render and j/k nav via visibleRoots.
-  store.searchRoots = () => {
-    const term = (store.searchTerm||'').trim().toLowerCase();
-    if(!term) return [];
-    let matched = store.tasks.filter(t =>
-      (t.title||'').toLowerCase().includes(term) || (t.notes||'').toLowerCase().includes(term) ||
-      (t.id||'').toLowerCase().includes(term));
-    matched = matched.filter(store.completionPass);
-    const roots = []; const seen = new Set();
-    for(const t of matched){
-      let r=t; while(r.parentId){ const p=store.taskById(r.parentId); if(!p) break; r=p; }
-      if(!seen.has(r.id)){ seen.add(r.id); roots.push(r); }
+  // the app types the active query selects (non-negated type: tokens; [] = no type: term)
+  store.queryTypes = () => {
+    const set = new Set();
+    for(const t of Q.parse(store.currentQuery()).terms){
+      if(t.field==='type' && !t.neg) for(const tok of String(t.value).split(',').map(s=>s.trim())) if(tok) set.add(tok);
     }
-    const rank = t => {
-      if((t.id||'').toLowerCase()===term) return -1;   // exact id hit → top
-      const ti=(t.title||'').toLowerCase();
-      if(ti.startsWith(term)) return 0;
-      if(ti.includes(term))   return 1;
-      return 2;   // notes-only, id-substring, or surfaced because a subtask matched
-    };
-    return roots.sort((a,b)=> rank(a)-rank(b) || a.title.localeCompare(b.title));
+    return [...set];
+  };
+  // the current app's own entity type (Tasks→task, Events→event, Notes→note)
+  store.nativeType = () => ({ tasks:'task', events:'event', notes:'note' })[store.currentApp()];
+  // mixed view = the query selects a type beyond the current app's own. Each app keeps its
+  // native screen (task tree / calendar grid / notes list) for its own type or no type:;
+  // broadening (e.g. type:event,task in the Events app) falls back to the shared mixed list.
+  // ---- presentation: grid vs list on the events screen (audit e.1) --------------------
+  // Grid-vs-list is VIEW metadata (saved_queries.display), never a query term — the query
+  // language is parity-locked and type-agnostic, and 'list' means nothing to tasks/notes.
+  // A date-range query fights the grid (a calendar IS already a date filter, and it owns what
+  // gets fetched), so 'auto' renders those as a list and keeps the grid for everything else.
+  store.isDateRangeQuery = (q) =>
+    Q.parse(q || '').terms.some(t => !t.neg && (t.field==='due' || t.field==='created' || t.field==='edited'));
+  // the saved view behind the current screen — INCLUDING system/seed views (activeSavedQuery
+  // deliberately excludes them, since they can't be updated; we still want to read their display)
+  store.currentSavedView = () => {
+    const v = store.view;
+    const id = store.savedQueries.some(s=>s.id===v.id) ? v.id : v.originId;
+    return id ? (store.savedQueries.find(s=>s.id===id) || null) : null;
+  };
+  // A grid can only draw DATEABLE things: tasks and events both have a date, notes don't — so a
+  // query touching notes can never be a grid (e.5). Tasks + events on a grid together is fine.
+  store.gridAllowed = () => {
+    const app = store.currentApp();
+    if(app !== 'tasks' && app !== 'events') return false;
+    return store.queryTypes().every(t => t==='task' || t==='event');
+  };
+  store.viewDisplay = () => {
+    if(store.displayOverride) return store.displayOverride;          // the session's toggle wins
+    const sv = store.currentSavedView();
+    const d = (sv && sv.display) || 'auto';
+    if(d==='grid' || d==='list') return d;                           // pinned on the view
+    // auto = the app's NATIVE presentation. Events are a calendar by nature — except for a
+    // date-range query, which fights the grid (e.1). Tasks/notes are lists by nature.
+    if(store.currentApp() !== 'events') return 'list';
+    return store.isDateRangeQuery(store.currentQuery()) ? 'list' : 'grid';
+  };
+  // does THIS screen render the calendar grid? (the one question the templates + onKey ask)
+  store.showsGrid = () => store.gridAllowed() && store.viewDisplay()==='grid';
+  store.eventsAsList = () => store.currentApp()==='events' && !store.showsGrid();
+  store.toggleDisplay = () => {
+    if(!store.gridAllowed() && store.viewDisplay()==='list'){
+      store.toast('no grid for this query — notes have no date to place');   // e.5
+      return;
+    }
+    store.displayOverride = store.viewDisplay()==='list' ? 'grid' : 'list';
+    const sv = store.currentSavedView();
+    const pin = sv && !sv.system ? ' · q then u to pin it to this view' : '';
+    store.toast((store.displayOverride==='grid' ? 'calendar' : 'list') + ' view' + pin);
+  };
+  // ---- grid filtering: SERIES vs OCCURRENCE (audit e.1) -------------------------------
+  // The grid draws OCCURRENCES; the unified query matches SERIES. Filtering by matched-id alone
+  // therefore CANNOT express a date range — a weekly standup that matches `due:this-week` puts its
+  // id in the set, and every one of its 17 monthly occurrences stays on the grid (which is why the
+  // calendar looked unfiltered). So compose two passes:
+  //   1. series-level  — calMatchIds (label: / calendar: / category: / text)
+  //   2. occurrence-level — `due:` evaluated against THIS occurrence's own date, which is the same
+  //      due:→occurrence mapping the server does in unifiedQuery (*AsTask). Reuses the parity engine.
+  let _dueSrc = null, _dueProg = null;
+  store.calDueTerms = () => {
+    const q = store.currentQuery() || '';
+    if(q !== _dueSrc){ _dueSrc = q; _dueProg = { terms: Q.parse(q).terms.filter(t => t.field==='due') }; }
+    return _dueProg;
+  };
+  store.calShows = (ev) => {
+    if(store.calMatchIds && !store.calMatchIds.has(ev.id)) return false;   // pass 1
+    const prog = store.calDueTerms();
+    if(!prog.terms.length) return true;
+    return Q.evaluate({ due: ev.date }, prog, store.ctx());                // pass 2
+  };
+  // ---- what the grid may DRAW: the type: rule, same as everywhere else (audit e.5) -----
+  // The task overlay predates the type: rule and was gated on "does a predicate exist", which
+  // was wrong both ways (type:event still drew tasks; any predicate hid tasks you'd asked for).
+  // no type: at all → every type (the §3.1 rule).
+  store.gridShowsTasks = () => { const ts = store.queryTypes(); return !ts.length || ts.includes('task'); };
+  store.gridShowsEvents = () => { const ts = store.queryTypes(); return !ts.length || ts.includes('event'); };
+  // A dated task passes if its type is wanted AND the query matches it — evaluated SYNCHRONOUSLY
+  // by the client engine, the same one the task list uses (so grid and list can't disagree).
+  //
+  // This deliberately does NOT use a server match-set. Events need one (only the server expands
+  // recurrences), but every task is already in the store. An async id-set starts out null, and
+  // "null" has to mean "no filter" — so the grid painted EVERY dated task in the window before the
+  // fetch landed, which on the Tasks screen is the very first thing you see. No async, no window.
+  let _tqSrc = null, _tqProg = null;
+  store.gridTaskQuery = () => {
+    const q = store.currentQuery() || '';
+    if(q !== _tqSrc){ _tqSrc = q; _tqProg = { terms: Q.parse(q).terms.filter(t => t.field !== 'type') }; }
+    return _tqProg;   // type: is the gate above; the client engine has no 'type' field
+  };
+  store.taskShows = (t) => {
+    if(!store.gridShowsTasks()) return false;
+    const prog = store.gridTaskQuery();
+    if(!prog.terms.length) return true;
+    return Q.evaluate(t, prog, store.ctx());
+  };
+  store.isMixedView = () => {
+    if(store.view.kind==='project') return false;
+    const ts = store.queryTypes();
+    if(ts.length===0) return false;                          // no type: → native screen
+    return !(ts.length===1 && ts[0]===store.nativeType());   // exactly the app's own type → native
+  };
+  // the current query with type:/-type: stripped — fed to the client Q engine, which has no
+  // 'type' field (a type: term would hit the text-match fallback and wrongly empty the list).
+  // NOT applied to currentQuery() itself, which must keep type: for display + the mixed path.
+  store.taskQuery = () => Q.build(Q.parse(store.currentQuery()).terms.filter(t => t.field!=='type'));
+  // The '/' find (2E §3.4): a throwaway, text-only live find across ALL types
+  // (tasks + events + notes) — distinct from the categorical query system. Each
+  // word is matched as a literal text term (quoted so a stray `due:`/`label:` in the
+  // find box stays plain text, never a field), AND-ed, over title + body/notes. Backed
+  // by the same unified engine as the mixed list (store.runQuery), results land in
+  // store.searchResults for the search-list surface. No save, no categories.
+  store.runSearch = async () => {
+    const term = (store.searchTerm||'').trim();
+    if(!term){ store.searchResults = []; return; }
+    const seq = ++store._searchSeq;
+    const words = term.split(/\s+/).filter(Boolean).map(w => '"'+w.replace(/"/g,'')+'"');
+    const items = await store.runQuery('type:task,event,note '+words.join(' '));
+    if(seq !== store._searchSeq) return;   // a newer keystroke superseded this one
+    store.searchResults = items || [];
   };
   store.visibleRoots = () => {
-    if(store.searchActive) return store.searchRoots();
     const ctx = store.ctx();
-    const q = store.currentQuery();
+    const q = store.taskQuery();   // type: stripped — client Q has no 'type' field
     let matched = Q.run(q, ctx);
     if(!/status:done|is:done/.test(q)) matched = matched.filter(store.completionPass);
     const matchedIds = new Set(matched.map(t=>t.id));
@@ -337,17 +597,30 @@
   // Project deterministically; Flags (recurring/reminder/is/has) and free text
   // are ignored (see store.viewWarn). For dates we pick the day closest to today
   // that satisfies the view's due/status terms — reusing the query engine itself.
-  const APPLIED_FIELDS = new Set(['project','label','status','due']);
-  store.viewDefaults = () => {
+  const APPLIED_FIELDS = new Set(['project','label','status','due','folder','calendar','category']);
+  // The view's implied fields, in the creation engine's ABSTRACT vocabulary
+  // ({labels, category, date, done}) — CL.apply maps them onto each type's own columns
+  // (category → projectId / folderId / calendarId; date → due / reviewAt / startAt),
+  // exactly as the query engine already maps `due:` and `category:` per type.
+  //
+  // This is what lets a note created in a `label:work` view actually STAY in that view
+  // — and it's why the quick-add's ⚠ shrinks instead of getting louder: the fields it
+  // used to warn about are now applied.
+  const CAT_FIELD = { task:'project', note:'folder', event:'calendar' };
+  const CAT_LIST  = { task:'projects', note:'folders', event:'calendars' };
+  store.defaultsFor = (type) => {
     const out = { labels: [] };
     const terms = Q.parse(store.currentQuery()).terms;
     const ctx = store.ctx();
 
-    // project: assign the first matching project (id or name slug)
-    const pt = terms.find(t => t.field==='project' && !t.neg);
-    if(pt){
-      const p = store.projects.find(p => p.id===pt.value || Q.slug(p.name)===Q.slug(pt.value));
-      if(p) out.projectId = p.id;
+    // category: the first matching project / folder / calendar (by id or name slug).
+    // `category:` is the cross-app spelling of the same idea, so it counts too.
+    const catField = CAT_FIELD[type] || 'project';
+    const ct = terms.find(t => (t.field===catField || t.field==='category') && !t.neg);
+    if(ct){
+      const list = store[CAT_LIST[type] || 'projects'] || [];
+      const hit = list.find(c => c.id===ct.value || Q.slug(c.name)===Q.slug(ct.value));
+      if(hit) out.category = hit.id;
     }
 
     // labels: every non-negated label term, comma-lists expanded (OR -> apply all)
@@ -358,13 +631,16 @@
       });
     });
 
-    // create the task already done when the view filters to completed — either a
-    // status:done query term, or the completion pills set to completed-only (open off).
-    if(terms.some(t => t.field==='status' && t.value==='done' && !t.neg) ||
-       (store.completion.done && !store.completion.open)) out.done = true;
+    // create it already done when the view filters to completed — either a status:done
+    // query term, or the completion pills set to completed-only (open off). Tasks only:
+    // notes and events have no done state.
+    if(type==='task' && (terms.some(t => t.field==='status' && t.value==='done' && !t.neg) ||
+       (store.completion.done && !store.completion.open))) out.done = true;
 
-    // due: closest-to-today date satisfying every due/status term. due:none means
-    // "no due date", which an undated task already satisfies, so leave due unset.
+    // date: closest-to-today date satisfying every due/status term. due:none means "no
+    // date", which a new item already satisfies, so leave it unset. The probe is
+    // type-agnostic: it asks the QUERY ENGINE which day passes, and the engine already
+    // reads a note's `due:` as its review date.
     const dateTerms = terms.filter(t => t.field==='due' || t.field==='status');
     const hasDateConstraint = dateTerms.some(t =>
       t.field==='due' || t.value==='today' || t.value==='overdue');
@@ -372,7 +648,7 @@
     if(hasDateConstraint && !wantsNoDue){
       const base = Rec.startOfDay(new Date());
       // future-first: closest date that satisfies the due/status terms, preferring
-      // today/upcoming over past (so a due:<weekdays> view lands a new task on the
+      // today/upcoming over past (so a due:<weekdays> view lands a new item on the
       // next selected weekday). Regression-free for the other due filters.
       const offsets = [0];
       for(let i=1; i<=400; i++){ offsets.push(i); }
@@ -381,19 +657,72 @@
         const cand = { due: Rec.ymd(Rec.addDays(base, delta)), done: !!out.done,
           parentId:null, recurrence:null, labels:[], title:'', notes:'' };
         if(dateTerms.every(t => Q.evaluate(cand, { terms:[t], ok:true }, ctx))){
-          out.due = cand.due; break;
+          out.date = cand.due; break;
         }
       }
     }
     return out;
   };
+  // the task-shaped view of the same thing (projectId/due), kept because it's the shape
+  // the store's own golden pins. Key order matches the original build order.
+  store.viewDefaults = () => {
+    const d = store.defaultsFor('task');
+    const out = { labels: d.labels };
+    if(d.category !== undefined) out.projectId = d.category;
+    if(d.done !== undefined) out.done = d.done;
+    if(d.date !== undefined) out.due = d.date;
+    return out;
+  };
 
   // True when the current view filters on parameters we can't apply to a new task
-  // (Flags or free text) — drives the quick-add warning indicator. `has:no-labels`
-  // ("no tag") is exempt: a brand-new task has no labels, so it already satisfies it.
+  // (Flags or free text) — drives the quick-add warning indicator. Two exemptions, both
+  // things a brand-new task ALREADY satisfies, so warning about them is just noise:
+  //   · `has:no-labels` ("no tag") — a new task has no labels.
+  //   · `type:` that includes task — a new task IS a task. Every default task view now carries
+  //     `type:task` (the §3.1 type: rule), which lit this warning on Today/Open/This week.
+  const satisfiedByNewTask = (t) => {
+    if(t.neg) return false;                                   // -type:task / -has:no-labels do exclude it
+    if(t.field==='has' && t.value==='no-labels') return true;
+    if(t.field==='type') return String(t.value).split(',').map(s=>s.trim()).includes('task');
+    return false;
+  };
   store.viewWarn = () =>
     Q.parse(store.currentQuery()).terms.some(t =>
-      !APPLIED_FIELDS.has(t.field) && !(t.field==='has' && t.value==='no-labels'));
+      !APPLIED_FIELDS.has(t.field) && !satisfiedByNewTask(t));
+
+  // ---- the creation language's context (CL.apply) -------------------------------------
+  // CL.parse is PURE — it hands back label NAMES and a category NAME. Every side effect
+  // (creating a label) and every lookup lives here, on the store.
+  //   known()        gates `/`: a label auto-creates, but a project/folder/calendar can't,
+  //                  so an unknown `/xyz` stays visible in the title instead of vanishing.
+  //   findCategory() resolves it, using the QUERY ENGINE'S OWN name rule (CL.nameMatch =
+  //                  catNameMatch), so `/tdx` finds `tdx-app` exactly as `project:tdx` does.
+  const catList = (kind) => kind==='folder' ? store.folders
+    : kind==='calendar' ? store.calendars : store.projects;
+  store.clCtx = (type) => ({
+    defaults: store.defaultsFor(type),
+    addLabel: (name) => store.addLabel(name),          // creates on demand — apply-time only
+    findCategory: (kind, name) => catList(kind).find(c => CL.nameMatch(c.name, name)) || null,
+  });
+  store.clKnown = (kind, name) => catList(kind).some(c => CL.nameMatch(c.name, name));
+  // Ghost-completion, shared by every quick-add: the grey suffix of the first candidate
+  // whose name extends the trailing token. Candidates depend on the SIGIL, not the app —
+  // labels for `#`, the type's categorizer for `/`, and a fixed vocabulary for `$` (the
+  // date words are the only ones a user can't discover from their own data).
+  const DATE_WORDS = ['today','tomorrow', ...CL.WD_FULL];
+  store.clCandidates = (type, sigil) =>
+    sigil==='#' ? store.sortedLabels().map(l => l.name)
+    : sigil==='/' ? catList(CL.CATEGORY_OF[type] || 'project').map(c => c.name)
+    : sigil==='$' ? DATE_WORDS
+    : [];
+  store.clGhost = (text, type) => {
+    const f = CL.fragment(text, type);
+    if(!f || !f.fragment) return '';
+    const frag = f.fragment.toLowerCase();
+    const hit = store.clCandidates(type, f.sigil)
+      .find(n => n.toLowerCase() !== frag && n.toLowerCase().startsWith(frag));
+    return hit ? hit.slice(f.fragment.length) : '';
+  };
 
   // ---- mutations ----
   store.toast = (msg) => {
@@ -401,19 +730,120 @@
     setTimeout(()=>{ const i = store.toasts.findIndex(t=>t.id===id); if(i>=0) store.toasts.splice(i,1); }, 2200);
   };
 
-  store.setView = (v) => {
+  // an editor with unsaved work registers store.dirtyCheck (() => bool); switching
+  // views (apps, saved queries, projects…) routes through here, so this one guard
+  // catches every "navigate away and lose my edits" path.
+  store.dirtyCheck = null;
+  // Modals (event/task editors) stack OVER the main editor, so they can't use the
+  // single dirtyCheck slot without clobbering it. They register here instead; the
+  // refresh/close-tab guard (beforeunload) consults dirtyCheck + every registered
+  // checker. Returns an unregister fn for the component's beforeUnmount.
+  store._dirtyCheckers = new Set();
+  store.registerDirty = (fn) => { store._dirtyCheckers.add(fn); return () => store._dirtyCheckers.delete(fn); };
+  store.isAnyDirty = () => {
+    try { if(store.dirtyCheck && store.dirtyCheck()) return true; } catch(e){ /* ignore a torn-down checker */ }
+    for(const fn of store._dirtyCheckers){ try { if(fn()) return true; } catch(e){ /* ignore */ } }
+    return false;
+  };
+  // ---- the shared list cursor (audit a.2) -------------------------------------------------
+  // J/K walk the list UNDER an open drawer and swap which item it shows, without closing it
+  // (j/k belong to the drawer's own fields). That worked for tasks only, because detailSwap was
+  // hard-wired to store.visibleRows() + selectedTaskId. Instead of copying it per list, whichever
+  // list is on screen REGISTERS a cursor here, and every drawer calls the one listSwap().
+  //   rows()  → the items, in display order
+  //   index() → the current position
+  //   go(i)   → move there AND show it in its drawer (each list already knows how, per type)
+  store.listCursor = null;
+  store.registerListCursor = (c) => { store.listCursor = c; return () => { if(store.listCursor===c) store.listCursor = null; }; };
+  store.listSwap = async (dir) => {
+    const c = store.listCursor;
+    if(!c) return;
+    const rows = c.rows() || [];
+    if(!rows.length) return;
+    const i = Math.max(0, Math.min(rows.length - 1, c.index() + dir));
+    if(i === c.index()) return;                       // already at the end — don't churn the drawer
+    // The event/note drawers SNAPSHOT their entity and are remounted by :key, so swapping away
+    // would silently bin unsaved edits. Tasks are safe (task-detail edits the store directly).
+    if(store.isAnyDirty() && store.askConfirm){
+      const ok = await store.askConfirm('Discard unsaved changes?');
+      if(!ok) return;
+    }
+    c.go(i);
+  };
+
+  const applyView = (v) => {
     store.view = v; store.selectedTaskId = null; store.sidebarOpen = false;
     store.searchActive = false;   // switching views exits search (the term is kept for the next '/')
     store.healthFilter = null;    // and drops any project health-bar filter
+    store.dayDetailOpen = false;  // and closes the calendar day-schedule drawer (calendar-only)
+    store.displayOverride = null; // a grid/list toggle belongs to the view you toggled it on (e.1)
   };
-  store.openQueryView = (sv) => {
-    store.setView({ kind:'query', id:sv.id, title:sv.name, query:sv.query });
+  store.setView = (v) => {
+    if(store.dirtyCheck && store.dirtyCheck() && store.askConfirm){
+      store.askConfirm("Discard unsaved changes? You'll lose your edits.").then((ok)=>{
+        if(ok){ store.dirtyCheck = null; applyView(v); }
+      });
+      return;
+    }
+    applyView(v);
   };
+  // Open a saved view. WHICH SCREEN it lands on (audit a.7):
+  //   1. `forceApp` wins — the app-switch callers (the app rail, #/tasks, toggleCalendar, boot)
+  //      mean "go to THIS app", and must not be second-guessed by the rules below.
+  //   2. else, if the view's types include the CURRENT app's own type, STAY WHERE YOU ARE. An
+  //      "Everything" view opened from the Events nav keeps you in Events. This is the fix: the
+  //      old code routed purely by type: tokens, so anything spanning >1 type fell into the
+  //      tasks catch-all — even though the nav had offered it to you from Events/Notes.
+  //   3. else, derive the app from the view's types (a single-type events/notes view opens on
+  //      that app's native screen; anything else is a task/mixed query view).
+  store.openQueryView = (sv, forceApp) => {
+    const types = new Set();
+    for(const t of Q.parse(sv.query||'').terms)
+      if(t.field==='type' && !t.neg) String(t.value).split(',').map(s=>s.trim()).forEach(x=>{ if(x) types.add(x); });
+
+    const derived = types.size===1 && types.has('event') ? 'events'
+      : types.size===1 && types.has('note') ? 'notes'
+      : 'tasks';
+    const stay = !forceApp && types.has(store.nativeType());   // the view speaks this app's language
+    const app = forceApp || (stay ? store.currentApp() : derived);
+
+    if(app==='events') store.setView({ kind:'calendar', id:sv.id, title:sv.name, query:sv.query, calendarId:null });
+    else if(app==='notes') store.setView({ kind:'notes', id:sv.id, title:sv.name, query:sv.query, folderId:null });
+    else store.setView({ kind:'query', id:sv.id, title:sv.name, query:sv.query });
+  };
+  // ---- calendar (D2) ----
+  // app home = all events / all notes (no category filter); a specific calendar/folder
+  // narrows the screen to that category (calendarId/folderId on the view).
+  // each app's query defaults to its own type: (so the builder reflects it and broadening
+  // beyond that type trips the mixed-list); the calendar/folder narrowing rides on the
+  // view's calendarId/folderId, separate from the query text.
+  // the unfiltered events view. Its TITLE is the "all calendars" row's name when there is one
+  // (e.10) — one line, and all 7 callers (the ✕ chip, deep-nav, switchApp, …) inherit it.
+  store.openCalendar = () => {
+    const all = store.allCalendars();
+    store.setView({ kind:'calendar', id:'calendar', title:(all ? all.name : 'Calendar'), query:'type:event', calendarId:null });
+  };
+  store.openNotes = () => store.setView({ kind:'notes', id:'notes', title:'Notes', query:'type:note', folderId:null });
+  store.openCalendarView = (c) => store.setView({ kind:'calendar', id:c.id, title:c.name, query:'type:event', calendarId:c.id });
+  store.openFolderView = (f) => store.setView({ kind:'notes', id:f.id, title:f.name, query:'type:note', folderId:f.id });
+  // the base directory needs its OWN view id: folderId:null is already "all notes" (openNotes),
+  // so the root can't be addressed by null — it would be indistinguishable from the Notes home.
+  store.openBaseFolder = () => {
+    const r = store.rootFolder();
+    if(r) store.setView({ kind:'notes', id:store.BASE_FID, title:r.name, query:'type:note', folderId:store.BASE_FID });
+  };
+  // the three right-hand detail drawers (task / event / note) share the right edge —
+  // only one open at a time. Each opener closes the others first via closeDrawers().
+  store.closeDrawers = () => { store.detailOpen = false; store.eventDetailOpen = false; store.noteDetailOpen = false; };
+  store.editEvent = (ev) => { store.closeDrawers(); store.editingEvent = ev; store.eventDetailOpen = true; };
+  // open a note's PEEK drawer (metadata + light body edit) in place — does NOT navigate
+  // to the full /notes screen (that's `o`, via store.openNote → openNotes + pendingNoteId).
+  store.openNoteDrawer = (id) => { store.closeDrawers(); store.selectedNoteId = id; store.noteDetailOpen = true; };
   store.openProjectView = (p) => {
     store.setView({ kind:'project', id:p.id, title:p.name, query:'' });
   };
   store.openLabelView = (l) => {
-    store.setView({ kind:'query', id:'label_'+l.id, title:'#'+l.name, query:'label:'+l.name+' status:open' });
+    store.setView({ kind:'query', id:'label_'+l.id, title:'#'+l.name, query:'label:'+Q.slug(l.name)+' status:open' });
   };
 
   // Flat, ordered list of every navigable sidebar row (views, then the project
@@ -421,16 +851,24 @@
   store.sideItems = () => {
     const items = [];
     const ns = store.navSections || {};
+    const kind = store.categoryKind();   // project | calendar | folder, by app
     // section headers are always navigable (so a collapsed section can be re-expanded)
     items.push({ kind:'head', section:'query', id:'head_query' });
-    if(!ns.query) store.savedQueries.forEach(sv => items.push({ kind:'query', id:sv.id, ref:sv }));
-    items.push({ kind:'head', section:'project', id:'head_project' });
-    if(!ns.project){
-      const walk = (p) => {
-        items.push({ kind:'project', id:p.id, ref:p });
-        if(!p.collapsed) store.childProjects(p.id).forEach(walk);
+    if(!ns.query) store.appQueries().forEach(sv => items.push({ kind:'query', id:sv.id, ref:sv }));
+    // the category section swaps by app; calendars are flat, projects/folders nest
+    items.push({ kind:'head', section:kind, id:'head_'+kind });
+    if(!ns[kind]){
+      // the base directory sits ABOVE the real folders (n.16). Its own kind, deliberately: the
+      // sidebar's rename/delete/add-child/move verbs all fire on kind==='folder', so a distinct
+      // kind makes them inert here by construction rather than by a guard someone can forget.
+      if(kind==='folder'){ const r = store.rootFolder(); if(r) items.push({ kind:'baseFolder', id:r.id, ref:r }); }
+      // the same shape for "all calendars" (e.10) — and the same reason for its own kind
+      if(kind==='calendar'){ const a = store.allCalendars(); if(a) items.push({ kind:'allCalendars', id:a.id, ref:a }); }
+      const walk = (node) => {
+        items.push({ kind, id:node.id, ref:node });
+        if(!node.collapsed) store.catChildren(kind, node.id).forEach(walk);
       };
-      store.projects.filter(p=>!p.parentId).forEach(walk);
+      store.catRoots(kind).forEach(walk);
     }
     items.push({ kind:'head', section:'label', id:'head_label' });
     if(!ns.label) store.sortedLabels().forEach(l => items.push({ kind:'label', id:l.id, ref:l }));
@@ -464,10 +902,40 @@
   store.openSideItem = (it) => {
     if(!it) return;
     if(it.kind==='query') store.openQueryView(it.ref);
-    else if(it.kind==='project') store.openProjectView(it.ref);
+    else if(it.kind==='project'||it.kind==='calendar'||it.kind==='folder') store.openCatView(it.kind, it.ref);
+    else if(it.kind==='baseFolder') store.openBaseFolder();
+    else if(it.kind==='allCalendars') store.openCalendar();   // clears the calendar filter (e.10)
     else if(it.kind==='label') store.openLabelView(it.ref);
   };
 
+  // ---- draft task (audit e.6) --------------------------------------------------------------
+  // `i` on the calendar used to call addTask() immediately, which PERSISTS a task titled
+  // 'untitled' the moment you press the key — junk rows from a stray keystroke, and a detail
+  // drawer sitting open on nothing. Instead the drawer opens on a DRAFT that lives OUTSIDE
+  // store.tasks (so it never syncs, never shows in a list, and J/K can't land on it) and is
+  // committed only when it has a name. Same rule the notes editor uses: nothing is written
+  // until it's named.
+  store.startDraftTask = (partial) => {
+    const t = mk(uid('t'), partial.projectId || currentProjectId(), null, '', partial);
+    store.draftTask = t;
+    store.closeDrawers();
+    store.selectedTaskId = t.id;
+    store.detailOpen = true;
+    return t;
+  };
+  store.commitDraftTask = () => {
+    const t = store.draftTask;
+    if(!t) return null;
+    store.draftTask = null;
+    store.tasks.push(t);          // now it's real — the autosave picks it up from here
+    return t;
+  };
+  store.discardDraftTask = () => {
+    if(!store.draftTask) return;
+    const id = store.draftTask.id;
+    store.draftTask = null;
+    if(store.selectedTaskId === id) store.selectedTaskId = null;
+  };
   store.addTask = (partial) => {
     const t = mk(uid('t'), partial.projectId || currentProjectId(), partial.parentId||null, partial.title||'untitled', partial);
     if(partial.rec) t.recurrence = partial.rec;
@@ -530,6 +998,35 @@
     });
     store.projects.push(p); return p;
   };
+  store.addCalendar = (partial) => {
+    const c = reactive({
+      id: uid('c'), name: partial.name||'new-calendar',
+      color: partial.color||COLORS[0], glyph: partial.glyph||'●',
+    });
+    store.calendars.push(c); return c;
+  };
+  store.addFolder = (partial) => {
+    const f = reactive({
+      id: uid('f'), parentId: partial.parentId||null,
+      name: partial.name||'new-folder',
+      color: partial.color||COLORS[0], glyph: partial.glyph||'●', collapsed:false,
+    });
+    store.folders.push(f); return f;
+  };
+  store.moveCalendar = (c, dir) => {            // flat list: swap with prev/next
+    const arr = store.calendars;
+    const i = arr.indexOf(c), j = i + dir;
+    if(i<0 || j<0 || j>=arr.length) return;
+    arr.splice(i,1); arr.splice(j,0,c);
+  };
+  store.moveFolder = (f, dir) => {              // swap with prev/next sibling (same parent)
+    const arr = store.folders;
+    const sibs = arr.filter(x=>x.parentId===f.parentId);
+    const target = sibs[sibs.indexOf(f) + dir];
+    if(!target) return;
+    const ia = arr.indexOf(f), ib = arr.indexOf(target);
+    const tmp = arr[ia]; arr[ia] = arr[ib]; arr[ib] = tmp;
+  };
   // Deep-clone a project + every task/subtask, with fresh ids and remapped
   // parent/project refs. includeSubprojects (default true) also clones the whole
   // subproject subtree; false clones just this project + its own tasks, leaving the
@@ -576,8 +1073,11 @@
   };
 
   store.saveQuery = (name, query, glyph, color, pinned) => {
-    const sv = { id: uid('sv'), name, glyph: glyph || '◆', color: color || COLORS[0], query, system:false, pinned: !!pinned };
+    // a grid/list toggle in flight is pinned onto the new view; otherwise 'auto' (app infers) — e.1
+    const display = store.displayOverride || 'auto';
+    const sv = { id: uid('sv'), name, glyph: glyph || '◆', color: color || COLORS[0], query, system:false, pinned: !!pinned, display };
     store.savedQueries.push(sv);
+    store.displayOverride = null;
     store.openQueryView(sv);
     return sv;
   };

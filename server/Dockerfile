@@ -16,6 +16,10 @@ RUN npm run build && npm prune --omit=dev
 
 FROM node:22-slim
 WORKDIR /app/server
+# git: the notes vault backup shells out to it (server/src/vault-git.ts)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production \
     FRONTEND_DIR=/app/frontend \
     MIGRATIONS_DIR=/app/server/migrations
@@ -25,6 +29,11 @@ COPY --from=build /app/server/migrations ./migrations
 COPY server/package.json ./
 COPY frontend /app/frontend
 EXPOSE 3000
+# Watchtower auto-deploys :latest with nothing verifying the app came up; a crash-loop
+# (e.g. a migration throwing at boot) would otherwise be silent. Probe /health (already
+# served by app.ts). start-period covers boot + applyMigrations before failures count.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
+  CMD node -e "fetch('http://localhost:'+(process.env.PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 # one-off admin tooling (compiled to dist/scripts):
 #   docker compose run --rm tdx node dist/scripts/add-user.js <user> <email> <pw> --admin
 #   docker compose run --rm tdx node dist/scripts/migrate-from-legacy.js <legacy.db> <target.db>

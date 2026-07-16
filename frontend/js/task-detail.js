@@ -11,7 +11,7 @@ window.TaskDetail = {
   <div class="detail" :class="{ hidden: !store.detailOpen || !task }">
     <div v-if="task" class="detail-head">
       <span class="mut">task</span>
-      <span class="cy">#{{ task.id }}</span>
+      <span v-if="task.readableId" class="cy">{{ task.readableId }}</span>
       <span v-if="parentTask" class="mut">· sub of "{{ parentTask.title.slice(0,18) }}"</span>
       <span class="x" @click="close" title="Close (esc)">✕</span>
     </div>
@@ -114,6 +114,12 @@ window.TaskDetail = {
           <input ref="addsub" v-model="subDraft" placeholder="add subtask…" @focus="kbFocusRow('addsub')" @keydown.enter="addSub" @keydown.esc.stop.prevent="blurField" />
         </div>
       </div>
+
+      <!-- cross-links (D2 2d slice 5) — a KbForm grid row, like labels (audit n.13) -->
+      <div class="field" v-if="task">
+        <linked-items ref="links" :store="store" type="task" :id="task.id"
+                      :kb-focus="linkFocus" :add-focus="addLinkFocus" @links="linkList = $event" @pick="kbPick('links', $event)"></linked-items>
+      </div>
     </div>
 
     <div v-if="task" class="d-actions">
@@ -123,9 +129,12 @@ window.TaskDetail = {
     </div>
   </div>
   `,
-  data(){ return { subDraft:'', kbAutoListen:false, kbAutofocus:false, recurActive:false, recurTouched:false, subMoveId:null }; },
+  data(){ return { subDraft:'', kbAutoListen:false, kbAutofocus:false, recurActive:false, recurTouched:false, subMoveId:null,
+    linkList:[] }; },   // linkList = the links the child emitted up (n.13; $refs isn't reactive)
   computed: {
     task(){ return this.store.taskById(this.store.selectedTaskId); },
+    linkFocus(){ return this.kbCellOf('links'); },   // → <linked-items :kb-focus> (n.13)
+    addLinkFocus(){ return !!this.kbCls('addlink').kfocus; },
     projectOptions(){ return this.store.projectTree(); },   // tree-ordered for the project select
     parentTask(){ return this.task && this.task.parentId ? this.store.taskById(this.task.parentId) : null; },
     subs(){ return this.task ? this.store.subtasks(this.task.id) : []; },
@@ -149,6 +158,12 @@ window.TaskDetail = {
     'store.detailOpen'(v){
       if(v){ this.recurTouched = false; this.$nextTick(()=>{
         this.kbInit();
+        // a DRAFT task (i on the calendar) has no name yet — land in the title so you just type (e.6)
+        if(this.store.draftTask && this.task && this.store.draftTask.id===this.task.id){
+          this.kbFocusRow('title');
+          this.kbEditCurrent();
+          return;
+        }
         if(this.store.pendingNotesFocus){   // quick-add / list Shift+Enter: land in the notes field
           this.store.pendingNotesFocus = false;
           this.kbFocusRow('notes');
@@ -181,6 +196,12 @@ window.TaskDetail = {
         // one navigable row per existing subtask (j/k highlight · i rename · m reorder)
         ...this.subs.map(s => ({ id:'sub_'+s.id, type:'input', ref:'sub_'+s.id })),
         { id:'addsub',    type:'input',  ref:'addsub' },
+        // links behave exactly like the labels row: j/k skip it, h/l cross the chips, space opens
+        { id:'links',     type:'grid',   items:this.linkList, cols:99,
+          select:l=>this.$refs.links && this.$refs.links.open(l), when:()=>this.linkList.length>0 },
+        // NOT gated on linkList.length — with zero links the grid row above emits no nav rows at
+        // all, so this is the only way to reach the picker and add the first link (n.13 follow-up)
+        { id:'addlink',   type:'input',  ref:'links', when:()=>!!this.task },   // i/space → linked-items.focus()
         { id:'save',      type:'button', activate:()=>this.save() },
         { id:'duplicate', type:'button', activate:()=>this.duplicate() },
         { id:'delete',    type:'button', activate:()=>this.del() },
@@ -250,6 +271,17 @@ window.TaskDetail = {
       if(occ) t.due = Rec.ymd(occ);   // today if today matches, else the next match
     },
     save(){
+      // a DRAFT task (created by `i` on the calendar) only becomes real once it has a name —
+      // saving it nameless discards it instead of persisting an 'untitled' row (e.6)
+      const draft = this.store.draftTask;
+      if(draft && this.task && draft.id === this.task.id){
+        if(!String(draft.title || '').trim()){
+          this.store.discardDraftTask();
+          this.store.detailOpen = false;
+          return;
+        }
+        this.store.commitDraftTask();
+      }
       if(this.recurTouched) this.inferDueFromRecurrence();   // persist the inferred due in this same write
       const a=document.activeElement; if(a && a.blur) a.blur();   // release focus from any field (e.g. notes on ⌃/⌘+↵)
       if(this.store.saveNow) this.store.saveNow();   // flush the debounced write now
