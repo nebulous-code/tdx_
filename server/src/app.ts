@@ -32,6 +32,7 @@ import tokenRoutes from './routes/tokens.js';
 import { ensureDefaultCalendars } from './services/calendars.js';
 import { migrateVaultLayout } from './services/notes.js';
 import { backfillReadableIds } from './services/readableIds.js';
+import { ensureDefaultSavedQueries } from './services/savedQueries.js';
 import { type VaultGit, createVaultGit } from './vault-git.js';
 
 declare module 'fastify' {
@@ -113,6 +114,7 @@ export async function buildApp(opts: AppOpts = {}): Promise<FastifyInstance> {
   registerDb(app, handle);
   await migrateVaultLayout(handle.db); // one-time: move legacy flat notes into per-owner subdirs
   await ensureDefaultCalendars(handle.db); // one-time: default calendar per user + assign orphan events
+  await ensureDefaultSavedQueries(handle.db); // one-time: backfill missing per-app default views (event/note)
   await backfillReadableIds(handle.db); // one-time: assign readable ids to any legacy rows missing one
   await registerAuth(app);
   app.decorate('backups', createBackups(handle.sqlite));
