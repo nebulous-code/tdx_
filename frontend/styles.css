@@ -772,6 +772,12 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
      shortcut on touch); the right group wraps but stays right-aligned */
   .statusbar .right { flex-wrap: wrap; justify-content: flex-end; min-width: 0; row-gap: 4px; }
   .view-title .view-q { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* iOS Safari auto-zooms the viewport when a focused input's font-size is <16px, which left the
+     field zoomed and shoved off to one side (t_0265 — e.g. shift-enter into the notes field). 16px
+     stops the auto-zoom while KEEPING pinch-zoom (a maximum-scale viewport lock would kill both).
+     !important because the field font-sizes are set via higher-specificity CLASS rules (.d-notes,
+     .input, .note-body…) that would otherwise win. Desktop keeps its denser 12–15px fields. */
+  input, textarea, select { font-size: 16px !important; }
 }
 
 /* Detail drawer goes FULL-SCREEN on phones/tablets (both orientations) — the 860px

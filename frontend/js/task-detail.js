@@ -316,7 +316,20 @@ window.TaskDetail = {
     // transitionend (with a timeout fallback), then focus without scrolling and reveal.
     focusNotesAfterOpen(){
       const root = this.$el;
-      const go = () => { const el=this.$refs.notes; if(el){ el.focus({ preventScroll:true }); el.scrollIntoView({ block:'nearest' }); } };
+      const go = () => {
+        const el = this.$refs.notes;
+        if(!el) return;
+        // t_0265: on a phone the soft keyboard makes iOS's OWN focus-scroll the reliable placement —
+        // it's keyboard-aware and correctly timed (exactly what a manual re-tap triggers, which the
+        // user confirmed lands perfectly). Our custom visual-viewport math fought that timing and
+        // jittered, so on mobile we DON'T preventScroll and DON'T scroll ourselves — just focus and
+        // let the browser place it, same as a tap. Desktop keeps the controlled scroll, because there
+        // an unguarded focus() can yank the whole page instead of nudging the drawer body.
+        const mobile = window.matchMedia && window.matchMedia('(max-width: 1024px)').matches;
+        if(mobile){ el.focus(); return; }
+        el.focus({ preventScroll:true });
+        el.scrollIntoView({ block:'nearest' });
+      };
       if(!root || !root.addEventListener){ go(); return; }
       let done = false;
       const finish = () => { if(done) return; done=true; root.removeEventListener('transitionend', onEnd); go(); };
