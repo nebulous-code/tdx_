@@ -40,6 +40,18 @@
     return out;
   }
 
+  // Inverse of indexEntities for ONE entity: write a snapshot record's whitelisted fields back
+  // onto a live store object. Skips `position` (that's the array index — restored by reordering,
+  // not a property) and slice-copies ARRAY_FIELDS so the live object never aliases the record's
+  // arrays. Used by undo to restore a captured pre-change record onto the store.
+  function applyRecord(type, obj, record){
+    for(const f of FIELDS[type]){
+      if(f === 'position') continue;
+      else if(ARRAY_FIELDS.has(f)) obj[f] = Array.isArray(record[f]) ? record[f].slice() : [];
+      else obj[f] = (record[f] === undefined ? null : record[f]);
+    }
+  }
+
   function snapshot(store){
     return {
       tasks: indexEntities(store.tasks, FIELDS.tasks),
@@ -86,7 +98,7 @@
   // empty snapshot (used to seed lastSaved before the first load)
   function empty(){ return { tasks:{}, projects:{}, calendars:{}, folders:{}, labels:{}, savedQueries:{} }; }
 
-  window.Sync = { snapshot, diff, empty, FIELDS, _indexEntities: indexEntities, _eq: eq };
+  window.Sync = { snapshot, applyRecord, diff, empty, FIELDS, _indexEntities: indexEntities, _eq: eq };
 
   // dual-export for the node:test harness (browser ignores `module`)
   if (typeof module !== 'undefined' && module.exports) module.exports = window.Sync;

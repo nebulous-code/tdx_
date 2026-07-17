@@ -84,3 +84,26 @@ test('label rename + saved-query create', () => {
   assert.deepEqual(d.labels.updates, ['l1']);
   assert.deepEqual(d.savedQueries.creates, ['v1']);
 });
+
+// applyRecord is the inverse of indexEntities — used by undo to restore a captured pre-change record.
+test('applyRecord restores whitelisted fields onto a live object', () => {
+  const before = Sync.snapshot(store({ tasks: [task('t1', { title: 'A', done: false, priority: 2, labels: ['x', 'y'] })] })).tasks.t1;
+  const live = task('t1', { title: 'B', done: true, priority: 5, labels: ['z'], completedAt: '2026-02-02' });
+  Sync.applyRecord('tasks', live, before);
+  assert.equal(live.title, 'A');
+  assert.equal(live.done, false);
+  assert.equal(live.priority, 2);
+  assert.deepEqual(live.labels, ['x', 'y']);
+  assert.equal(live.completedAt, '2026-02-02'); // not whitelisted → applyRecord leaves it alone (undo() fixes it)
+});
+
+test('applyRecord skips position and copies array fields (no aliasing)', () => {
+  const before = Sync.snapshot(store({ projects: [project('p1', { name: 'P', health: ['h1'] })] })).projects.p1;
+  const live = project('p1', { name: 'X', health: [] });
+  Sync.applyRecord('projects', live, before);
+  assert.equal(live.name, 'P');
+  assert.ok(!('position' in live), 'position is the array index, never written onto the object');
+  assert.deepEqual(live.health, ['h1']);
+  before.health.push('h2'); // the restored array must be a COPY — mutating the source can't leak
+  assert.deepEqual(live.health, ['h1']);
+});

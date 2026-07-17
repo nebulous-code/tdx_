@@ -729,9 +729,10 @@
   };
 
   // ---- mutations ----
-  store.toast = (msg) => {
+  store.toast = (msg, opts) => {
     const id = uid('toast'); store.toasts.push({ id, msg });
-    setTimeout(()=>{ const i = store.toasts.findIndex(t=>t.id===id); if(i>=0) store.toasts.splice(i,1); }, 2200);
+    const dur = (opts && opts.duration) || 2200;   // undo uses a longer window so you can read what reverted
+    setTimeout(()=>{ const i = store.toasts.findIndex(t=>t.id===id); if(i>=0) store.toasts.splice(i,1); }, dur);
   };
 
   // an editor with unsaved work registers store.dirtyCheck (() => bool); switching

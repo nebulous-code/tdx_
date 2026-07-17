@@ -548,6 +548,16 @@ const app = createApp({
       const typing = tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable;
       // ⌘K / Ctrl+K everywhere
       if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); this.paletteOpen=!this.paletteOpen; return; }
+      // ⌘Z / ⌘⇧Z: undo / redo the last field-edit batch (t_0425). Placed above the modifier bail
+      // below so it fires from any pane. In a text field, fall through to the browser's NATIVE text
+      // undo/redo (note: this test is narrower than `typing` — a <select> is not a text field, so
+      // changing a priority dropdown then ⌘Z does an entity undo).
+      if((e.metaKey||e.ctrlKey) && (e.key||'').toLowerCase()==='z'){
+        if(tag==='input'||tag==='textarea'||e.target.isContentEditable) return;
+        e.preventDefault();
+        if(e.shiftKey) this.redo(); else this.undo();
+        return;
+      }
       // let browser combos (ctrl+f find, ctrl+l address bar, etc.) through; our
       // shortcuts are bare keys or shift-combos only
       if(e.ctrlKey||e.metaKey||e.altKey) return;
@@ -1065,6 +1075,7 @@ const app = createApp({
       if(s.labels){ this.store.labels.splice(0, this.store.labels.length, ...s.labels); }
       if(s.savedQueries){ this.store.savedQueries.splice(0, this.store.savedQueries.length, ...s.savedQueries); }
       this._lastSaved = window.Sync.snapshot(this.store);   // diff baseline
+      this._undoStack = []; this._undoCursor = 0;   // a full state reload invalidates undo/redo entries captured against the old baseline
       this.$nextTick(()=>{ this._suppress = false; });
     },
     // Diff the store against the last synced baseline and issue granular calls.
@@ -1078,6 +1089,9 @@ const app = createApp({
       window.QueryRebind.reconcile(prev, this.store);
       const curr = window.Sync.snapshot(this.store);
       const d = window.Sync.diff(prev, curr);
+      // undo capture (t_0425): record this batch's before/after state BEFORE we sync — unless we ARE
+      // an undo/redo reversal (_undoing), which must not record its own inverse.
+      if(!this._undoing) this.recordUndo(prev, curr, d);
       // t_0504: bump updatedAt on locally created/changed tasks so "sort by modified" reflects
       // THIS session's edits (not just load time). updatedAt is excluded from the diff (sync.js),
       // so this can't loop; the server sets its own updated_at on the write — this keeps the
@@ -1104,6 +1118,121 @@ const app = createApp({
         }
         // on failure leave the baseline stale → the next watcher fire retries it.
       }
+    },
+    // Capture the pre- AND post-change state of one persist batch as a ring entry (t_0425). Each
+    // update keeps a DEEP COPY of the entity's 'before' and 'after' records (records hold arrays — a
+    // shallow copy would alias the live labels/health); creates keep just ids. Undo restores
+    // 'before'; redo re-applies 'after'. Deletes are out of scope. The stack is a CURSOR ring: a
+    // fresh action drops any redoable tail (entries past the cursor) before appending.
+    recordUndo(prev, curr, d){
+      const TYPES = ['tasks','projects','calendars','folders','labels','savedQueries'];
+      const cp = (o) => JSON.parse(JSON.stringify(o));
+      const entry = {}; let touched = 0, hasCreates = false;
+      for(const type of TYPES){
+        const updates = d[type].updates.map(id => ({ id, before: cp(prev[type][id]), after: cp(curr[type][id]) }));
+        const creates = d[type].creates.slice();
+        if(creates.length) hasCreates = true;
+        if(updates.length || creates.length){ entry[type] = { updates, creates }; touched += updates.length + creates.length; }
+      }
+      if(!touched) return;
+      entry.hasCreates = hasCreates;   // a created item can't be redone (re-POST would collide server-side) → redo barrier
+      entry.label = this.undoLabel(entry, '↩ Undo: ');
+      entry.redoLabel = this.undoLabel(entry, '↷ Redo: ');
+      if(!this._undoStack) this._undoStack = [];
+      if(this._undoCursor == null) this._undoCursor = this._undoStack.length;
+      this._undoStack.length = this._undoCursor;   // a fresh action invalidates the redo tail
+      this._undoStack.push(entry);
+      if(this._undoStack.length > 20) this._undoStack.shift();   // evict oldest
+      this._undoCursor = this._undoStack.length;
+    },
+    // Human toast label for an entry, from WHAT changed ('before' vs the live/after object at record
+    // time). `prefix` is '↩ Undo: ' or '↷ Redo: '. Format: '<prefix><verb> "<title>"'.
+    undoLabel(entry, prefix){
+      const TYPES = ['tasks','projects','calendars','folders','labels','savedQueries'];
+      const q = (s) => '"' + (s==null?'':String(s)) + '"';
+      const titleOf = (ty, id) => { const o = (this.store[ty]||[]).find(x=>x.id===id); return o ? (o.name!=null ? o.name : o.title) : ''; };
+      const taskVerb = (u) => {
+        const o = this.store.tasks.find(x=>x.id===u.id); if(!o) return null; const b=u.before;
+        if(!!o.done !== !!b.done) return o.done ? 'completed' : 'uncompleted';
+        if((o.due||'') !== (b.due||'')) return 'rescheduled';
+        if((o.priority||0) !== (b.priority||0)) return 'reprioritized';
+        if((o.title||'') !== (b.title||'') || (o.notes||'') !== (b.notes||'')) return 'edited';
+        return null;   // position-only or a non-salient field change
+      };
+      const upd = [], cre = [];
+      for(const ty of TYPES){ if(entry[ty]){ for(const u of entry[ty].updates) upd.push({ ty, ...u }); for(const id of entry[ty].creates) cre.push({ ty, id }); } }
+      // a complete/uncomplete flip wins — also covers recurring completion (which spawns creates)
+      const flip = upd.find(u => u.ty==='tasks' && (taskVerb(u)==='completed' || taskVerb(u)==='uncompleted'));
+      if(flip) return prefix + taskVerb(flip) + ' ' + q(titleOf('tasks', flip.id));
+      // pure reorder: updates present, none change a salient field, nothing created
+      const salient = upd.filter(u => u.ty!=='tasks' || taskVerb(u)!==null);
+      if(upd.length && !salient.length && !cre.length) return prefix + 'reordered';
+      // exactly one salient task edit
+      const taskEdits = upd.filter(u => u.ty==='tasks' && taskVerb(u)!==null);
+      if(taskEdits.length===1 && cre.length===0) return prefix + taskVerb(taskEdits[0]) + ' ' + q(titleOf('tasks', taskEdits[0].id));
+      // a single fresh create
+      if(cre.length===1 && upd.length===0) return prefix + 'added ' + q(titleOf(cre[0].ty, cre[0].id));
+      const n = upd.length + cre.length;
+      return prefix + n + ' change' + (n===1?'':'s');
+    },
+    // Apply one entry to the store: side='before' (undo) removes this batch's creates and restores
+    // pre-change fields; side='after' (redo) re-applies post-change fields. Then persist() syncs it,
+    // guarded (_undoing/_suppress) so it records no new entry and schedules no redundant save (t_0425).
+    async applyEntry(entry, side){
+      const TYPES = ['tasks','projects','calendars','folders','labels','savedQueries'];
+      this._undoing = true;
+      this._suppress = true;
+      try {
+        for(const type of TYPES){
+          const e = entry[type]; if(!e) continue;
+          const arr = this.store[type];
+          if(side === 'before'){   // undo only: drop everything created this batch (incl. recurrence spawns + subtrees)
+            for(const id of e.creates){ const i = arr.findIndex(o=>o.id===id); if(i>=0) arr.splice(i,1); }
+          }
+          for(const u of e.updates){
+            const o = arr.find(x=>x.id===u.id); if(!o) continue;
+            const rec = side==='before' ? u.before : u.after;
+            window.Sync.applyRecord(type, o, rec);
+            // completedAt isn't whitelisted — mirror toggleDone so a restored done/completedAt stays consistent
+            if(type==='tasks') o.completedAt = o.done ? (o.completedAt || new Date().toISOString()) : null;
+          }
+          const posMap = {};
+          for(const u of e.updates){ const rec = side==='before'?u.before:u.after; if(rec.position != null) posMap[u.id] = rec.position; }
+          if(Object.keys(posMap).length){
+            arr.forEach((o,i)=>{ if(posMap[o.id]==null) posMap[o.id]=i; });
+            const sorted = arr.slice().sort((a,b)=> posMap[a.id]-posMap[b.id]);
+            arr.splice(0, arr.length, ...sorted);
+          }
+        }
+        await this.persist();
+      } finally {
+        this._undoing = false;
+        this.$nextTick(()=>{ this._suppress = false; });
+      }
+    },
+    // ⌘Z: step the cursor back one entry, restoring its 'before' state (t_0425).
+    async undo(){
+      if(this._save){ clearTimeout(this._save); this._save=null; await this.persist(); }  // capture the newest action first
+      const stack = this._undoStack || [];
+      if(this._undoCursor == null) this._undoCursor = stack.length;
+      if(this._undoCursor <= 0){ this.store.toast('Nothing to undo'); return; }
+      const entry = stack[this._undoCursor - 1];
+      await this.applyEntry(entry, 'before');
+      this._undoCursor--;
+      this.store.toast(entry.label, { duration: 5000 });
+    },
+    // ⌘⇧Z: step the cursor forward one entry, re-applying its 'after' state. A batch that CREATED
+    // something is a redo barrier — re-POSTing an archived id would collide server-side (t_0425).
+    async redo(){
+      if(this._save){ clearTimeout(this._save); this._save=null; await this.persist(); }
+      const stack = this._undoStack || [];
+      if(this._undoCursor == null) this._undoCursor = stack.length;
+      if(this._undoCursor >= stack.length){ this.store.toast('Nothing to redo'); return; }
+      const entry = stack[this._undoCursor];
+      if(entry.hasCreates){ this.store.toast('can’t redo a new item'); return; }
+      await this.applyEntry(entry, 'after');
+      this._undoCursor++;
+      this.store.toast(entry.redoLabel, { duration: 5000 });
     },
     syncOp(op, curr){
       const base = SYNC_EP[op.type];
