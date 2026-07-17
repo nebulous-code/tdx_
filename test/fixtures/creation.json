@@ -46,13 +46,15 @@
 
     "everything at once",
     "Call plumber /home #errand !2 $friday {ask about the leak}",
-    "Standup /home #fun $tomorrow {agenda: ship it}"
+    "Standup /home #fun $tomorrow {agenda: ship it}",
+    "Hang Drywall /Home Renovation #interior !3",
+    "Patch wiring /Home Renovation in the kitchen"
   ],
 
   "types": ["task", "note", "event"],
 
   "categories": {
-    "project": ["tdx-app", "infra", "home", "house-upkeep", "finance", "health", "reading", "dev"],
+    "project": ["tdx-app", "infra", "home", "house-upkeep", "finance", "health", "reading", "dev", "Home Renovation"],
     "folder": ["Work", "Journal", "Reading"],
     "calendar": ["Personal", "Work"]
   },

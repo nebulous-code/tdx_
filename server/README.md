@@ -9,11 +9,10 @@ Node + Fastify 5 (strict TS) · TypeBox (schema → validation + OpenAPI) · Kys
 ```sh
 npm install
 SESSION_SECRET=dev npm run dev   # -> http://localhost:3002  (Swagger UI at /docs)
-npm test                         # 43 integration tests (fastify.inject) + parity + migration
+npm test                         # integration tests (fastify.inject) + parity goldens
 npm run typecheck                # tsc --noEmit (strict)
 npm run lint                     # biome
 npm run migrate                  # apply migrations/*.sql to a dev DB (data/tdx.dev.db)
-npm run migrate:legacy -- <legacy.db> [target.db]   # one-time legacy → UUID migration (use a COPY)
 SESSION_SECRET=dev npx tsx scripts/add-user.ts <user> <email> <password> [--admin]
 ```
 `SESSION_SECRET` is required to boot (signs the session cookie). For dev, put it in a gitignored `server/.env` (dotenv is loaded).
@@ -22,7 +21,6 @@ SESSION_SECRET=dev npx tsx scripts/add-user.ts <user> <email> <password> [--admi
 - `migrations/001_init.sql` — D1 schema: global UUID ids + `owner_id`; `creator_id`/`assignee_id`; `grants`/`groups`/`group_members`/`api_tokens`; `updated_at` (ETag) on tasks/projects.
 - `src/db.ts` — Kysely typed schema + idempotent numbered-`.sql` migration runner; `openDatabase()`.
 - `src/rec.ts`, `src/query.ts` — recurrence + query engines ported from `frontend/js/`, **proven byte-for-byte equal** to the Phase 0 goldens (`test/parity.test.ts`).
-- `scripts/migrate-from-legacy.ts` — legacy snapshot DB → D1 (prefixed ids → UUIDs, refs rewired, archived kept, no grants).
 
 ## API (all behind auth; `buildApp(opts)` is DB-injectable for tests)
 - **Auth** — `auth.ts` (argon2id sessions + rate-limit), `routes/auth.ts` (login/logout/me/account), `tokens.ts` + `routes/tokens.ts` (PATs via `Authorization: Bearer`, read/write scopes), `routes/admin.ts` (`POST /api/admin/users`).

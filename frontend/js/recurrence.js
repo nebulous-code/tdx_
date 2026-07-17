@@ -61,6 +61,12 @@
     if((m = s.match(/^every (\d+) months?$/)))
       return { type:'monthly-day', interval:+m[1], day:null };
 
+    // yearly / annually — every N years on the anchor's month + day-of-month (t_0468)
+    if(s === 'yearly' || s === 'annually' || s === 'every year')
+      return { type:'yearly', interval:1 };
+    if((m = s.match(/^every (\d+) years?$/)))
+      return { type:'yearly', interval:+m[1] };
+
     return { type:'invalid', raw:str };
   }
 
@@ -91,6 +97,8 @@
         const o = ORD_NAME[r.ord], w = WD[r.weekday];
         return r.interval===1 ? `monthly on ${o} ${w}` : `every ${r.interval} months on ${o} ${w}`;
       }
+      case 'yearly':
+        return r.interval===1 ? 'yearly' : `every ${r.interval} years`;
     }
     return '';
   }
@@ -119,6 +127,8 @@
         const w = WD_FULL[r.weekday];
         return r.interval===1 ? `Monthly on the ${o} ${w}` : `Every ${r.interval} months on the ${o} ${w}`;
       }
+      case 'yearly':
+        return r.interval===1 ? 'Every year' : `Every ${r.interval} years`;
     }
     return '';
   }
@@ -143,6 +153,7 @@
         const w = A[r.weekday];
         return r.interval===1 ? `${o} ${w}` : `${o} ${w}/${r.interval}mo`;
       }
+      case 'yearly': return r.interval===1 ? 'yearly' : `${r.interval}y`;
     }
     return '';
   }
@@ -191,6 +202,15 @@
         if(monthsBetween(anchor,date) % n !== 0) return false;
         const occ = nthWeekdayOfMonth(date.getFullYear(), date.getMonth(), r.weekday, r.ord);
         return occ && sameDay(occ, date);
+      }
+      case 'yearly': {
+        const n = r.interval||1;
+        // same month + day-of-month as the anchor, every n years. Feb-29 clamps to the
+        // month length in non-leap years (mirrors monthly-day's clamp).
+        if((date.getFullYear()-anchor.getFullYear()) % n !== 0) return false;
+        if(date.getMonth() !== anchor.getMonth()) return false;
+        const dim = new Date(date.getFullYear(), date.getMonth()+1, 0).getDate();
+        return date.getDate() === Math.min(anchor.getDate(), dim);
       }
     }
     return false;

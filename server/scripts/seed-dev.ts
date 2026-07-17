@@ -416,6 +416,16 @@ async function main() {
       body: `# Research note ${i}\n\nBulk seed content so the notes list is long enough to scroll.\n`,
     });
   }
+  // one deliberately LONG note so the note-editor's vim-cursor scroll (t_0501) is exercisable in dev.
+  await n({
+    folderId: bigFolder.id,
+    title: 'Long note (scroll test)',
+    body: `# Long note\n\nUse j/k in this note to check the cursor scroll follows.\n\n${Array.from(
+      { length: 120 },
+      (_, i) =>
+        `Line ${String(i + 1).padStart(3, '0')} — lorem ipsum dolor sit amet, consectetur adipiscing elit.`,
+    ).join('\n')}\n`,
+  });
 
   // ---- saved views: custom + CROSS-APP category views ------------------------
   await createSavedQuery(db, owner, {

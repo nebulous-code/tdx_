@@ -361,6 +361,28 @@
     "literal": []
   },
   {
+    "type": "task",
+    "text": "Hang Drywall /Home Renovation #interior !3",
+    "title": "Hang Drywall",
+    "fields": {
+      "category": "Home Renovation",
+      "labels": [
+        "interior"
+      ],
+      "priority": 3
+    },
+    "literal": []
+  },
+  {
+    "type": "task",
+    "text": "Patch wiring /Home Renovation in the kitchen",
+    "title": "Patch wiring in the kitchen",
+    "fields": {
+      "category": "Home Renovation"
+    },
+    "literal": []
+  },
+  {
     "type": "note",
     "text": "Ship the recurrence builder",
     "title": "Ship the recurrence builder",
@@ -713,6 +735,28 @@
     ]
   },
   {
+    "type": "note",
+    "text": "Hang Drywall /Home Renovation #interior !3",
+    "title": "Hang Drywall /Home Renovation !3",
+    "fields": {
+      "labels": [
+        "interior"
+      ]
+    },
+    "literal": [
+      "/Home"
+    ]
+  },
+  {
+    "type": "note",
+    "text": "Patch wiring /Home Renovation in the kitchen",
+    "title": "Patch wiring /Home Renovation in the kitchen",
+    "fields": {},
+    "literal": [
+      "/Home"
+    ]
+  },
+  {
     "type": "event",
     "text": "Ship the recurrence builder",
     "title": "Ship the recurrence builder",
@@ -1062,6 +1106,28 @@
     },
     "literal": [
       "/home"
+    ]
+  },
+  {
+    "type": "event",
+    "text": "Hang Drywall /Home Renovation #interior !3",
+    "title": "Hang Drywall /Home Renovation !3",
+    "fields": {
+      "labels": [
+        "interior"
+      ]
+    },
+    "literal": [
+      "/Home"
+    ]
+  },
+  {
+    "type": "event",
+    "text": "Patch wiring /Home Renovation in the kitchen",
+    "title": "Patch wiring /Home Renovation in the kitchen",
+    "fields": {},
+    "literal": [
+      "/Home"
     ]
   }
 ]

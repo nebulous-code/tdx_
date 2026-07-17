@@ -551,6 +551,12 @@ const app = createApp({
       // let browser combos (ctrl+f find, ctrl+l address bar, etc.) through; our
       // shortcuts are bare keys or shift-combos only
       if(e.ctrlKey||e.metaKey||e.altKey) return;
+      // t_0502: a note editor awaiting a `r` replace char claims the next key entirely — even bare
+      // shortcuts like `@` that would otherwise fire globally. Esc reaches onKey too and aborts the
+      // replace (bodyKey), so it cancels cleanly instead of typing.
+      if(this.store.view.kind==='notes' && this.$refs.notes && this.$refs.notes.capturingKey && this.$refs.notes.capturingKey()){
+        e.preventDefault(); this.$refs.notes.onKey(e); return;
+      }
       if(e.key==='Escape'){
         if(this.paletteOpen){ this.paletteOpen=false; return; }
         // project/save/label modals own Esc themselves (KbForm dirty-guard)
@@ -1070,6 +1076,14 @@ const app = createApp({
       window.QueryRebind.reconcile(prev, this.store);
       const curr = window.Sync.snapshot(this.store);
       const d = window.Sync.diff(prev, curr);
+      // t_0504: bump updatedAt on locally created/changed tasks so "sort by modified" reflects
+      // THIS session's edits (not just load time). updatedAt is excluded from the diff (sync.js),
+      // so this can't loop; the server sets its own updated_at on the write — this keeps the
+      // client copy fresh until the next reload.
+      if(d.tasks.creates.length || d.tasks.updates.length){
+        const now = new Date().toISOString();
+        for(const id of [...d.tasks.creates, ...d.tasks.updates]){ const t = this.store.tasks.find(x=>x.id===id); if(t) t.updatedAt = now; }
+      }
       // ordered: create parents first (projects/labels/views, then tasks in store
       // order so a task's parent precedes it), then updates, then deletes (children
       // before parents). Tasks are only removed via the archive path, not here.
@@ -1151,8 +1165,13 @@ const app = createApp({
     async startSession(){
       if(!this._keysAttached){ document.addEventListener('keydown', this.onKey); this._keysAttached = true; }
       if(!this._watchAttached){
-        this.$watch(()=>JSON.stringify([this.store.tasks,this.store.projects,this.store.calendars,this.store.folders,this.store.labels,this.store.savedQueries]),
-          ()=>{ if(this._suppress) return; clearTimeout(this._save); this._save=setTimeout(this.persist,300); });
+        // t_0503 / t_0343: a DEEP watcher schedules the (already-debounced) persist on any change,
+        // instead of JSON.stringify-ing the ENTIRE store on every reactive tick to detect a change.
+        // That stringify ran per-keystroke and made typing in a big store (e.g. a task's notes field)
+        // lag badly. persist()'s own Sync.diff is the real change-detector, so a spurious wake no-ops.
+        this.$watch(()=>[this.store.tasks,this.store.projects,this.store.calendars,this.store.folders,this.store.labels,this.store.savedQueries],
+          ()=>{ if(this._suppress) return; clearTimeout(this._save); this._save=setTimeout(this.persist,300); },
+          { deep:true });
         this._watchAttached = true;
       }
       await this.hydrate();

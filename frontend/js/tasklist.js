@@ -9,6 +9,7 @@ const SORTS = [
   { key:'priority', label:'priority' },
   { key:'size',     label:'size' },         // Fibonacci estimate (only when sizing is enabled)
   { key:'tag',      label:'tag' },          // group by concatenated label names
+  { key:'modified', label:'modified' },     // last edited (task.updatedAt); desc = most-recent first
 ];
 window.TaskRow = {
   name: 'task-row',

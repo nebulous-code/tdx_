@@ -10,7 +10,6 @@
     "start": "node dist/src/app.js",
     "test": "node --import tsx --test \"test/**/*.test.ts\"",
     "migrate": "tsx src/db.ts --migrate",
-    "migrate:legacy": "tsx scripts/migrate-from-legacy.ts",
     "seed:dev": "tsx scripts/seed-dev.ts",
     "export:openapi": "tsx scripts/export-openapi.ts",
     "test:e2e": "playwright test",

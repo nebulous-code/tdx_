@@ -46,7 +46,7 @@ window.SortModal = {
       kbAutofocus: false,
       moveKey: null,           // the sort key currently in move-mode (m)
       busy: false, error: '',
-      labels: { due:'due', created:'created', title:'title', project:'project', priority:'priority', size:'size', tag:'tag' },
+      labels: { due:'due', created:'created', title:'title', project:'project', priority:'priority', size:'size', tag:'tag', modified:'modified' },
       cfg,
       _orig: JSON.parse(JSON.stringify(cfg)),   // for dirty detection
     };

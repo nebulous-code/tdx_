@@ -1013,6 +1013,7 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
    destructive/commit (delete · save) right. The ladder walks them in that same order. */
 .note-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
 .na-left { display: flex; gap: 8px; margin-right: auto; }
+.note-wordcount { align-self: center; font-size: 11px; }   /* t_0493: word count in the editor footer */
 /* labels + review date on the full editor (n.3) — the ladder walks these like any field */
 .note-meta-row { display: flex; align-items: center; gap: 8px; }
 /* .note-editor .ti is width:100% — in a flex row beside its label that overhangs the container

@@ -322,6 +322,56 @@
     "compact": "3mo"
   },
   {
+    "rule": "yearly",
+    "parsed": {
+      "type": "yearly",
+      "interval": 1
+    },
+    "stringify": "yearly",
+    "summary": "Every year",
+    "compact": "yearly"
+  },
+  {
+    "rule": "annually",
+    "parsed": {
+      "type": "yearly",
+      "interval": 1
+    },
+    "stringify": "yearly",
+    "summary": "Every year",
+    "compact": "yearly"
+  },
+  {
+    "rule": "every year",
+    "parsed": {
+      "type": "yearly",
+      "interval": 1
+    },
+    "stringify": "yearly",
+    "summary": "Every year",
+    "compact": "yearly"
+  },
+  {
+    "rule": "every 2 years",
+    "parsed": {
+      "type": "yearly",
+      "interval": 2
+    },
+    "stringify": "every 2 years",
+    "summary": "Every 2 years",
+    "compact": "2y"
+  },
+  {
+    "rule": "every 5 years",
+    "parsed": {
+      "type": "yearly",
+      "interval": 5
+    },
+    "stringify": "every 5 years",
+    "summary": "Every 5 years",
+    "compact": "5y"
+  },
+  {
     "rule": "WEEKLY ON MON,WED",
     "parsed": {
       "type": "weekly",

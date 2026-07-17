@@ -144,12 +144,12 @@
     searchResults: [],       // cross-type find hits ({type,id,title,…}) for the search-list
     _searchSeq: 0,           // guards against out-of-order async find responses
     healthFilter: null,      // a health-bar signal key while filtering a project view (transient)
-    sortField: 'due',        // due | created | title | project | priority | size | tag
+    sortField: 'due',        // due | created | title | project | priority | size | tag | modified
     // per-field direction. 'asc' = ^, 'desc' = v.
-    sortDirs: { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', size:'desc', tag:'asc' },
+    sortDirs: { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', size:'desc', tag:'asc', modified:'desc' },
     // sort configuration (Shift+S popup, persisted per-user as users.sort_prefs)
-    sortOrder: ['due','created','title','project','priority','size','tag'],   // priority order for the `s` cycle
-    sortEnabled: { due:true, created:true, title:true, project:true, priority:true, size:true, tag:true },
+    sortOrder: ['due','created','title','project','priority','size','tag','modified'],   // priority order for the `s` cycle
+    sortEnabled: { due:true, created:true, title:true, project:true, priority:true, size:true, tag:true, modified:true },
     builderOpen: false,
     sidebarOpen: false,      // mobile slide-in
     navCollapsed: false,     // desktop: hide the sidebar column (toggled with n)
@@ -306,8 +306,8 @@
     return (sv && !sv.system) ? sv : null;
   };
   // ---- sort configuration (Shift+S popup; persisted as users.sort_prefs) ----
-  const SORT_KEYS = ['due','created','title','project','priority','size','tag'];
-  const DEFAULT_SORT_DIRS = { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', size:'desc', tag:'asc' };
+  const SORT_KEYS = ['due','created','title','project','priority','size','tag','modified'];
+  const DEFAULT_SORT_DIRS = { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', size:'desc', tag:'asc', modified:'desc' };
   // pure: turn a (possibly null/partial) stored prefs object into a clean {order,enabled,dirs}
   store.normalizeSortPrefs = (p) => {
     const order = (p && Array.isArray(p.order)) ? p.order.filter(k=>SORT_KEYS.includes(k)) : [];
@@ -571,6 +571,7 @@
       if(by==='priority') return (a.priority||0)-(b.priority||0);
       if(by==='size')     return (a.size||0)-(b.size||0);
       if(by==='tag')      return tagKey(a).localeCompare(tagKey(b));
+      if(by==='modified') return (a.updatedAt||'').localeCompare(b.updatedAt||'');
       return 0;
     };
     list = [...list].sort((a,b)=> dir * cmp(a,b));
