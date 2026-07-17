@@ -87,10 +87,16 @@ function parse(str: string | null | undefined): ParsedQuery {
 
 // resolve a project token (id or slug of name) -> set of matching project ids only
 // (exact: subprojects are NOT included, so a parent's view/count shows just its own tasks)
+// resolve a project token: id, readable id (`p_0042` — exact, 1:1 like the internal id), or
+// name slug. Parity-locked with frontend/js/query.js resolveProjects.
 function resolveProjects(value: string, ctx: Ctx): Set<string> {
   const projects = ctx.projects || [];
   const match = projects.filter(
-    (p) => p.id === value || slug(p.name) === slug(value) || slug(p.name).includes(slug(value)),
+    (p) =>
+      p.id === value ||
+      p.readableId === value ||
+      slug(p.name) === slug(value) ||
+      slug(p.name).includes(slug(value)),
   );
   return new Set(match.map((p) => p.id));
 }

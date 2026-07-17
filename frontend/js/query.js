@@ -43,12 +43,15 @@
     return { terms, ok:true };
   }
 
-  // resolve a project token (id or slug of name) -> set of matching project ids only
-  // (exact: subprojects are NOT included, so a parent's view/count shows just its own tasks)
+  // resolve a project token (id, readable id like `p_0042`, or slug of name) -> set of matching
+  // project ids only (exact: subprojects are NOT included, so a parent's view/count shows just
+  // its own tasks). The readableId arm makes `project:p_0042` an EXACT, copy-pasteable token
+  // (readable ids are 1:1 like the internal id) — the project-view header uses it.
   function resolveProjects(value, ctx){
     const projects = ctx.projects || [];
     const match = projects.filter(p =>
       p.id === value ||
+      p.readableId === value ||
       slug(p.name) === slug(value) ||
       slug(p.name).includes(slug(value))
     );

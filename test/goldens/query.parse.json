@@ -390,6 +390,17 @@
     "rebuilt": "project:work"
   },
   {
+    "query": "project:p_0042",
+    "terms": [
+      {
+        "field": "project",
+        "value": "p_0042",
+        "neg": false
+      }
+    ],
+    "rebuilt": "project:p_0042"
+  },
+  {
     "query": "project:home",
     "terms": [
       {
