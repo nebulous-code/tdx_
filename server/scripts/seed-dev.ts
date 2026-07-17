@@ -28,6 +28,7 @@ import { createNote } from '../src/services/notes.js';
 import { createProject } from '../src/services/projects.js';
 import { createSavedQuery } from '../src/services/savedQueries.js';
 import { createTask } from '../src/services/tasks.js';
+import { vaultBase } from '../src/vault.js';
 
 const dbPath = DEFAULT_DB_PATH; // server/.env → data/tdx.dev.db (relative to server/)
 for (const ext of ['', '-wal', '-shm']) {
@@ -36,6 +37,13 @@ for (const ext of ['', '-wal', '-shm']) {
   } catch {
     /* not there — fine */
   }
+}
+// Notes are file-backed (.md on disk), so a DB-only reset would leave stale note files that
+// reconcile back in on the next scan. Wipe the vault too so the reseed is genuinely clean.
+try {
+  fs.rmSync(vaultBase(), { recursive: true, force: true });
+} catch {
+  /* not there — fine */
 }
 
 const { db, sqlite } = openDatabase(dbPath); // fresh file → applies every migration
@@ -59,8 +67,14 @@ async function main() {
     password: 'Password123!',
   });
   const owner = user.id;
-  // turn on Fibonacci sizing so size badges render in the UI
-  await db.updateTable('users').set({ fib_sizing: 1 }).where('id', '=', owner).execute();
+  // turn on Fibonacci sizing so size badges render; put dev on the red-ish `plasma` theme so it's
+  // visually unmistakable from prod (prod runs amber/ice/matrix) — a guard against editing the
+  // wrong environment by mistake.
+  await db
+    .updateTable('users')
+    .set({ fib_sizing: 1, theme: 'plasma' })
+    .where('id', '=', owner)
+    .execute();
 
   // inbox project + the system views were created by createUser → seedUserDefaults
   const inbox = (await db
@@ -372,6 +386,36 @@ async function main() {
     title: 'Scratchpad',
     body: 'loose thoughts — no folder, no labels (shows in the Untagged notes view)\n',
   });
+
+  // ---- bulk fixtures: a big project + a big notebook (30 rows each) -----------
+  // Dev historically carried too little data to overflow a viewport — which is exactly how a
+  // list-scroll bug (a missing min-height:0) hid here while biting in prod. Keep a deliberately
+  // large project and folder so overflow / scroll regressions surface in dev, not prod.
+  const bigProj = await createProject(db, owner, {
+    name: 'Home Renovation',
+    color: '#ff6b9d',
+    glyph: '■',
+  });
+  for (let i = 1; i <= 30; i++) {
+    await t({
+      projectId: bigProj.id,
+      title: `Renovation task ${String(i).padStart(2, '0')}`,
+      priority: ((i - 1) % 5) + 1,
+      ...(i % 3 === 0 ? { due: d(i) } : {}),
+    });
+  }
+  const bigFolder = await createFolder(db, owner, {
+    name: 'Research',
+    color: '#7dd3fc',
+    glyph: '⊞',
+  });
+  for (let i = 1; i <= 30; i++) {
+    await n({
+      folderId: bigFolder.id,
+      title: `Research note ${String(i).padStart(2, '0')}`,
+      body: `# Research note ${i}\n\nBulk seed content so the notes list is long enough to scroll.\n`,
+    });
+  }
 
   // ---- saved views: custom + CROSS-APP category views ------------------------
   await createSavedQuery(db, owner, {
