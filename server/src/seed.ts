@@ -5,6 +5,7 @@
 import { hashPassword } from './auth.js';
 import type { DB } from './db.js';
 import { allocateReadableId, newId } from './ids.js';
+import { DEFAULT_VIEWS } from './services/savedQueries.js';
 
 export interface NewUserInput {
   username: string;
@@ -73,27 +74,8 @@ export async function seedUserDefaults(db: DB, ownerId: string): Promise<void> {
     })
     .execute();
 
-  // [name, glyph, query, position, pinned]. Every view carries an explicit `type:` so it's a
-  // reasonable, unambiguous default + surfaces only under its app (the per-app nav filters by
-  // type; a view with no type: is treated as Tasks-only). §2.4 seed views.
-  const views: [string, string, string, number, number][] = [
-    ['Today', '☉', 'type:task status:open due:today', 0, 0],
-    ['Open', '○', 'type:task status:open', 1, 1],
-    ['Overdue', '!', 'type:task status:overdue', 2, 1],
-    ['This week', '☰', 'type:task status:open due:week', 3, 0],
-    ['Recurring', '↻', 'type:task recurring:true status:open', 4, 0],
-    ['No date', '∅', 'type:task due:none status:open', 5, 0],
-    // Events (calendar-month/week keywords from the §3.3 date model)
-    ['This week', '☰', 'type:event due:this-week', 6, 0],
-    ['This month', '◫', 'type:event due:this-month', 7, 0],
-    ['Next month', '»', 'type:event due:next-month', 8, 0],
-    // Notes (created/edited + review date)
-    ['Edited this week', '✎', 'type:note edited:>=-7d', 9, 0],
-    ['Created this week', '✦', 'type:note created:>=-7d', 10, 0],
-    ['To review', '◉', 'type:note due:today', 11, 0],
-    ['Untagged', '∅', 'type:note has:no-labels', 12, 0],
-  ];
-  for (const [name, glyph, query, position, pinned] of views) {
+  // §2.4 seed views — the shared per-app defaults (DEFAULT_VIEWS in services/savedQueries).
+  for (const [name, glyph, query, position, pinned] of DEFAULT_VIEWS) {
     await db
       .insertInto('saved_queries')
       .values({

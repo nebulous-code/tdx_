@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "D1 TypeScript backend for tdx (fresh service, stands beside backend/ until cutover).",
+  "description": "TypeScript backend for tdx — the API plus the same-origin static frontend.",
   "scripts": {
     "dev": "tsx watch src/app.ts",
     "build": "tsc",

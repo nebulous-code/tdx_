@@ -415,7 +415,10 @@
   // the visible, sorted root tasks for the current view (shared by list + keyboard nav)
   store.currentQuery = () => {
     const v = store.view;
-    return v.kind==='project' ? 'project:'+v.id : (v.query||'');
+    // a project view queries by the project's readable id (p_0042) — exact like the internal id,
+    // but human-readable and copy-pasteable in the header. Fall back to the id if it's unset.
+    if(v.kind==='project'){ const p = store.projectById(v.id); return 'project:'+((p && p.readableId) || v.id); }
+    return v.query||'';
   };
   // the app types the active query selects (non-negated type: tokens; [] = no type: term)
   store.queryTypes = () => {

@@ -59,7 +59,9 @@ docker start watchtower
 The client mints UUIDs with a `crypto.getRandomValues` fallback for plain-HTTP LAN access (where `crypto.randomUUID` is undefined). If you instead front the app with HTTPS, `randomUUID` is used directly. Either path is fine.
 
 ## Rollback
-The legacy `backend/` is untouched and still works against the legacy schema.
+> **Note:** the legacy `backend/` directory has since been **removed** from the repo (the follow-up below is done), so the "revert to `backend/Dockerfile`" path no longer applies. This section is retained as the historical record of the D1 cutover. To roll back a *current* deploy, use the image-pinning + DB-restore procedure in [`DEPLOY_EVENTS_AND_NOTES.md`](DEPLOY_EVENTS_AND_NOTES.md); `git revert` of the cutover commit would still restore `backend/` from history if it were ever truly needed.
+
+At the time of the cutover, the legacy `backend/` was untouched and still worked against the legacy schema:
 ```sh
 docker compose stop tdx
 mv data/tdx.legacy.db data/tdx.db                 # restore the pre-migration DB
@@ -70,5 +72,5 @@ docker start watchtower
 Keep `data/tdx.legacy-*.db` until you've daily-driven the new server for a while.
 
 ## Follow-ups (not blocking)
-- Once the new server is proven in prod, delete `backend/` and the `tools/` CLI (superseded by `server/scripts/`).
+- ~~Once the new server is proven in prod, delete `backend/` and the `tools/` CLI (superseded by `server/scripts/`).~~ **Done** — `backend/` and the legacy `tools/add-user.js` + `tools/reset-password.js` were removed after the Events & Notes cutover.
 - The granular API also exposes `/complete`, `/assign`, `/labels/merge`, grants/groups, and PATs (`/api/auth/tokens`) for a future CLI / agents / portfolio — not used by the app yet.
