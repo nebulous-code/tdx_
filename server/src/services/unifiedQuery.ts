@@ -48,6 +48,7 @@ function eventAsTask(
 ): Task {
   return {
     id: e.id,
+    readableId: e.readableId,
     title: e.title,
     notes: `${e.notes} ${e.location ?? ''}`.trim(),
     due: occDate,
@@ -66,6 +67,7 @@ function eventAsTask(
 function noteAsTask(n: NoteForQuery, folderName: string | null): Task {
   return {
     id: n.id,
+    readableId: n.readableId,
     title: n.title,
     notes: n.body,
     due: n.reviewAt ?? null,

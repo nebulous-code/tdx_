@@ -29,7 +29,10 @@ export async function dummyVerify(plain: string): Promise<void> {
 
 // ---- session tokens --------------------------------------------------------
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days, sliding
-export const COOKIE_NAME = 'tdx_session';
+// Overridable via SESSION_COOKIE so a second instance on the SAME host (e.g. dev :3001 beside
+// prod :3000 — cookies aren't port-scoped, so both share one jar) can use a distinct cookie name
+// and not clobber the other's login. Prod leaves it unset → 'tdx_session', so no prod impact.
+export const COOKIE_NAME = process.env.SESSION_COOKIE || 'tdx_session';
 
 const mintToken = (): string => crypto.randomBytes(32).toString('base64url'); // -> cookie
 const hashToken = (t: string): string => crypto.createHash('sha256').update(t).digest('hex'); // -> sessions.id

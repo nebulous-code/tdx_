@@ -82,5 +82,49 @@
         "matches": true
       }
     ]
+  },
+  {
+    "rule": "yearly",
+    "anchor": "2026-03-15",
+    "results": [
+      {
+        "date": "2027-03-15",
+        "matches": true
+      },
+      {
+        "date": "2027-03-14",
+        "matches": false
+      },
+      {
+        "date": "2028-03-15",
+        "matches": true
+      },
+      {
+        "date": "2026-03-15",
+        "matches": true
+      }
+    ]
+  },
+  {
+    "rule": "yearly",
+    "anchor": "2024-02-29",
+    "results": [
+      {
+        "date": "2025-02-28",
+        "matches": true
+      },
+      {
+        "date": "2025-03-01",
+        "matches": false
+      },
+      {
+        "date": "2028-02-29",
+        "matches": true
+      },
+      {
+        "date": "2026-02-28",
+        "matches": true
+      }
+    ]
   }
 ]

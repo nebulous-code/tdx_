@@ -31,6 +31,10 @@ window.NotesView = {
     // the body as source lines + the top-level block segments (current-block-raw model, §6.1)
     bodyLines() { return this.draft.body.split('\n'); },
     segs() { return window.MdRender ? window.MdRender.blocks(this.draft.body) : [{ start: 0, end: this.bodyLines.length }]; },
+    // t_0493: word / char count for the full note view. Words = whitespace-separated tokens
+    // (the standard "nothing fancy" count; markdown markers count with their word).
+    wordCount() { return (this.draft.body.trim().match(/\S+/g) || []).length; },
+    charCount() { return this.draft.body.length; },
     // ---- the unified ladder (audit n.3) ------------------------------------------------
     // Every body line is a KbForm row, so j/k walk fields AND text as one list: the cursor's
     // LINE is just kbRow offset by however many field rows precede the body.
@@ -100,6 +104,10 @@ window.NotesView = {
     },
   },
   watch: {
+    // t_0501: j/k move the block cursor via KbForm's ladder (kbRow), which never calls
+    // scrollCursor — so the pane didn't follow the cursor down. Watch the derived line and
+    // scroll on ANY line change (j/k, w/b, gg/G), so the cursor stays in view no matter how it moved.
+    curLine() { this.scrollCursor(); },
     // markdown renders synchronously; tdx-query blocks fetch async, so hydrate after paint
     'draft.body'() { if (this.mode === 'normal') this.$nextTick(this.hydrateQueries); },
     mode(v) { if (v === 'normal') this.$nextTick(this.hydrateQueries); },
@@ -293,12 +301,17 @@ window.NotesView = {
         if (e.key === 'd') { e.preventDefault(); this.del(); return true; }
         return false;                                   // fields: plain KbForm
       }
-      if (e.key === 'j' || e.key === 'k' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        this.pending = null;
+      // an armed operator (r/g/d) claims the NEXT key — even j/k — so `rj` replaces with 'j'
+      // instead of navigating (t_0502). Only fall through to the ladder when nothing's pending.
+      if (!this.pending && (e.key === 'j' || e.key === 'k' || e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
         return false;                                   // let the ladder move
       }
       return this.bodyKey(e);
     },
+    // t_0502: while a `r` replace is armed, the note claims EVERY next key (except Esc) — even
+    // global bare-key shortcuts like `@` — so the char lands on the note instead of firing the
+    // shortcut. The global handler (index.html onKey) checks this and routes the key here first.
+    capturingKey() { return this.editing && this.mode === 'normal' && this.pending === 'r'; },
     // ---- §6.1 block cursor: motions, insert entry, and the operators (n.2/n.5/n.12) ----
     bodyKey(e) {
       const lines = this.bodyLines;
@@ -306,6 +319,9 @@ window.NotesView = {
       const setCol = (c) => { this.curCol = Math.max(0, Math.min(lineLen(), c)); this.goalCol = this.curCol; };
       // a pending operator swallows the next key
       if (this.pending) {
+        // a bare modifier keydown (Shift for @ / $, or Ctrl/Alt/Meta) fires BEFORE the real char,
+        // so it must not consume/abort the operator — ignore it and keep waiting (t_0502).
+        if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return true;
         const p = this.pending;
         this.pending = null;
         e.preventDefault();
@@ -436,7 +452,26 @@ window.NotesView = {
       }
       return out.join('\n');
     },
-    scrollCursor() { this.$nextTick(() => { const el = this.$el && this.$el.querySelector('.nb-cursor'); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' }); }); },
+    scrollCursor() {
+      this.$nextTick(() => {
+        const cur = this.$el && this.$el.querySelector('.nb-cursor');
+        if (!cur) return;
+        // t_0501: scrollIntoView({block:'nearest'}) didn't move the nested .note-render pane
+        // (the cursor rode down inside one tall raw block while scrollTop stayed 0). So walk up
+        // to the actual scroll container and drive its scrollTop, keeping the cursor `pad` px
+        // clear of the top/bottom edges.
+        let box = cur.parentElement;
+        while (box) {
+          const oy = getComputedStyle(box).overflowY;
+          if ((oy === 'auto' || oy === 'scroll') && box.scrollHeight > box.clientHeight) break;
+          box = box.parentElement;
+        }
+        if (!box) return;
+        const c = cur.getBoundingClientRect(), b = box.getBoundingClientRect(), pad = 40;
+        if (c.top < b.top + pad) box.scrollTop -= (b.top + pad) - c.top;
+        else if (c.bottom > b.bottom - pad) box.scrollTop += c.bottom - (b.bottom - pad);
+      });
+    },
     // keys routed from the app's global handler (so they inherit its modal/typing gate)
     onKey(e) {
       if (this.editing) {
@@ -581,7 +616,7 @@ window.NotesView = {
       if (segEl) { this.curLine = segBase; this.curCol = 0; this.goalCol = 0; }
     },
     openEntity(type, id) {
-      if (type === 'task') { this.store.selectedTaskId = id; this.store.detailOpen = true; }
+      if (type === 'task') { this.store.selectTask(id); }
       else if (type === 'event') { this.store.openEvent(id); }
       else if (type === 'note') { this.store.openNoteDrawer(id); }   // peek in place (§4.3); `o` in the drawer opens it fully
     },
@@ -765,6 +800,7 @@ window.NotesView = {
           <button class="btn" :class="navCls('back')" @click="closeEditor" title="Back to the notes list (esc)">back <span class="mut">{{ mode==='insert' ? '⎋⎋' : '⎋' }}</span></button>
           <button class="btn" :class="navCls('mode')" @click="toggleMode">{{ mode==='insert' ? 'render' : 'edit' }} <span class="mut">{{ mode==='insert' ? '⎋' : 'i' }}</span></button>
         </div>
+        <span class="note-wordcount mut" :title="charCount + ' characters'">{{ wordCount }} word{{ wordCount === 1 ? '' : 's' }}</span>
         <button v-if="sel" class="btn danger" :class="navCls('delete')" @click="del"><span><u>d</u>elete</span></button>
         <button class="btn primary" :class="navCls('save')" @click="save">save ↵</button>
       </div>

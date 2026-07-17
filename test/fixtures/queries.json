@@ -73,6 +73,10 @@
     "due:this-month",
     "due:next-month",
     "due:last-week",
-    "due:this-week"
+    "due:this-week",
+    "id:t1",
+    "id:t1,t3",
+    "id:t_9999",
+    "-id:t1"
   ]
 }

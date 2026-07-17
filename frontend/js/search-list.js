@@ -31,7 +31,7 @@ window.SearchList = {
       return '';
     },
     openItem(it) {
-      if (it.type === 'task') { this.store.selectedTaskId = it.id; this.store.detailOpen = true; }
+      if (it.type === 'task') { this.store.selectTask(it.id); }
       else if (it.type === 'event') { this.store.openEvent(it.id); }
       else if (it.type === 'note') { this.store.openNoteDrawer(it.id); }   // peek drawer (§4.3)
     },

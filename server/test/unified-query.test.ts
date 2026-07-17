@@ -211,3 +211,42 @@ test('a real folder with the base name WINS — the alias switches off', async (
   assert.ok(bare.items.some((i: Item) => i.title === 'Beta'));
   assert.ok(!bare.items.some((i: Item) => i.title === 'InTheRealInbox'));
 });
+
+// Runs LAST: it creates its own task/event/note, and asserts via exact id identity, so it is
+// robust to everything already in the shared app — but it also ADDS items, so keeping it at the
+// end avoids perturbing the earlier exact-count assertions (e.g. `type:event due:set` == 1).
+test('id: matches by readable id (and UUID) across all three types', async () => {
+  // capture the ids the server allocates on create
+  const task = await j('POST', '/api/tasks', { title: 'id-probe task' }).then((r) => r.json());
+  const ev = await j('POST', '/api/events', {
+    title: 'id-probe event',
+    startAt: '2026-07-20',
+  }).then((r) => r.json());
+  const note = await j('POST', '/api/notes', { title: 'IdProbeNote', body: 'x' }).then((r) =>
+    r.json(),
+  );
+  assert.match(task.readableId, /^t_\d{4,}$/);
+  assert.match(ev.readableId, /^e_\d{4,}$/);
+  assert.match(note.readableId, /^n_\d{4,}$/);
+
+  // each readable id resolves to exactly its own item, whichever type it is
+  for (const it of [task, ev, note]) {
+    const res = await query(`type:task,event,note id:${it.readableId}`);
+    assert.equal(res.items.length, 1, `one hit for ${it.readableId}`);
+    assert.equal(res.items[0].id, it.id);
+  }
+
+  // the raw UUID works too (the arm the query-corpus golden exercises)
+  const byUuid = await query(`type:task,event,note id:${task.id}`);
+  assert.equal(byUuid.items.length, 1);
+  assert.equal(byUuid.items[0].id, task.id);
+
+  // comma-list = OR — a task and a note in one query
+  const both = await query(`type:task,event,note id:${task.readableId},${note.readableId}`);
+  const ids = new Set(both.items.map((i: Item) => i.id));
+  assert.equal(both.items.length, 2);
+  assert.ok(ids.has(task.id) && ids.has(note.id));
+
+  // a nonexistent id matches nothing
+  assert.equal((await query('type:task,event,note id:t_999999')).items.length, 0);
+});

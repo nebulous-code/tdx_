@@ -28,6 +28,11 @@
     "monthly on last sun",
     "every 2 months on 1st mon",
     "every 3 months",
+    "yearly",
+    "annually",
+    "every year",
+    "every 2 years",
+    "every 5 years",
     "WEEKLY ON MON,WED",
     "  daily  ",
     "every 0 days",
@@ -54,13 +59,17 @@
     { "rule": "monthly on last sun",         "from": "2026-06-18", "anchor": "2026-01-25", "count": 4, "inclusive": false },
     { "rule": "monthly on 5th sun",          "from": "2026-01-01", "anchor": "2026-01-01", "count": 4, "inclusive": false },
     { "rule": "every 2 months on 1st mon",   "from": "2026-06-18", "anchor": "2026-01-05", "count": 4, "inclusive": false },
-    { "rule": "daily",                       "from": "2026-06-18", "anchor": "2026-06-20", "count": 3, "inclusive": true }
+    { "rule": "daily",                       "from": "2026-06-18", "anchor": "2026-06-20", "count": 3, "inclusive": true },
+    { "rule": "yearly",                      "from": "2026-06-18", "anchor": "2026-03-15", "count": 3, "inclusive": false },
+    { "rule": "every 2 years",               "from": "2026-06-18", "anchor": "2026-03-15", "count": 3, "inclusive": false }
   ],
   "matches": [
     { "rule": "weekly on mon,wed,fri", "anchor": "2026-06-01", "dates": ["2026-06-17", "2026-06-18", "2026-06-19", "2026-06-20"] },
     { "rule": "monthly on day 31",     "anchor": "2026-01-31", "dates": ["2026-02-28", "2026-02-27", "2026-03-31", "2026-04-30"] },
     { "rule": "monthly on last fri",   "anchor": "2026-01-30", "dates": ["2026-06-26", "2026-06-27", "2026-07-31"] },
-    { "rule": "every 3 days",          "anchor": "2026-06-01", "dates": ["2026-06-03", "2026-06-04", "2026-06-18", "2026-06-19"] }
+    { "rule": "every 3 days",          "anchor": "2026-06-01", "dates": ["2026-06-03", "2026-06-04", "2026-06-18", "2026-06-19"] },
+    { "rule": "yearly",                "anchor": "2026-03-15", "dates": ["2027-03-15", "2027-03-14", "2028-03-15", "2026-03-15"] },
+    { "rule": "yearly",                "anchor": "2024-02-29", "dates": ["2025-02-28", "2025-03-01", "2028-02-29", "2026-02-28"] }
   ],
   "dateHelpers": {
     "ymd":         ["2026-06-18", "2026-01-01", "2026-12-31"],

@@ -144,12 +144,12 @@
     searchResults: [],       // cross-type find hits ({type,id,title,…}) for the search-list
     _searchSeq: 0,           // guards against out-of-order async find responses
     healthFilter: null,      // a health-bar signal key while filtering a project view (transient)
-    sortField: 'due',        // due | created | title | project | priority | size | tag
+    sortField: 'due',        // due | created | title | project | priority | size | tag | modified
     // per-field direction. 'asc' = ^, 'desc' = v.
-    sortDirs: { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', size:'desc', tag:'asc' },
+    sortDirs: { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', size:'desc', tag:'asc', modified:'desc' },
     // sort configuration (Shift+S popup, persisted per-user as users.sort_prefs)
-    sortOrder: ['due','created','title','project','priority','size','tag'],   // priority order for the `s` cycle
-    sortEnabled: { due:true, created:true, title:true, project:true, priority:true, size:true, tag:true },
+    sortOrder: ['due','created','title','project','priority','size','tag','modified'],   // priority order for the `s` cycle
+    sortEnabled: { due:true, created:true, title:true, project:true, priority:true, size:true, tag:true, modified:true },
     builderOpen: false,
     sidebarOpen: false,      // mobile slide-in
     navCollapsed: false,     // desktop: hide the sidebar column (toggled with n)
@@ -306,8 +306,8 @@
     return (sv && !sv.system) ? sv : null;
   };
   // ---- sort configuration (Shift+S popup; persisted as users.sort_prefs) ----
-  const SORT_KEYS = ['due','created','title','project','priority','size','tag'];
-  const DEFAULT_SORT_DIRS = { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', size:'desc', tag:'asc' };
+  const SORT_KEYS = ['due','created','title','project','priority','size','tag','modified'];
+  const DEFAULT_SORT_DIRS = { due:'asc', created:'asc', title:'asc', project:'asc', priority:'desc', size:'desc', tag:'asc', modified:'desc' };
   // pure: turn a (possibly null/partial) stored prefs object into a clean {order,enabled,dirs}
   store.normalizeSortPrefs = (p) => {
     const order = (p && Array.isArray(p.order)) ? p.order.filter(k=>SORT_KEYS.includes(k)) : [];
@@ -571,6 +571,7 @@
       if(by==='priority') return (a.priority||0)-(b.priority||0);
       if(by==='size')     return (a.size||0)-(b.size||0);
       if(by==='tag')      return tagKey(a).localeCompare(tagKey(b));
+      if(by==='modified') return (a.updatedAt||'').localeCompare(b.updatedAt||'');
       return 0;
     };
     list = [...list].sort((a,b)=> dir * cmp(a,b));
@@ -728,9 +729,10 @@
   };
 
   // ---- mutations ----
-  store.toast = (msg) => {
+  store.toast = (msg, opts) => {
     const id = uid('toast'); store.toasts.push({ id, msg });
-    setTimeout(()=>{ const i = store.toasts.findIndex(t=>t.id===id); if(i>=0) store.toasts.splice(i,1); }, 2200);
+    const dur = (opts && opts.duration) || 2200;   // undo uses a longer window so you can read what reverted
+    setTimeout(()=>{ const i = store.toasts.findIndex(t=>t.id===id); if(i>=0) store.toasts.splice(i,1); }, dur);
   };
 
   // an editor with unsaved work registers store.dirtyCheck (() => bool); switching
@@ -774,6 +776,20 @@
     c.go(i);
   };
 
+  // The mouse equivalent of listSwap: clicking a task (a list row, calendar chip, linked item,
+  // search hit) opens it in the drawer. Same isAnyDirty() gate, so switching away from a task
+  // that has unsaved work (e.g. a pending subtask draft) warns first. The guard is a no-op when
+  // nothing is dirty, so ordinary opens stay instant; re-selecting the open task never prompts (t_0278).
+  store.selectTask = (id) => {
+    if(id === store.selectedTaskId){ store.detailOpen = true; return; }   // same task — not a navigation
+    const apply = () => { store.selectedTaskId = id; store.detailOpen = true; };
+    if(store.isAnyDirty() && store.askConfirm){
+      store.askConfirm('Discard unsaved changes?').then((ok) => { if(ok) apply(); });
+      return;
+    }
+    apply();
+  };
+
   const applyView = (v) => {
     store.view = v; store.selectedTaskId = null; store.sidebarOpen = false;
     store.searchActive = false;   // switching views exits search (the term is kept for the next '/')
@@ -782,7 +798,10 @@
     store.displayOverride = null; // a grid/list toggle belongs to the view you toggled it on (e.1)
   };
   store.setView = (v) => {
-    if(store.dirtyCheck && store.dirtyCheck() && store.askConfirm){
+    // isAnyDirty() (not just the single dirtyCheck slot) so switching views/apps warns about ANY
+    // unsaved work — the notes-app editor AND every open drawer (task subtask draft, event, note).
+    // dirtyCheck is already one of isAnyDirty()'s inputs, so this only widens coverage (t_0278).
+    if(store.isAnyDirty() && store.askConfirm){
       store.askConfirm("Discard unsaved changes? You'll lose your edits.").then((ok)=>{
         if(ok){ store.dirtyCheck = null; applyView(v); }
       });

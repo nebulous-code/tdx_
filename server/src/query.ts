@@ -7,6 +7,7 @@ import { Rec } from './rec.js';
 
 export interface Task {
   id?: string;
+  readableId?: string | null;
   title?: string;
   notes?: string;
   projectId?: string;
@@ -224,6 +225,17 @@ function evalTerm(task: Task, t: Term, ctx: Ctx): boolean {
       res =
         (task.title || '').toLowerCase().includes(t.value) ||
         (task.notes || '').toLowerCase().includes(t.value);
+      break;
+    case 'id':
+      // exact identity match on the readable id (`t_0278`) or the raw UUID; comma-list = OR.
+      // Values are already lowercased at parse time, as are readable ids and UUIDs.
+      res = t.value
+        .split(',')
+        .some(
+          (v) =>
+            v === String(task.readableId ?? '').toLowerCase() ||
+            v === String(task.id ?? '').toLowerCase(),
+        );
       break;
     case 'project': {
       const ids = resolveProjects(t.value, ctx);

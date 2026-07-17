@@ -15,6 +15,7 @@ window.RecurrenceBuilder = {
       <span class="chip" :class="[{on: freq==='daily'},   active ? kbCls('freq',1) : null]" @click="setFreq('daily')">daily</span>
       <span class="chip" :class="[{on: freq==='weekly'},  active ? kbCls('freq',2) : null]" @click="setFreq('weekly')">weekly</span>
       <span class="chip" :class="[{on: freq==='monthly'}, active ? kbCls('freq',3) : null]" @click="setFreq('monthly')">monthly</span>
+      <span class="chip" :class="[{on: freq==='yearly'},  active ? kbCls('freq',4) : null]" @click="setFreq('yearly')">yearly</span>
     </div>
 
     <!-- DAILY -->
@@ -81,6 +82,16 @@ window.RecurrenceBuilder = {
       </div>
     </div>
 
+    <!-- yearly -->
+    <div v-if="freq==='yearly'" class="bgroup" style="margin-bottom:8px;">
+      <div class="bg-label">repeat</div>
+      <div class="chips" style="align-items:center;">
+        <span class="mut">every</span>
+        <input ref="yInterval" class="input" :class="active ? kbCls('yInterval') : null" style="width:48px;text-align:center;" type="number" min="1" v-model.number="yInterval" @input="emit" @keydown.esc.stop.prevent="$event.target.blur()" />
+        <span class="mut">year(s) <span style="opacity:.7">— on the due date's month &amp; day</span></span>
+      </div>
+    </div>
+
     <!-- syntax (editable) + preview -->
     <div v-if="freq!=='none'" class="field" style="margin-bottom:6px;">
       <label>syntax <span class="mut">— editable, reusable</span></label>
@@ -104,6 +115,7 @@ window.RecurrenceBuilder = {
       dInterval:1,
       wDays:[1], wInterval:1,
       mMode:'day', mDay:1, mOrd:'1', mWeekday:1, mInterval:1,
+      yInterval:1,
       WD: Rec.WD.map(w=>w), // sun..sat
       WDfull: Rec.WD_FULL,
     };
@@ -123,7 +135,7 @@ window.RecurrenceBuilder = {
   methods: {
     // KbForm rows — dynamic by frequency (j/k between controls, h/l within a chip row)
     kbRows(){
-      const rows=[{ id:'freq', type:'grid', items:['none','daily','weekly','monthly'], cols:99, select:f=>this.setFreq(f) }];
+      const rows=[{ id:'freq', type:'grid', items:['none','daily','weekly','monthly','yearly'], cols:99, select:f=>this.setFreq(f) }];
       if(this.freq==='daily'){
         rows.push({ id:'dInterval', type:'input', ref:'dInterval' });
       } else if(this.freq==='weekly'){
@@ -135,6 +147,8 @@ window.RecurrenceBuilder = {
         if(this.mMode==='day') rows.push({ id:'mDay', type:'input', ref:'mDay' });
         else { rows.push({ id:'mOrd', type:'input', ref:'mOrd' }); rows.push({ id:'mWeekday', type:'input', ref:'mWeekday' }); }
         rows.push({ id:'mInterval', type:'input', ref:'mInterval' });
+      } else if(this.freq==='yearly'){
+        rows.push({ id:'yInterval', type:'input', ref:'yInterval' });
       }
       if(this.freq!=='none') rows.push({ id:'raw', type:'input', ref:'raw' });
       return rows;
@@ -148,6 +162,7 @@ window.RecurrenceBuilder = {
       else if(r.type==='weekly'){ this.freq='weekly'; this.wDays=(r.days&&r.days.length)?[...r.days]:[1]; this.wInterval=r.interval; }
       else if(r.type==='monthly-day'){ this.freq='monthly'; this.mMode='day'; this.mDay=r.day||1; this.mInterval=r.interval; }
       else if(r.type==='monthly-weekday'){ this.freq='monthly'; this.mMode='weekday'; this.mOrd=String(r.ord); this.mWeekday=r.weekday; this.mInterval=r.interval; }
+      else if(r.type==='yearly'){ this.freq='yearly'; this.yInterval=r.interval; }
     },
     setFreq(f){
       this.freq=f;
@@ -171,6 +186,7 @@ window.RecurrenceBuilder = {
         if(this.mMode==='day') r={type:'monthly-day', interval:Math.max(1,this.mInterval||1), day:Math.min(31,Math.max(1,this.mDay||1))};
         else r={type:'monthly-weekday', interval:Math.max(1,this.mInterval||1), ord:parseInt(this.mOrd), weekday:this.mWeekday};
       }
+      else if(this.freq==='yearly') r={type:'yearly', interval:Math.max(1,this.yInterval||1)};
       return r ? Rec.stringify(r) : '';
     },
     emit(){

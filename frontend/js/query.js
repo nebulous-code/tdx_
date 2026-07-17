@@ -3,6 +3,7 @@
    Attached to window.Q.
    ------------------------------------------------------------
    Grammar (space-separated terms, implicit AND):
+     id:t_0278               (exact readable id or UUID; comma list = OR -> id:t_0278,t_0301)
      project:work            (matches that project only, not its subprojects)
      label:urgent            (comma list = OR -> label:urgent,bug)
      status:open|done|overdue|today
@@ -141,6 +142,13 @@
       case 'text':
         res = (task.title||'').toLowerCase().includes(t.value) ||
               (task.notes||'').toLowerCase().includes(t.value);
+        break;
+      case 'id':
+        // exact identity match on the readable id (`t_0278`) or the raw UUID; comma-list = OR.
+        // Values are already lowercased at parse time, as are readable ids and UUIDs.
+        res = t.value.split(',').some(v =>
+          v === String(task.readableId||'').toLowerCase() ||
+          v === String(task.id||'').toLowerCase());
         break;
       case 'project': {
         const ids = resolveProjects(t.value, ctx);

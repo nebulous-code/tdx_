@@ -3,7 +3,13 @@
 // Phase 0 goldens); only the wrapper changed (window.Rec -> exports) plus light
 // types. Supported syntax is unchanged — see the original header.
 
-export type RuleType = 'daily' | 'weekly' | 'monthly-day' | 'monthly-weekday' | 'invalid';
+export type RuleType =
+  | 'daily'
+  | 'weekly'
+  | 'monthly-day'
+  | 'monthly-weekday'
+  | 'yearly'
+  | 'invalid';
 
 export interface Rule {
   type: RuleType;
@@ -94,6 +100,11 @@ export function parse(str: string | null | undefined): Rule | null {
   if ((m = s.match(/^every (\d+) months?$/)))
     return { type: 'monthly-day', interval: +m[1], day: null };
 
+  // yearly / annually — every N years on the anchor's month + day-of-month (t_0468)
+  if (s === 'yearly' || s === 'annually' || s === 'every year')
+    return { type: 'yearly', interval: 1 };
+  if ((m = s.match(/^every (\d+) years?$/))) return { type: 'yearly', interval: +m[1] };
+
   return { type: 'invalid', raw: str };
 }
 
@@ -131,6 +142,8 @@ export function stringify(r: Rule | null): string {
       const w = WD[r.weekday as number];
       return r.interval === 1 ? `monthly on ${o} ${w}` : `every ${r.interval} months on ${o} ${w}`;
     }
+    case 'yearly':
+      return r.interval === 1 ? 'yearly' : `every ${r.interval} years`;
   }
 }
 
@@ -165,6 +178,8 @@ export function summary(strOrObj: string | Rule | null): string {
         ? `Monthly on the ${o} ${w}`
         : `Every ${r.interval} months on the ${o} ${w}`;
     }
+    case 'yearly':
+      return r.interval === 1 ? 'Every year' : `Every ${r.interval} years`;
   }
 }
 export function ordSuffix(n: number): string {
@@ -194,6 +209,8 @@ export function compact(strOrObj: string | Rule | null): string {
       const w = A[r.weekday as number];
       return r.interval === 1 ? `${o} ${w}` : `${o} ${w}/${r.interval}mo`;
     }
+    case 'yearly':
+      return r.interval === 1 ? 'yearly' : `${r.interval}y`;
   }
 }
 
@@ -247,6 +264,15 @@ export function matches(date: Date, r: Rule, anchor?: Date): boolean {
         r.ord as number,
       );
       return !!occ && sameDay(occ, date);
+    }
+    case 'yearly': {
+      const n = r.interval || 1;
+      // same month + day-of-month as the anchor, every n years. Feb-29 clamps to the
+      // month length in non-leap years (mirrors monthly-day's clamp).
+      if ((date.getFullYear() - anchor.getFullYear()) % n !== 0) return false;
+      if (date.getMonth() !== anchor.getMonth()) return false;
+      const dim = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+      return date.getDate() === Math.min(anchor.getDate(), dim);
     }
   }
   return false;

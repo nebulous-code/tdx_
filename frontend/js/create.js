@@ -200,10 +200,24 @@
       if (sig === '/' && accepts.includes('/') && w.length > 1 && fields.category === undefined) {
         // A label auto-creates, so `#anything` is always a token. A CATEGORY cannot —
         // projects carry color/glyph/position, folders are real directories on disk.
-        // So `/xyz` is a token only if such a thing EXISTS; otherwise it stays visible
-        // in the title rather than being silently eaten.
-        const name = w.slice(1);
-        if (known(CATEGORY_OF[type], name)) { fields.category = name; continue; }
+        // So `/xyz` is a token only if such a thing EXISTS; otherwise it stays visible.
+        // Match GREEDILY across the following words so a multi-word name is consumed WHOLE:
+        // `/Home Renovation` claims both words, and `/Home Renovation in Office` claims the
+        // longest run that names a real category ("Home Renovation"), leaving "in Office" in
+        // the title. Runs stop at the next sigil word so a trailing `#label`/`!3` isn't eaten.
+        const kind = CATEGORY_OF[type];
+        let run = w.slice(1);
+        let bestExtra = -1;
+        let bestName = null;
+        for (let j = i; j < words.length; j++) {
+          if (j > i) {
+            const nxt = words[j];
+            if (nxt.length > 1 && accepts.includes(nxt[0])) break; // don't swallow a token
+            run += ` ${nxt}`;
+          }
+          if (known(kind, run)) { bestExtra = j - i; bestName = run; }
+        }
+        if (bestName !== null) { fields.category = bestName; i += bestExtra; continue; }
         literal.push(w); titleWords.push(w); continue;
       }
       titleWords.push(w);

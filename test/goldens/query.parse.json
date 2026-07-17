@@ -820,5 +820,49 @@
       }
     ],
     "rebuilt": "due:this-week"
+  },
+  {
+    "query": "id:t1",
+    "terms": [
+      {
+        "field": "id",
+        "value": "t1",
+        "neg": false
+      }
+    ],
+    "rebuilt": "id:t1"
+  },
+  {
+    "query": "id:t1,t3",
+    "terms": [
+      {
+        "field": "id",
+        "value": "t1,t3",
+        "neg": false
+      }
+    ],
+    "rebuilt": "id:t1,t3"
+  },
+  {
+    "query": "id:t_9999",
+    "terms": [
+      {
+        "field": "id",
+        "value": "t_9999",
+        "neg": false
+      }
+    ],
+    "rebuilt": "id:t_9999"
+  },
+  {
+    "query": "-id:t1",
+    "terms": [
+      {
+        "field": "id",
+        "value": "t1",
+        "neg": true
+      }
+    ],
+    "rebuilt": "-id:t1"
   }
 ]
