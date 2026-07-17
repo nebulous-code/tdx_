@@ -1392,20 +1392,29 @@ const app = createApp({
     window.addEventListener('pagehide', this._flush);
     this._onVis=()=>{ if(document.visibilityState==='hidden') this._flush(); };
     document.addEventListener('visibilitychange', this._onVis);
-    // Mobile nav swipe (t_681): left-edge swipe-right opens the sidebar; swipe-left on
-    // the open sidebar closes it. Mostly-horizontal only, so vertical scrolling is left
-    // alone; passive listeners (we never preventDefault). Gated to the mobile breakpoint
-    // at gesture time so it follows viewport changes. The detail drawer (right) is untouched.
+    // Mobile nav swipe (t_681): a mostly-horizontal swipe drills through the nav layers.
+    // Right-swipe opens the next layer (nothing → app nav → deep nav); left-swipe closes
+    // the current one (deep nav → app nav → nothing). Deliberately NOT gated to the left
+    // edge: iOS reserves the very edge for its own back/forward gesture (in Safari *and*
+    // standalone PWAs), so an edge-anchored open just fought the OS — swiping from anywhere
+    // sidesteps it. Gated to list views (detail drawer closed) so dragging across text in
+    // an open editor doesn't pop the nav. Mostly-horizontal only, so vertical scrolling is
+    // left alone; passive listeners (we never preventDefault); mobile breakpoint only.
     this._touch=null;
     this._onTouchStart=(e)=>{ const t=e.changedTouches&&e.changedTouches[0]; this._touch = t ? { x:t.clientX, y:t.clientY } : null; };
     this._onTouchEnd=(e)=>{
       const s=this._touch; this._touch=null;
-      if(!s || !window.matchMedia('(max-width: 860px)').matches) return;
+      if(!s || this.store.detailOpen || !window.matchMedia('(max-width: 860px)').matches) return;
       const t=e.changedTouches&&e.changedTouches[0]; if(!t) return;
       const dx=t.clientX-s.x, dy=t.clientY-s.y;
       if(Math.abs(dx) <= Math.abs(dy)) return;              // mostly-horizontal only
-      if(!this.store.sidebarOpen && s.x < 24 && dx > 50) this.store.sidebarOpen=true;     // open: from left edge
-      else if(this.store.sidebarOpen && dx < -50) this.store.sidebarOpen=false;           // close: swipe left
+      if(dx > 55){                                          // right-swipe: open the next layer
+        if(!this.store.sidebarOpen) this.store.sidebarOpen=true;
+        else if(!this.store.deepNavOpen) this.store.deepNavOpen=true;
+      } else if(dx < -55){                                  // left-swipe: close the current layer
+        if(this.store.deepNavOpen) this.store.deepNavOpen=false;
+        else if(this.store.sidebarOpen) this.store.sidebarOpen=false;
+      }
     };
     window.addEventListener('touchstart', this._onTouchStart, { passive:true });
     window.addEventListener('touchend', this._onTouchEnd, { passive:true });
