@@ -192,7 +192,7 @@ window.DayDetail = {
     openEvent(occ) { const { date, ...ev } = occ; this.store.editEvent({ ...ev }); },   // opens the event drawer to the right
     // open the task detail drawer to the right (the detailOpen watcher closes the event/note
     // drawers + takes the keyboard; the day drawer stays open underneath, like events)
-    openTask(t) { this.store.selectedTaskId = t.id; this.store.detailOpen = true; },
+    openTask(t) { this.store.selectTask(t.id); },
     createAtFocus() { const c = this.focusedCell; this.createAt(c && typeof c.hour === 'number' ? c.hour : 8); },
     alldayFocused(e) { const c = this.focusedCell; return !!(c && c.type === 'allday' && this.focusedEvent && this.focusedEvent.id === e.id); },
     // `i` creates what the APP you're in is about — a task on Tasks, an event on Events — so the

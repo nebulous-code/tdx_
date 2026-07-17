@@ -131,6 +131,15 @@ window.TaskDetail = {
   `,
   data(){ return { subDraft:'', kbAutoListen:false, kbAutofocus:false, recurActive:false, recurTouched:false, subMoveId:null,
     linkList:[] }; },   // linkList = the links the child emitted up (n.13; $refs isn't reactive)
+  mounted(){
+    // A typed-but-unadded subtask (subDraft) is this drawer's only real data-loss surface — the
+    // task's own fields autosave, but the subtask add-field doesn't. Register it with the shared
+    // dirty registry so every navigate-away guard that already consults isAnyDirty() (J/K swap,
+    // view/app switch, tab close/refresh) prompts before dropping it (t_0278). Gated to detailOpen
+    // so a leftover draft can never trip the guard once the drawer is shut.
+    this._unregSubDirty = this.store.registerDirty(() => this.store.detailOpen && this.subDraft.trim() !== '');
+  },
+  beforeUnmount(){ if(this._unregSubDirty) this._unregSubDirty(); },
   computed: {
     task(){ return this.store.taskById(this.store.selectedTaskId); },
     linkFocus(){ return this.kbCellOf('links'); },   // → <linked-items :kb-focus> (n.13)
@@ -149,6 +158,7 @@ window.TaskDetail = {
   },
   watch: {
     'store.selectedTaskId'(_now, was){
+      this.subDraft='';   // a pending subtask belongs to the task it was typed on — never carry it to the next (t_0278)
       this.$nextTick(this.autosize);
       // J/K-swapping to another task while the drawer is open ends this task's edit
       // session — infer for the task we're leaving if its recurrence was changed.
@@ -173,7 +183,7 @@ window.TaskDetail = {
       // Closing the drawer ends the edit session — infer the due date from the FINAL
       // recurrence rule (only if it was actually changed this session). Works for mouse
       // and keyboard alike; due stays null through editing so MWF→TR lands on Tue.
-      else { if(this.recurTouched) this.inferDueFromRecurrence(); this.recurTouched = false; }
+      else { if(this.recurTouched) this.inferDueFromRecurrence(); this.recurTouched = false; this.subDraft=''; }
     }
   },
   methods: {
@@ -258,7 +268,16 @@ window.TaskDetail = {
     },
     // keep the kbForm cursor on the held subtask as it changes array position
     _refocusSub(id){ const i=this.kbNav.findIndex(r=>r.id==='sub_'+id); if(i>=0) this.kbRow=i; },
-    close(){ this.store.detailOpen=false; },
+    // The X and Esc close paths bypass the isAnyDirty() guards (they just flip detailOpen), so
+    // confirm here too — otherwise closing the drawer would silently drop a pending subtask (t_0278).
+    confirmDropSubDraft(){
+      if(!this.subDraft.trim()) return Promise.resolve(true);
+      return this.store.askConfirm('Discard unsaved changes?');
+    },
+    async close(){
+      if(!(await this.confirmDropSubDraft())) return;
+      this.store.detailOpen=false;
+    },
     // recurrence-builder changed — remember it (so we only infer a due date when the
     // rule was actually edited this session, not merely viewed).
     onRecurrenceInput(val){ if(this.task){ this.task.recurrence = val; this.recurTouched = true; } },
@@ -282,6 +301,7 @@ window.TaskDetail = {
         }
         this.store.commitDraftTask();
       }
+      if(this.subDraft.trim()) this.addSub();   // an explicit save adopts a typed-but-unadded subtask rather than losing it (t_0278)
       if(this.recurTouched) this.inferDueFromRecurrence();   // persist the inferred due in this same write
       const a=document.activeElement; if(a && a.blur) a.blur();   // release focus from any field (e.g. notes on ⌃/⌘+↵)
       if(this.store.saveNow) this.store.saveNow();   // flush the debounced write now

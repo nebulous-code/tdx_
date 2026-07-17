@@ -775,6 +775,20 @@
     c.go(i);
   };
 
+  // The mouse equivalent of listSwap: clicking a task (a list row, calendar chip, linked item,
+  // search hit) opens it in the drawer. Same isAnyDirty() gate, so switching away from a task
+  // that has unsaved work (e.g. a pending subtask draft) warns first. The guard is a no-op when
+  // nothing is dirty, so ordinary opens stay instant; re-selecting the open task never prompts (t_0278).
+  store.selectTask = (id) => {
+    if(id === store.selectedTaskId){ store.detailOpen = true; return; }   // same task — not a navigation
+    const apply = () => { store.selectedTaskId = id; store.detailOpen = true; };
+    if(store.isAnyDirty() && store.askConfirm){
+      store.askConfirm('Discard unsaved changes?').then((ok) => { if(ok) apply(); });
+      return;
+    }
+    apply();
+  };
+
   const applyView = (v) => {
     store.view = v; store.selectedTaskId = null; store.sidebarOpen = false;
     store.searchActive = false;   // switching views exits search (the term is kept for the next '/')
@@ -783,7 +797,10 @@
     store.displayOverride = null; // a grid/list toggle belongs to the view you toggled it on (e.1)
   };
   store.setView = (v) => {
-    if(store.dirtyCheck && store.dirtyCheck() && store.askConfirm){
+    // isAnyDirty() (not just the single dirtyCheck slot) so switching views/apps warns about ANY
+    // unsaved work — the notes-app editor AND every open drawer (task subtask draft, event, note).
+    // dirtyCheck is already one of isAnyDirty()'s inputs, so this only widens coverage (t_0278).
+    if(store.isAnyDirty() && store.askConfirm){
       store.askConfirm("Discard unsaved changes? You'll lose your edits.").then((ok)=>{
         if(ok){ store.dirtyCheck = null; applyView(v); }
       });

@@ -54,7 +54,7 @@ window.LinkedItems = {
     },
     open(l) {
       const o = l.other;
-      if (o.type === 'task') { this.store.selectedTaskId = o.id; this.store.detailOpen = true; }
+      if (o.type === 'task') { this.store.selectTask(o.id); }
       else if (o.type === 'event') { this.store.openEvent(o.id); }
       else if (o.type === 'note') { this.store.openNoteDrawer(o.id); }   // peek in place (§4.3)
     },

@@ -229,7 +229,7 @@ window.CalendarView = {
     },
     onCell(ymd) { this.cursor = ymd; this.newEvent(ymd); },
     newEvent(ymd) { this.store.editEvent({ startAt: ymd, allDay: true, title: '', calendarId: this.calFilter || null }); },
-    openTask(t) { this.store.selectedTaskId = t.id; this.store.detailOpen = true; },
+    openTask(t) { this.store.selectTask(t.id); },
     // ---- the quick-add bar (e.9) — the creation language's last caller ------------------
     focusAdd() { const el = this.$refs.qa; if (el) el.focus(); },
     // Esc must be bound on the input: the app's global onKey bails at its typing gate, so the

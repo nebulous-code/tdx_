@@ -73,7 +73,7 @@ window.TaskRow = {
     dueLabel(){ return this.relLabel(this.task.due); }
   },
   methods: {
-    select(){ this.store.selectedTaskId = this.task.id; this.store.detailOpen = true; },
+    select(){ this.store.selectTask(this.task.id); },
     labelName(id){ const l=this.store.labelById(id); return l?l.name:'?'; },
     relLabel(ymd){
       const date = (ymd||'').slice(0,10); // accept 'YYYY-MM-DD' or 'YYYY-MM-DDTHH:MM'

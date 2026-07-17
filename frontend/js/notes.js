@@ -616,7 +616,7 @@ window.NotesView = {
       if (segEl) { this.curLine = segBase; this.curCol = 0; this.goalCol = 0; }
     },
     openEntity(type, id) {
-      if (type === 'task') { this.store.selectedTaskId = id; this.store.detailOpen = true; }
+      if (type === 'task') { this.store.selectTask(id); }
       else if (type === 'event') { this.store.openEvent(id); }
       else if (type === 'note') { this.store.openNoteDrawer(id); }   // peek in place (§4.3); `o` in the drawer opens it fully
     },

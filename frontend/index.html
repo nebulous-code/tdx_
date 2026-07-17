@@ -564,7 +564,9 @@ const app = createApp({
           // inside the recurrence sub-pane OR holding a subtask in move mode, Esc drops
           // that first (one level) — not the whole drawer; a second Esc closes the drawer
           if(this.$refs.detail && (this.$refs.detail.recurActive || this.$refs.detail.subMoveId)){ this.$refs.detail.kbKey(e); return; }
-          const a=document.activeElement; if(a && a.blur) a.blur(); this.store.detailOpen=false; return;
+          const a=document.activeElement; if(a && a.blur) a.blur();
+          if(this.$refs.detail) this.$refs.detail.close(); else this.store.detailOpen=false;   // guarded: confirms a pending subtask (t_0278)
+          return;
         }
         // the day-schedule drawer is closable from ANY state (audit e.6). It used to be reachable
         // only through dayKey, which is gated on showsGrid() — so if the grid stopped being the
