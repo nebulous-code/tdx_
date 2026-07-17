@@ -5,6 +5,7 @@ process.env.SESSION_SECRET ||= 'test-secret-please-change';
 
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
+import { COOKIE_NAME } from '../../src/auth.js';
 import { type DB, type Sqlite, openDatabase } from '../../src/db.js';
 import { type NewUserInput, createUser } from '../../src/seed.js';
 
@@ -54,7 +55,7 @@ export async function login(
     payload: { username, password },
   });
   if (res.statusCode !== 200) throw new Error(`login failed (${res.statusCode}): ${res.body}`);
-  const c = res.cookies.find((x) => x.name === 'tdx_session');
+  const c = res.cookies.find((x) => x.name === COOKIE_NAME);
   if (!c) throw new Error('no session cookie set on login');
   return `${c.name}=${c.value}`;
 }

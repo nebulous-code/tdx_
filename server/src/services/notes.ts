@@ -579,6 +579,7 @@ export interface NoteSearchHit {
 // edit reconciles on the next sync, same as the rest of the index.)
 export interface NoteForQuery {
   id: string;
+  readableId: string | null;
   title: string;
   body: string;
   reviewAt: string | null;
@@ -589,7 +590,7 @@ export interface NoteForQuery {
 export async function notesForQuery(db: DB, owner: string): Promise<NoteForQuery[]> {
   // title+body from the FTS index, dates from the notes row (for due:review / created: / edited:)
   const res = await sql<NoteForQuery>`
-    SELECT f.note_id AS id, f.title, f.body,
+    SELECT f.note_id AS id, n.readable_id AS "readableId", f.title, f.body,
            n.review_at AS "reviewAt", n.created_at AS "createdAt", n.updated_at AS "updatedAt",
            n.folder_id AS "folderId"
     FROM notes_fts f JOIN notes n ON n.id = f.note_id
