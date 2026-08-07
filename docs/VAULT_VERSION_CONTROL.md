@@ -1,59 +1,65 @@
-# Vault version control & permanent delete — design (future enhancements)
+# Vault version control — design
 
-The user-facing features that sit on top of the git history laid down by [`VAULT_BACKUP.md`](VAULT_BACKUP.md). None of this is required for the Events & Notes release — the point of committing the vault to git from day one is that this history silently accrues, so these become "expose and manage history that already exists" rather than "go build a versioning system." Captured here so the MVP doesn't have to carry it.
+In-app history, restore, archive, and permanent-delete for notes, built on the git history the vault backup already lays down. This is its own initiative on its own branch — **not** part of the Events & Notes release. The point of committing the vault to git from day one (`VAULT_BACKUP.md`) was that this history silently accrues, so this work is "expose and manage history that already exists," not "build a versioning system."
 
-## What the substrate gives us for free
+## What the substrate already gives us
 
-Once the MVP is committing the vault to a separate-dir git repo on a schedule, every note file already has a full linear history. These features are UI and history-management on top of that — no new storage model.
+`server/src/vault-git.ts` snapshots the whole vault into a separate git dir (`<backup_config.dir>/vault.git`, detached work-tree over `VAULT_DIR`) on a debounced commit-on-save (`createVaultGit().scheduleSnapshot()`, 5s) and on the scheduled backup, both gated by the single `backup_config.enabled` switch and serialized by a module mutex. Commits are whole-vault snapshots (`vault snapshot <ts> — N changed (reason)`), attributed to the sole user. So every note file already has linear history; a `git log`/`git show` over its path is its version list.
 
----
+Two facts shape the whole design:
 
-## Feature A — in-app version history & restore
+- **A note's identity is its frontmatter `id`, not its path.** `scanFile` (services/notes.ts) reads a file, writes back a frontmatter id if missing, and upserts the DB row by that id — so renames/moves resolve to the same note. Paths in git are `<owner>/<relPath>` (filename = title, Obsidian-style).
+- **The DB is a rebuildable shadow.** `scanFile` (one file) and `scanVault` (whole tree, incremental or full) reconcile rows + FTS + link edges from disk. This is exactly what a restore needs to call after it writes an old version back, and `POST /api/notes/sync` already exposes the whole-vault version of it.
 
-Let a user see and roll back a note's past states from inside the notes app, instead of dropping to the git CLI.
+Because commits are whole-vault snapshots, a note's "versions" are the subset of snapshot commits that touched its file — each such commit is a restore point. Version granularity is therefore the 5s save-burst, not per-keystroke, which is the right grain for restore points. In practice a save-burst touches the one note you're editing (plus any images added in the same burst), so a per-note history reads clean.
 
-- **Browse:** a note's history is `git log`/`git show` for that file's path — a list of versions with timestamps, a preview, and a diff against the current text (markdown diff rendering).
-- **Restore:** writing a chosen old version back to the file, which the next scan reconciles into the DB shadow. A restore is **non-destructive** — it's just a new commit on top, so you can always undo the undo.
-- **Scope:** notes are files, so they have history. Tasks and events are DB-only and are **not** in git, so this is a **notes-only** feature unless we later decide to also snapshot the DB into git (see Non-goals). That's consistent with the decision that tasks are fine on the 7-day rolling DB backup.
+## Feature A — in-app version history & restore (the core)
 
-## Feature B — permanent delete (soft archive vs hard delete)
+Let a user see and roll back a note's past states from inside the notes app, never dropping to the git CLI.
 
-The headline enhancement. Normal deletion is *soft*: the file leaves the vault but every past version still lives in git history — recoverable, which is exactly what you want for an accidental delete. **Permanent delete** is the escape hatch for the two cases where history *persisting* is the problem:
+**Read path (new helpers in `vault-git.ts`, reusing the existing `runGit`):**
 
-1. **Space.** Someone stored a large binary (a big PDF, a pile of images); deleting it from the vault doesn't reclaim the space because every version is pinned in history. Permanent delete purges it and lets `git gc` reclaim.
-2. **Sensitive content.** A non-technical user pastes their SSN, bank details, or an actual secret into a note (the notes analogue of committing a `.env`). A soft delete leaves it forever in history; only a hard delete actually scrubs it.
+- `history(relPath)` → `git log --follow --format=… -- <owner>/<relPath>`: an ordered list of `{ ref, timestamp, message }`. `--follow` carries history across renames/moves.
+- `versionText(ref, relPath)` → `git show <ref>:<owner>/<relPath>`: the note body as of that commit.
+- `restore(relPath, ref)` → `versionText` → **inject the note's current frontmatter id into the restored text** (so a pre-id-injection version can't mint a *new* id and duplicate the note) → write the file → `scanFile(db, owner, relPath)` to reconcile the DB shadow/FTS/links → `scheduleSnapshot()`. The restore lands as a **new commit on top** — non-destructive and itself reversible. (This is the round-trip already covered by `vault-git.test.ts`.)
 
-**UX framing (the user's insight):** present this as **archive vs delete permanently**, not as "git history rewrite." The friendly surface is a soft "Delete (recoverable)" as the default, and a distinct, high-friction "Delete permanently — removes every past version, cannot be undone" (type-to-confirm, matching the archive-project restore/hard-delete pattern already planned). Under the hood, "delete permanently" is a targeted history rewrite that purges all versions of that path, followed by a repack/gc.
+**Endpoints (routes/notes.ts):**
 
-**Hazards to design around (this is destructive and global):**
+- `GET /api/notes/:id/history` → the version list (resolve id → current relPath from the DB row, then `history`).
+- `GET /api/notes/:id/history/:ref` → `{ text, diff }` for one version (diff against current, computed in JS or via `git diff`).
+- `POST /api/notes/:id/restore` `{ ref }` → performs the restore, returns the refreshed note.
 
-- **History rewrite changes commit hashes** for everything after the purge point. Fine for a private, single-writer backup repo; it just needs the commit loop paused during the rewrite so nothing races it.
-- **Copies you already synced offsite are out of reach.** If the "fancy user" pushed the git dir to a remote or a ZFS/offsite target, a local purge does **not** reach those copies — the sensitive data survives wherever it was replicated. The honest UX is to *warn* that permanent delete only scrubs the local history and can't reclaim copies made elsewhere; attempting to rewrite remote history automatically is out of scope (and often impossible).
-- **It's a purge-by-path, not general rebase.** We expose exactly "obliterate this note / this file across all history," nothing resembling interactive branch surgery.
+**UI:** an **inline per-note history panel** reachable from the note detail drawer — a list of versions with relative timestamps, a **rendered-markdown diff** against the current text, and a Restore action per version. A per-note panel (not a global browser) is the right surface: `git log -- <path>` isolates a note's own versions even though the underlying commits are whole-vault snapshots.
 
----
+**Scope:** notes-only. Tasks and events are DB-only and not in git; they stay on the 7-day rolling DB backup. Restore rolls back the note's **markdown text**; embedded images/attachments are a separate concern that rides on the (unbuilt) pictures-in-notes work — see Deferred details.
 
-## Feature C — power-user-configurable ignore rules
+## Feature B — archive & permanent delete
 
-The MVP ships a minimal, fixed ignore (tool/OS cruft only — see [`VAULT_BACKUP.md`](VAULT_BACKUP.md) D4). Later, let a power user configure what the vault backup ignores — exclude a scratch folder, skip files over a size threshold — so they can keep git history lean **proactively**, rather than reaching for permanent-delete after bloat is already committed. It's the preventive complement to Feature B's after-the-fact cleanup. Deferred from the MVP because a sensible fixed default covers the common case, and a bad user-supplied ignore that silently drops real notes is worse than no config — so it needs a careful UX (show what a rule would exclude before it takes effect).
+Deletion is **archive by default** — recoverable. Archive is the existing soft-delete (the notes domain's `tombstoned` flag) surfaced in a UI: archiving removes the file from the vault and marks the row tombstoned, but its full history stays in git, so it's always restorable (restore = un-tombstone + write the last committed version back). Every note gets an **Archive** action (and, once images land, every attachment does too). Permanent delete is the escape hatch that actually scrubs history: **Permanent delete** is the separate, high-friction escape hatch for the two cases where history *persisting* is the problem:
 
----
+1. **Space** — a large binary (a big PDF, a pile of images) is pinned in history; deleting the file doesn't reclaim the space until its versions are purged and `git gc` runs.
+2. **Sensitive content** — an SSN, bank details, or an actual secret pasted into a note. A soft archive leaves it in history forever; only a hard delete scrubs it.
 
-## Non-goals (captured so they're decided, not forgotten)
+**Where it lives:** archived items are reviewed on a dedicated **archive screen under a Notes settings tab on the account screen** — a list of everything archived-but-not-yet-purged, each with **Restore** and **Delete permanently** (type-the-note-name to confirm, matching the planned project hard-delete). The per-item Archive action lives on the note (and attachment) itself; the account screen is where you review what's archived and permanently purge it. (Exact screen layout and confirmation friction fill in once the basic UI exists.)
 
-- **Task/event version history.** Tasks are DB-only and the 7-day rolling backup is considered sufficient. We are *not* snapshotting the DB into git just to give tasks month-old history. If that ever changes, the path is "commit a DB dump into the vault repo too," but it's explicitly not planned.
-- **Productized offsite sync.** Pushing the vault repo to a remote is currently a manual advanced-user step. Turning "add a git remote / push on schedule" into a first-class in-app setting is a candidate, not committed — noting it here so it isn't lost.
-- **Branching / merging / collaboration.** The vault repo stays linear and single-writer. Multi-user note collaboration is a separate initiative entirely (and interacts with the dormant sharing surface, not this).
+**Under the hood:** permanent delete is a purge-by-path across all history via **`git filter-repo`** — the extra binary in the image is an acceptable cost, and the alternative (`git filter-branch`) is deprecated and slow — followed by a repack/`gc`, with the commit loop **paused** for the duration (extend the existing mutex so no snapshot races the rewrite). It supports both **whole-note purge** and **single-attachment purge** (e.g. you uploaded the wrong image and want just that binary gone while keeping the note).
 
----
+**Scope:** the purge operates on the **local `vault.git` only**. Remote/offsite copies are explicitly not our concern — no remote rewrite, no offsite-copy warnings. History rewrite changes commit hashes after the purge point, which is fine for a private, single-writer repo as long as the commit loop is paused.
 
-## Open decisions
+## Feature C — configurable ignore rules
 
-- **E1 — history-rewrite tooling.** `git filter-repo` (fast, clean, but an extra dependency to install in the image) vs `git filter-branch` (built-in but slow and deprecated) vs a bare-repo re-pack approach? This picks how "permanent delete" is actually implemented.
-- **E2 — hard-delete granularity.** Purge a whole note's history by path only, or also support purging a *single embedded attachment/binary* while keeping the note? The binary case is the main space motivation, so attachment-level purge may be worth it.
-- **E3 — offsite/remote handling on purge.** Warn-only ("this can't reach copies you synced elsewhere") vs attempting a remote rewrite? *Leaning: warn-only — remote rewrite is fragile and often not ours to do.*
-- **E4 — where hard-delete lives.** A per-note "delete permanently" action, a dedicated "manage vault storage/history" admin screen (which also shows what's eating space), or both? And the confirmation friction (type-the-note-name, like the planned project hard-delete).
-- **E5 — restore/history UX.** An inline per-note history panel vs a global "vault history" browser. Diff presentation (rendered markdown diff vs raw text diff).
-- **E6 — restore semantics.** Confirm a restore is always a new commit on top (safe, reversible) rather than a history rewrite — *strongly recommended*, just want it on record.
-- **E7 — does version history stay notes-only?** Default yes (tasks/events excluded, since they're not in git). Flag if you'd ever want task history to pull the DB into git after all.
-- **E8 — where configurable ignore rules live (Feature C).** A settings screen, an editable ignore file in the vault, or the backup dir? And whether rules are globs, size thresholds, or both — plus how to preview what a rule would drop before committing to it.
+The substrate ships a fixed ignore (tool/OS cruft only, written to `<gitDir>/info/exclude` at init: `.obsidian/`, `.DS_Store`, `*.tmp`, `*.swp`, `Thumbs.db`). Later, let a power user configure what the backup ignores — exclude a scratch folder, skip files over a size threshold — to keep history lean **proactively** rather than reaching for permanent-delete after bloat is committed. Rules are globs and/or a size threshold. This config lives on the **same Notes settings tab** (account screen) as the archive review. The UI must **preview what a rule would exclude** before it takes effect, because a bad ignore that silently drops real notes is worse than no config.
+
+## Non-goals
+
+- **Task/event version history** — tasks and events are DB-only and have their own structure; the 7-day rolling backup is sufficient. We are not snapshotting the DB into git to give them month-old history. If that ever changes, the path is "commit a DB dump into the vault repo too," but it is not planned.
+- **Branching / merging / collaboration** — the vault repo stays linear and single-writer. Multi-user note collaboration is a separate initiative.
+- **Productized offsite sync** — pushing the vault repo to a remote stays a manual advanced-user step for now.
+
+## Phasing & deferred details
+
+- **Phase 1 — Feature A** (inline per-note history + restore): a thin layer over the existing git primitives; no new storage; note-text only.
+- **Phase 2 — Feature B** (archive-by-default, plus the account-screen Notes-settings tab for reviewing archived items and permanently purging them).
+- **Phase 3 — Feature C** (configurable ignore rules on the same tab).
+- **Deferred to build time:** the archive/settings screen layout and confirmation friction; the ignore-rule syntax and preview UX; and everything attachment-specific — **attachment-level purge** and **image-aware restore** — which presupposes notes can carry images (the unbuilt **t_0474 — Pictures in Notes**). Until that lands, history/restore/archive/purge are note-text only.
+- **Build it forward-compatible, not attachment-aware yet.** Deferring attachments must not box us in. The git primitives (`history`/`versionText`/`restore`/purge) are already **path-generic** — they operate on any `<owner>/<relPath>`, so a `.png` extends them with no rewrite; keep them that way rather than hardcoding `.md`. Model a note's restore point as "a note *and its associated files* at commit `<ref>`" even while the file set is only ever the one `.md` today, so image-aware restore is an additive change, not a reshape. And keep purge-by-path (which already spans any file) the single mechanism for both note and attachment permanent-delete.

@@ -260,6 +260,7 @@ export interface BackupConfigTable {
   vault_last_status: string | null; // git-vault backup health — 012, distinct from the DB backup's status
   vault_last_error: string | null;
   vault_last_run_at: string | null;
+  vault_ignore_rules: string | null; // 015: JSON { globs: string[], maxBytes: number|null } — Feature C
 }
 
 export interface Database_ {

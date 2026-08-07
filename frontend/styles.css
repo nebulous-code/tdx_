@@ -1146,3 +1146,29 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
   .note-body-wrap { flex: none; }
   .note-body, .note-render { flex: none; min-height: 35vh; }
 }
+
+/* ---- vault version control (docs/VAULT_VERSION_CONTROL.md) ---- */
+.hist-panel { display: flex; flex-direction: column; gap: 8px; }
+.hist-head { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.hist-head .x { margin-left: auto; cursor: pointer; padding: 0 4px; }
+.hist-head .x:hover { color: var(--amber); }
+.hist-versions { display: flex; flex-direction: column; gap: 2px; max-height: 30vh; overflow-y: auto; border: 1px solid var(--line-2); border-radius: var(--radius); padding: 4px; }
+.hist-row { display: flex; gap: 8px; align-items: baseline; padding: 3px 6px; border-radius: 2px; cursor: pointer; }
+.hist-row:hover { background: var(--bg-3); }
+.hist-row.on { background: var(--bg-3); box-shadow: inset 0 0 0 1px var(--amber-mut); }
+.hist-time { font-size: 11px; color: var(--amber-hi); white-space: nowrap; }
+.hist-msg { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-diff { font-family: var(--mono); font-size: 11px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; border: 1px solid var(--line-2); border-radius: var(--radius); padding: 6px 8px; max-height: 40vh; overflow-y: auto; }
+.hd { display: block; }
+.hd-add { color: #46d369; background: rgba(70,211,105,.08); }
+.hd-del { color: #ff6b6b; background: rgba(255,107,107,.08); }
+.hd-eq { color: var(--fg-mut); opacity: .8; }
+.hist-hint { font-size: 11px; }
+
+/* notes-settings overlay: archive review + ignore rules */
+.notes-settings-list { display: flex; flex-direction: column; gap: 2px; }
+.arch-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius); }
+.arch-row.on { background: var(--bg-3); box-shadow: inset 0 0 0 1px var(--amber-mut); }
+.arch-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arch-rid { font-family: var(--mono); font-size: 10px; opacity: .5; }
+.ignore-preview { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line-2); border-radius: var(--radius); padding: 6px 8px; max-height: 30vh; overflow-y: auto; margin-top: 6px; }

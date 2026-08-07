@@ -1,0 +1,11 @@
+-- 015: user-configurable vault-backup ignore rules (docs/VAULT_VERSION_CONTROL.md Feature C).
+--
+-- The vault git backup ships a fixed ignore (tool/OS cruft, written to <gitDir>/info/exclude).
+-- This column lets a power user extend it: extra globs (appended to the fixed base and written
+-- to info/exclude) plus a size threshold (enforced at staging time — info/exclude can't express
+-- file size). Preventive complement to permanent-delete: keep history lean rather than purge
+-- after bloat is committed. Read by readIgnoreRules() in vault-git.ts.
+--
+-- JSON shape: { "globs": string[], "maxBytes": number | null }.  NULL = defaults only (the
+-- fixed cruft list, no size cap). Singleton row (id = 1), shared with the rest of backup_config.
+ALTER TABLE backup_config ADD COLUMN vault_ignore_rules TEXT;

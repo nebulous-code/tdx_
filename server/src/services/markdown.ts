@@ -64,6 +64,19 @@ export function injectFrontmatterId(raw: string, id: string): string {
   return `---\nid: ${id}\n---\n\n${raw}`;
 }
 
+// Like injectFrontmatterId, but REPLACE an existing id rather than prepend a second `id:`
+// line — used by restore, where a historical version may already carry a (possibly stale)
+// id and a pre-id version carries none. No frontmatter → add a block; frontmatter with an
+// id → rewrite that line; frontmatter without an id → insert one after the opening fence.
+export function setFrontmatterId(raw: string, id: string): string {
+  const m = raw.match(FRONTMATTER);
+  if (!m) return `---\nid: ${id}\n---\n\n${raw}`;
+  if (/^id\s*:.*$/m.test(m[1])) {
+    return m[0].replace(/^id\s*:.*$/m, `id: ${id}`) + raw.slice(m[0].length);
+  }
+  return raw.replace(/^---\n/, `---\nid: ${id}\n`);
+}
+
 export interface ExtractedLinks {
   tasks: string[];
   events: string[];

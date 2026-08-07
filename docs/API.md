@@ -258,6 +258,42 @@ Delete the note and its `.md` file. Requires **write** scope. 204 on success.
 
 Responses: 204, 403, 404
 
+### `GET /api/notes/{id}/history` — Note version history
+
+The note's past versions (snapshot commits that touched its file), newest first.
+
+Responses: 200, 403, 404
+
+### `GET /api/notes/{id}/history/{ref}` — Get a past version
+
+The note markdown as of a given version ref (the client renders the diff vs current).
+
+Responses: 200, 403, 404
+
+### `DELETE /api/notes/{id}/permanent` — Permanently delete a note
+
+Obliterate every version of the note from git history + hard-delete the record. Irreversible; the note must be archived first. Requires **write** scope.
+
+Responses: 204, 404, 409
+
+### `POST /api/notes/{id}/restore` — Restore a past version
+
+Roll the note back to a version — lands as a new commit on top (reversible). Requires **write** scope.
+
+Responses: 200, 403, 404, 409
+
+### `POST /api/notes/{id}/unarchive` — Restore an archived note
+
+Bring a soft-deleted note back (restores its most recent version). Requires **write** scope.
+
+Responses: 200, 404, 409
+
+### `GET /api/notes/archived` — List archived notes
+
+Soft-deleted (tombstoned) notes — recoverable from git history. Backs the archive review screen.
+
+Responses: 200
+
 ### `GET /api/notes/search` — Search notes
 
 Full-text search over note titles + bodies. Returns hits with a highlighted snippet.
@@ -269,6 +305,24 @@ Responses: 200
 Reconcile the DB index with the on-disk vault after external edits (nvim/Obsidian). `mode=incremental` (default) only rescans changed files; `mode=full` rescans everything. Requires **write** scope. Returns counts of scanned/updated/tombstoned notes.
 
 Responses: 200
+
+### `POST /api/notes/vault/ignore-preview` — Preview vault ignore rules
+
+Dry run — the vault paths the proposed rules would exclude from the backup. No writes.
+
+Responses: 200
+
+### `GET /api/notes/vault/ignore-rules` — Get vault ignore rules
+
+The user-configured backup ignore globs + size threshold (on top of the fixed cruft list).
+
+Responses: 200
+
+### `PUT /api/notes/vault/ignore-rules` — Set vault ignore rules
+
+Persist extra ignore globs + a max file size and rewrite the repo exclude so it applies on the next snapshot. Requires **write** scope.
+
+Responses: 200, 400
 
 ## Projects
 

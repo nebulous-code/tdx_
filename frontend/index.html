@@ -184,9 +184,11 @@
   <save-query-modal v-if="saveModal" :store="store" :model="saveModal" @close="saveModal=null"></save-query-modal>
   <label-modal v-if="labelModal" :store="store" :model="labelModal" @close="labelModal=null"></label-modal>
   <help-modal v-if="helpOpen" @close="helpOpen=false"></help-modal>
+  <notes-screen v-if="notesSettingsOpen" :store="store" @close="notesSettingsOpen=false"></notes-screen>
   <account-screen v-if="accountOpen" :store="store"
     @close="accountOpen=false" @saved="onAccountSaved" @logout="onLogout"
-    @open-backups="accountOpen=false; backupOpen=true"></account-screen>
+    @open-backups="accountOpen=false; backupOpen=true"
+    @open-notes-settings="accountOpen=false; notesSettingsOpen=true"></account-screen>
   <backup-screen v-if="backupOpen" :store="store" @close="backupOpen=false"></backup-screen>
   <sort-modal v-if="sortOpen" :store="store" @close="sortOpen=false"></sort-modal>
 
@@ -249,6 +251,7 @@
 <script src="js/mixed-list.js"></script>
 <script src="js/search-list.js"></script>
 <script src="js/md-field.js"></script>
+<script src="js/line-diff.js"></script>
 <script src="js/note-detail.js"></script>
 <script src="js/day-detail.js"></script>
 <script src="js/recurrence-builder.js"></script>
@@ -265,6 +268,7 @@
 <script src="js/login-screen.js"></script>
 <script src="js/account-screen.js"></script>
 <script src="js/backup-screen.js"></script>
+<script src="js/notes-screen.js"></script>
 <script src="js/sort-modal.js"></script>
 <script>
 const { createApp, defineAsyncComponent } = Vue;
@@ -300,6 +304,7 @@ const app = createApp({
     helpOpen: false,
     accountOpen: false,
     backupOpen: false,
+    notesSettingsOpen: false,
     sortOpen: false,
     labelModal: null,
     confirmState: null,   // { msg, resolve } for store.askConfirm
@@ -544,7 +549,7 @@ const app = createApp({
       }
       if(this.promptState) return;   // the prompt input handles its own enter/esc
       // KbForm-driven modals are takeovers: each owns the keyboard while open
-      if(this.accountOpen || this.backupOpen || this.sortOpen || this.projectModal || this.saveModal || this.labelModal || this.helpOpen || this.store.eventDetailOpen || this.store.noteDetailOpen) return;
+      if(this.accountOpen || this.backupOpen || this.notesSettingsOpen || this.sortOpen || this.projectModal || this.saveModal || this.labelModal || this.helpOpen || this.store.eventDetailOpen || this.store.noteDetailOpen) return;
       const tag=(e.target.tagName||'').toLowerCase();
       const typing = tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable;
       // ⌘K / Ctrl+K everywhere
@@ -1438,6 +1443,62 @@ const app = createApp({
       return null;
     };
     this.store.deleteNote = (id) => this.apiSend('DELETE', '/api/notes/'+id, null);
+    // ---- vault version control (docs/VAULT_VERSION_CONTROL.md) ----
+    this.store.getNoteHistory = async (id) => {
+      try{ const r = await fetch('/api/notes/'+id+'/history', { credentials:'include' });
+        if(r.status===401){ this.handleAuthExpired(); return []; }
+        if(r.ok) return await r.json();
+      }catch(e){ /* offline */ } return [];
+    };
+    this.store.getNoteVersion = async (id, ref) => {
+      try{ const r = await fetch('/api/notes/'+id+'/history/'+ref, { credentials:'include' });
+        if(r.ok) return await r.json();
+      }catch(e){ /* offline */ } return null;
+    };
+    this.store.restoreNoteVersion = async (id, ref) => {
+      try{ const r = await fetch('/api/notes/'+id+'/restore', { method:'POST', credentials:'include',
+        headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ ref }) });
+        if(r.status===401){ this.handleAuthExpired(); return null; }
+        if(r.ok) return await r.json();
+        this.store.toast('restore failed ('+r.status+')');
+      }catch(e){ this.store.toast('offline — restore failed'); } return null;
+    };
+    this.store.fetchArchived = async () => {
+      try{ const r = await fetch('/api/notes/archived', { credentials:'include' });
+        if(r.status===401){ this.handleAuthExpired(); return []; }
+        if(r.ok) return await r.json();
+      }catch(e){ /* offline */ } return [];
+    };
+    this.store.unarchiveNote = async (id) => {
+      try{ const r = await fetch('/api/notes/'+id+'/unarchive', { method:'POST', credentials:'include' });
+        if(r.ok) return await r.json();
+        this.store.toast('restore failed ('+r.status+')');
+      }catch(e){ this.store.toast('offline'); } return null;
+    };
+    this.store.permanentDeleteNote = async (id) => {
+      try{ const r = await fetch('/api/notes/'+id+'/permanent', { method:'DELETE', credentials:'include' });
+        if(r.ok) return true;
+        this.store.toast('delete failed ('+r.status+')');
+      }catch(e){ this.store.toast('offline'); } return false;
+    };
+    this.store.getIgnoreRules = async () => {
+      try{ const r = await fetch('/api/notes/vault/ignore-rules', { credentials:'include' });
+        if(r.ok) return await r.json();
+      }catch(e){ /* offline */ } return { globs:[], maxBytes:null };
+    };
+    this.store.saveIgnoreRules = async (rules) => {
+      try{ const r = await fetch('/api/notes/vault/ignore-rules', { method:'PUT', credentials:'include',
+        headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(rules) });
+        if(r.ok) return await r.json();
+        this.store.toast('save failed ('+r.status+')');
+      }catch(e){ this.store.toast('offline'); } return null;
+    };
+    this.store.previewIgnoreRules = async (rules) => {
+      try{ const r = await fetch('/api/notes/vault/ignore-preview', { method:'POST', credentials:'include',
+        headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(rules) });
+        if(r.ok) return await r.json();
+      }catch(e){ /* offline */ } return { paths:[], truncated:false };
+    };
     this.store.searchNotes = async (q) => {
       try{
         const r = await fetch('/api/notes/search?q='+encodeURIComponent(q), { credentials:'include' });
@@ -1494,6 +1555,8 @@ const app = createApp({
       this.promptState={ label, value, resolve:res };
       this.$nextTick(()=>{ const el=this.$refs.promptInput; if(el){ el.focus(); el.select(); } });
     });
+    // high-friction destructive confirm: proceed only if the user types the exact name back
+    this.store.askConfirmTyped=async (name)=>{ const t=await this.store.askPrompt('type "'+name+'" to permanently delete'); return t!=null && t===name; };
     // Mobile overlays (sidebar / scrim / full-screen detail) are offset by the bar
     // heights. Those bars now grow when their pinned chips wrap, so publish the live
     // heights as CSS vars (--topbar-h / --statusbar-h) and keep them current with a
@@ -1605,6 +1668,7 @@ app.component('help-modal', window.HelpModal);
 app.component('login-screen', window.LoginScreen);
 app.component('account-screen', window.AccountScreen);
 app.component('backup-screen', window.BackupScreen);
+app.component('notes-screen', window.NotesScreen);
 app.component('sort-modal', window.SortModal);
 app.mount('#app');
 </script>

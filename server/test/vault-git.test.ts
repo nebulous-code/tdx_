@@ -10,7 +10,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 import { openDatabase } from '../src/db.js';
-import { commitVault, snapshotVault } from '../src/vault-git.js';
+import { commitVault, createVaultGit, snapshotVault } from '../src/vault-git.js';
+import type { Sqlite } from '../src/db.js';
 
 const committer = { name: 'alice', email: 'alice@tdx.local' };
 const tmpDirs: string[] = [];
@@ -89,6 +90,36 @@ test('commitVault: editor/OS cruft is ignored', async () => {
   assert.ok(!tracked.includes('.obsidian'));
 });
 
+test('commitVault: size threshold unstages an over-size file (Feature C)', async () => {
+  const vaultDir = mkTmp('tdx-vault-');
+  const gitDir = path.join(mkTmp('tdx-git-'), 'vault.git');
+  fs.mkdirSync(path.join(vaultDir, 'owner1'), { recursive: true });
+  fs.writeFileSync(path.join(vaultDir, 'owner1', 'small.md'), 'hi\n'); // 3 bytes
+  fs.writeFileSync(path.join(vaultDir, 'owner1', 'big.md'), 'x'.repeat(100)); // 100 bytes
+  const res = await commitVault({
+    vaultDir, gitDir, committer, reason: 'test', now: 't', ignoreRules: { globs: [], maxBytes: 10 },
+  });
+  assert.equal(res.committed, true);
+  const tracked = git(gitDir, ['ls-files']);
+  assert.ok(tracked.includes('owner1/small.md'));
+  assert.ok(!tracked.includes('owner1/big.md')); // over the 10-byte cap → never committed
+});
+
+test('commitVault: user ignore globs exclude matching files (Feature C)', async () => {
+  const vaultDir = mkTmp('tdx-vault-');
+  const gitDir = path.join(mkTmp('tdx-git-'), 'vault.git');
+  fs.mkdirSync(path.join(vaultDir, 'owner1'), { recursive: true });
+  fs.writeFileSync(path.join(vaultDir, 'owner1', 'keep.md'), 'k\n');
+  fs.writeFileSync(path.join(vaultDir, 'owner1', 'skip.pdf'), 'pdf');
+  const res = await commitVault({
+    vaultDir, gitDir, committer, reason: 'test', now: 't', ignoreRules: { globs: ['*.pdf'], maxBytes: null },
+  });
+  assert.equal(res.committed, true);
+  const tracked = git(gitDir, ['ls-files']);
+  assert.ok(tracked.includes('owner1/keep.md'));
+  assert.ok(!tracked.includes('skip.pdf')); // excluded by the user glob in info/exclude
+});
+
 test('snapshotVault: commits and records ok status when backups are enabled', async () => {
   const vaultDir = mkTmp('tdx-vault-');
   const backupDir = mkTmp('tdx-backup-');
@@ -125,5 +156,116 @@ test('snapshotVault: no-op when backups are disabled', async () => {
     vault_last_status: string | null;
   };
   assert.equal(cfg.vault_last_status, null); // nothing recorded when gated off
+  sqlite.close();
+});
+
+// ---- version-control helpers (docs/VAULT_VERSION_CONTROL.md) ----------------
+// Set up an enabled backup over a fresh vault + a createVaultGit handle.
+function setupRepo(): { sqlite: Sqlite; vaultDir: string; vg: ReturnType<typeof createVaultGit> } {
+  const vaultDir = mkTmp('tdx-vault-');
+  const backupDir = mkTmp('tdx-backup-');
+  process.env.VAULT_DIR = vaultDir;
+  const { sqlite } = openDatabase(':memory:');
+  sqlite.prepare('UPDATE backup_config SET enabled = 1, dir = ? WHERE id = 1').run(backupDir);
+  fs.mkdirSync(path.join(vaultDir, 'owner1'), { recursive: true });
+  return { sqlite, vaultDir, vg: createVaultGit(sqlite) };
+}
+
+test('vaultGit.history + versionText: versions across an edit', async () => {
+  const { sqlite, vaultDir, vg } = setupRepo();
+  const note = path.join(vaultDir, 'owner1', 'n.md');
+  fs.writeFileSync(note, 'v1\n');
+  await snapshotVault(sqlite, { reason: 'save' });
+  fs.writeFileSync(note, 'v2\n');
+  await snapshotVault(sqlite, { reason: 'save' });
+
+  const hist = await vg.history('owner1', 'n.md');
+  assert.equal(hist.length, 2);
+  assert.match(hist[0].ref, /^[0-9a-f]{40}$/);
+  assert.ok(hist[0].timestamp);
+  assert.equal(await vg.versionText('owner1', 'n.md', hist[1].ref), 'v1\n'); // older
+  assert.equal(await vg.versionText('owner1', 'n.md', hist[0].ref), 'v2\n'); // newer
+  sqlite.close();
+});
+
+test('vaultGit.history: empty + enabled()=false when backups are off', async () => {
+  const { sqlite } = openDatabase(':memory:');
+  const vg = createVaultGit(sqlite);
+  assert.deepEqual(await vg.history('owner1', 'n.md'), []);
+  assert.equal(vg.enabled(), false);
+  sqlite.close();
+});
+
+test('vaultGit: read/restore/purge guards are safe when backups are disabled', async () => {
+  const { sqlite } = openDatabase(':memory:'); // enabled defaults to 0
+  const vg = createVaultGit(sqlite);
+  assert.equal(await vg.lastLiveRef('o', 'n.md'), null);
+  await assert.rejects(() => vg.versionText('o', 'n.md', 'a'.repeat(40))); // throws → route 409/404
+  await vg.purgePath('o', 'n.md'); // no-op, no throw
+  vg.writeExclude(); // no-op
+  sqlite.close();
+});
+
+test('snapshotVault: honors configured ignore rules (readIgnoreRules)', async () => {
+  const vaultDir = mkTmp('tdx-vault-');
+  const backupDir = mkTmp('tdx-backup-');
+  process.env.VAULT_DIR = vaultDir;
+  const { sqlite } = openDatabase(':memory:');
+  sqlite
+    .prepare('UPDATE backup_config SET enabled = 1, dir = ?, vault_ignore_rules = ? WHERE id = 1')
+    .run(backupDir, JSON.stringify({ globs: ['*.pdf'], maxBytes: null }));
+  fs.mkdirSync(path.join(vaultDir, 'owner1'), { recursive: true });
+  fs.writeFileSync(path.join(vaultDir, 'owner1', 'keep.md'), 'k\n');
+  fs.writeFileSync(path.join(vaultDir, 'owner1', 'doc.pdf'), 'pdf');
+  await snapshotVault(sqlite, { reason: 'save' });
+  const tracked = git(path.join(backupDir, 'vault.git'), ['ls-files']);
+  assert.ok(tracked.includes('owner1/keep.md'));
+  assert.ok(!tracked.includes('doc.pdf')); // configured glob applied via info/exclude
+  sqlite.close();
+});
+
+test('vaultGit.versionText: a bad ref is rejected', async () => {
+  const { sqlite, vaultDir, vg } = setupRepo();
+  fs.writeFileSync(path.join(vaultDir, 'owner1', 'n.md'), 'v1\n');
+  await snapshotVault(sqlite, { reason: 'save' });
+  await assert.rejects(() => vg.versionText('owner1', 'n.md', 'not-a-ref'));
+  sqlite.close();
+});
+
+test('vaultGit.lastLiveRef: newest ref where the file still existed (skips the deletion)', async () => {
+  const { sqlite, vaultDir, vg } = setupRepo();
+  const note = path.join(vaultDir, 'owner1', 'n.md');
+  fs.writeFileSync(note, 'live\n');
+  await snapshotVault(sqlite, { reason: 'save' });
+  fs.unlinkSync(note); // the newest commit touching the path is the deletion (path absent there)
+  await snapshotVault(sqlite, { reason: 'delete' });
+
+  const ref = await vg.lastLiveRef('owner1', 'n.md');
+  assert.ok(ref);
+  assert.equal(await vg.versionText('owner1', 'n.md', ref as string), 'live\n');
+  sqlite.close();
+});
+
+test('vaultGit.purgePath: obliterates a path from all history, other notes survive', async () => {
+  const { sqlite, vaultDir, vg } = setupRepo();
+  const keep = path.join(vaultDir, 'owner1', 'keep.md');
+  const secret = path.join(vaultDir, 'owner1', 'secret.md');
+  fs.writeFileSync(keep, 'keeper\n');
+  fs.writeFileSync(secret, 'SSN 123-45-6789\n');
+  await snapshotVault(sqlite, { reason: 'save' });
+  fs.writeFileSync(secret, 'SSN 123-45-6789 (edited)\n');
+  await snapshotVault(sqlite, { reason: 'save' });
+  assert.ok((await vg.history('owner1', 'secret.md')).length >= 2); // it's in history
+
+  fs.unlinkSync(secret); // archived: file already removed from the vault before purge
+  await vg.purgePath('owner1', 'secret.md');
+
+  assert.deepEqual(await vg.history('owner1', 'secret.md'), []); // gone from every commit
+  assert.ok((await vg.history('owner1', 'keep.md')).length >= 1); // the other note keeps its history
+  assert.ok(fs.existsSync(keep));
+  // the repo survived the rewrite — a fresh snapshot still commits
+  fs.writeFileSync(path.join(vaultDir, 'owner1', 'after.md'), 'still working\n');
+  const res = await snapshotVault(sqlite, { reason: 'save' });
+  assert.ok(res?.committed);
   sqlite.close();
 });

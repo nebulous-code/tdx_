@@ -6,7 +6,7 @@
    preview), Enter saves, Esc exits with the shared dirty-guard. */
 window.AccountScreen = {
   props: ['store'],
-  emits: ['close', 'saved', 'logout', 'open-backups'],
+  emits: ['close', 'saved', 'logout', 'open-backups', 'open-notes-settings'],
   mixins: [window.KbForm],
   data(){
     const u = this.store.currentUser || {};
@@ -97,6 +97,13 @@ window.AccountScreen = {
           <span class="info-tip" data-tip="Notes at the top of your vault (not in any folder) show up under this name in the notes nav — and folder:&lt;name&gt; finds them. Leave it blank to hide that row entirely. It can't hold folders: every folder already lives inside it." @click.stop>ⓘ</span>
         </div>
 
+        <div class="acct-sep">notes</div>
+        <div class="acct-row" :class="kbCls('notesSettings')" @click="openNotesSettings" style="cursor:pointer;">
+          <span class="acct-label">vault</span>
+          <span style="flex:1;" class="mut">archived notes &amp; backup ignore rules</span>
+          <span class="acct-chevron">›</span>
+        </div>
+
         <div v-if="isAdmin" class="acct-sep">admin</div>
         <div v-if="isAdmin" class="acct-row" :class="kbCls('backups')" @click="openBackups" style="cursor:pointer;">
           <span class="acct-label">backups</span>
@@ -147,6 +154,7 @@ window.AccountScreen = {
       { id:'fibSizing',       type:'button', activate:()=>{ this.fibSizing=!this.fibSizing; } },
       { id:'allCal',          type:'input',  ref:'allCal' },
       { id:'baseDir',         type:'input',  ref:'baseDir' },
+      { id:'notesSettings',   type:'button', activate:()=>this.openNotesSettings() },
       { id:'backups',         type:'button', when:()=>this.isAdmin, activate:()=>this.openBackups() },
       { id:'oldPassword',     type:'input',  ref:'oldPassword' },
       { id:'newPassword',     type:'input',  ref:'newPassword' },
@@ -160,6 +168,11 @@ window.AccountScreen = {
     // open the admin backups screen; guard unsaved account edits first
     openBackups(){
       const go = () => this.$emit('open-backups');
+      if(this.dirty){ this.store.askConfirm('Discard account changes?').then(ok=>{ if(ok){ this.revertTheme(); go(); } }); }
+      else go();
+    },
+    openNotesSettings(){
+      const go = () => this.$emit('open-notes-settings');
       if(this.dirty){ this.store.askConfirm('Discard account changes?').then(ok=>{ if(ok){ this.revertTheme(); go(); } }); }
       else go();
     },
