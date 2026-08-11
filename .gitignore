@@ -23,3 +23,5 @@ build/
 # os / editor
 .DS_Store
 *.swp
+
+server/test-results/
