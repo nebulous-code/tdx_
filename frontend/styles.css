@@ -605,6 +605,9 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .mdf .mdf-render { min-height: 60px; max-height: 40vh; overflow-y: auto; flex: none;
   background: var(--bg-3); border: 1px solid var(--line-2); border-radius: var(--radius);
   padding: 5px 8px; font-size: 12px; cursor: text; }
+/* edit mode: cap the textarea like the rendered view so a long note scrolls internally
+   instead of expanding down into the linked-items section below (t_0555; worse on mobile). */
+.mdf .mdf-edit { max-height: 40vh; overflow-y: auto; }
 .mdf .mdf-render:hover { border-color: var(--amber-mut); }
 .mdf.kfocus .mdf-render { border-color: var(--amber-mut); box-shadow: var(--glow-soft); }
 .mdf .mdf-render > div:first-child > :first-child { margin-top: 0; }
@@ -1000,7 +1003,10 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .nr-labels { display: flex; flex-wrap: wrap; gap: 4px; }
 .nr-dates { flex: 0 0 auto; text-align: right; font-size: 10px; line-height: 1.5; white-space: nowrap; }
 
-.note-editor { display: flex; flex-direction: column; gap: 8px; padding: 12px; overflow-y: auto; min-height: 0; }
+/* flex:1 so the editor FILLS the bounded .notes pane instead of sizing to content — without it
+   a long body overran .notes (which is overflow:hidden), clipping the links row + action buttons
+   off the bottom on short/mobile screens; now the body scrolls internally and they stay put. */
+.note-editor { display: flex; flex-direction: column; gap: 8px; padding: 12px; overflow-y: auto; min-height: 0; flex: 1; }
 .note-editor .ti { background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--radius); color: var(--amber-hi); font-family: var(--mono); padding: 6px 8px; outline: none; width: 100%; }
 .note-editor .ti:focus { border-color: var(--amber-mut); }
 .note-title { font-size: 15px; }
@@ -1125,3 +1131,13 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .notes-row-rid { font-family: var(--mono); font-size: 10px; opacity: .5; margin-right: 6px; }
 .note-folder-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
 .note-folder-row .ti { flex: 1; }
+
+/* Mobile note editor: scroll the WHOLE editor as one region. The body sits at its natural, usable
+   height instead of being flex-squeezed into a gap it then overflows (which overlapped the links
+   row + save/back buttons). This block is placed AFTER the base .note-* rules ON PURPOSE — an
+   earlier copy above them in the file lost the cascade (same specificity, later source wins) and
+   never took effect, which is why the layout looked unchanged. (t_0555) */
+@media (max-width: 860px) {
+  .note-body-wrap { flex: none; }
+  .note-body, .note-render { flex: none; min-height: 35vh; }
+}

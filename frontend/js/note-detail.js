@@ -65,6 +65,7 @@ window.NoteDetail = {
         { id: 'review', type: 'input', ref: 'review' },
         { id: 'labels', type: 'grid', items: labels, cols: 99,
           isOn: l => this.f.labels.includes(l.id), select: l => this.toggleLabel(l.id), when: () => labels.length > 0 },
+        { id: 'addlabel', type: 'button', activate: () => this.addLabel() },
         { id: 'notes', type: 'input', ref: 'notes' },   // ref → md-field.focus() (i edits)
         // links = a grid row, like labels: j/k skip it, h/l cross the chips, space opens (n.13)
         { id: 'links', type: 'grid', items: this.linkList, cols: 99,
@@ -92,6 +93,10 @@ window.NoteDetail = {
     },
     blurField() { const a = document.activeElement; if (a && a.blur) a.blur(); },
     toggleLabel(id) { const i = this.f.labels.indexOf(id); if (i >= 0) this.f.labels.splice(i, 1); else this.f.labels.push(id); },
+    async addLabel() {
+      const name = await this.store.askPrompt('new label');
+      if (name) { const l = this.store.addLabel(name); if (!this.f.labels.includes(l.id)) this.f.labels.push(l.id); }
+    },
     async save() {
       const t = this.f.title.trim(); if (!t) return;
       const ok = await this.store.saveNote({
@@ -132,6 +137,7 @@ window.NoteDetail = {
         <label>labels</label>
         <div class="labelpick">
           <span v-for="(l,i) in store.sortedLabels()" :key="l.id" class="chip" :class="[{on: f.labels.includes(l.id)}, kbCls('labels', i)]" @click="kbPick('labels', i)">#{{ l.name }}</span>
+          <span class="chip" :class="kbCls('addlabel')" @click="addLabel">+ new</span>
         </div>
       </div>
 

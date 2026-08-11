@@ -43,6 +43,38 @@ window.MdField = {
     },
     done() { this.editing = false; },               // Esc / blur → back to the rendered view
     onInput(e) { this.$emit('update:modelValue', e.target.value); },
+    // Tab indents the current line(s) (2 spaces) instead of leaving the field — so bulleted
+    // lists nest naturally; Shift+Tab outdents. Operates line-first so Tab anywhere on a
+    // `- item` line indents the whole bullet. (t_0520)
+    indent(e) {
+      const ta = e.target;
+      const val = ta.value;
+      const s = ta.selectionStart;
+      const en = ta.selectionEnd;
+      const outdent = e.shiftKey;
+      const UNIT = '  ';
+      const lineStart = val.lastIndexOf('\n', s - 1) + 1;   // start of the first touched line
+      const lines = val.slice(lineStart, en).split('\n');
+      let firstDelta = 0;
+      let total = 0;
+      const out = lines.map((ln, i) => {
+        if (outdent) {
+          const m = ln.match(/^( {1,2}|\t)/);
+          const removed = m ? m[0].length : 0;
+          if (i === 0) firstDelta = -removed;
+          total -= removed;
+          return ln.slice(removed);
+        }
+        if (i === 0) firstDelta = UNIT.length;
+        total += UNIT.length;
+        return UNIT + ln;
+      });
+      this.$emit('update:modelValue', val.slice(0, lineStart) + out.join('\n') + val.slice(en));
+      this.$nextTick(() => {
+        ta.selectionStart = Math.max(lineStart, s + firstDelta);
+        ta.selectionEnd = en + total;
+      });
+    },
   },
   template: `
   <div class="mdf">
@@ -50,6 +82,7 @@ window.MdField = {
       :value="modelValue" :placeholder="placeholder"
       @input="onInput" @blur="done"
       @keydown.esc.stop.prevent="done"
+      @keydown.tab.prevent="indent"
       @keydown.enter.ctrl.prevent="$emit('submit')"
       @keydown.enter.meta.prevent="$emit('submit')"></textarea>
     <div v-else class="md-body mdf-render" @click="edit">

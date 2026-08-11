@@ -113,6 +113,10 @@ window.NotesView = {
     mode(v) { if (v === 'normal') this.$nextTick(this.hydrateQueries); },
     // opened from a link chip on a task/event (store.openNote sets this)
     'store.pendingNoteId'(id) { if (id) { this.store.pendingNoteId = null; this.open(id); } },
+    // switching notebooks in the nav closes the open note and drops you in the new folder's list
+    // (t_0666). The "discard unsaved changes?" prompt already fired at the setView layer, so if the
+    // folder actually changed the user confirmed — just clear the editor.
+    folderFilter(nv, ov) { if (nv !== ov && this.editing) this.back(); },
     // re-run the query-bar filter when the active query changes
     activeQuery() { this.refilter(); },
   },
@@ -239,6 +243,10 @@ window.NotesView = {
       const i = this.draft.labels.indexOf(id);
       if (i >= 0) this.draft.labels.splice(i, 1); else this.draft.labels.push(id);
     },
+    async addLabel() {
+      const name = await this.store.askPrompt('new label');
+      if (name) { const l = this.store.addLabel(name); if (!this.draft.labels.includes(l.id)) this.draft.labels.push(l.id); }
+    },
     // ---- vim modes ----
     toInsert() {
       this.mode = 'insert';
@@ -269,6 +277,7 @@ window.NotesView = {
         { id: 'labels', type: 'grid', items: labels, cols: 99,
           isOn: (l) => this.draft.labels.includes(l.id), select: (l) => this.toggleLabel(l.id),
           when: () => labels.length > 0 },
+        { id: 'addlabel', type: 'button', activate: () => this.addLabel() },
         { id: 'review', type: 'input', ref: 'reviewInput' },
         // the body: one row per source line — this is what makes the ladder continuous
         ...this.bodyLines.map((_, i) => ({ id: 'body_' + i, type: 'static' })),
@@ -558,7 +567,28 @@ window.NotesView = {
         return; // keep typing — @input re-detects
       }
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.commitAndNormal(); return; } // esc writes + renders
+      if (e.key === 'Tab') { e.preventDefault(); this.indentBody(e.shiftKey); return; }   // indent the line(s), don't leave the field (t_0520)
       if (e.key === 'Enter' && !e.shiftKey) this.continueList(e);   // bullets/numbers/checkboxes (n.4)
+    },
+    // Tab indents the current line(s) 2 spaces (Shift+Tab outdents), line-first so it nests a
+    // whole `- bullet` no matter where the caret sits. Mutates draft.body (v-model) directly.
+    indentBody(outdent) {
+      const ta = this.$refs.bodyArea; if (!ta) return;
+      const val = this.draft.body;
+      const s = ta.selectionStart, en = ta.selectionEnd;
+      const UNIT = '  ';
+      const lineStart = val.lastIndexOf('\n', s - 1) + 1;
+      const lines = val.slice(lineStart, en).split('\n');
+      let firstDelta = 0, total = 0;
+      const out = lines.map((ln, i) => {
+        if (outdent) {
+          const m = ln.match(/^( {1,2}|\t)/); const removed = m ? m[0].length : 0;
+          if (i === 0) firstDelta = -removed; total -= removed; return ln.slice(removed);
+        }
+        if (i === 0) firstDelta = UNIT.length; total += UNIT.length; return UNIT + ln;
+      });
+      this.draft.body = val.slice(0, lineStart) + out.join('\n') + val.slice(en);
+      this.$nextTick(() => { ta.selectionStart = Math.max(lineStart, s + firstDelta); ta.selectionEnd = en + total; });
     },
     // Enter on a list line carries the leader down: same indent, same bullet (checkbox → a fresh
     // UNCHECKED one), ordered → n+1. On an EMPTY leader, Enter strips it instead — that's how you
@@ -764,6 +794,7 @@ window.NotesView = {
         <div class="labelpick">
           <span v-for="(l,i) in store.sortedLabels()" :key="l.id" class="chip"
                 :class="[{ on: draft.labels.includes(l.id) }, navCls('labels', i)]" @click="kbPick('labels', i)">#{{ l.name }}</span>
+          <span class="chip" :class="navCls('addlabel')" @click="addLabel">+ new</span>
         </div>
       </div>
       <div class="note-meta-row" :class="navCls('review')">
