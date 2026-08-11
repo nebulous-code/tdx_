@@ -31,3 +31,5 @@ server/blob-report/
 # os / editor
 .DS_Store
 *.swp
+
+server/test-results/
