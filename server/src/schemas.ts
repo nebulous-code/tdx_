@@ -172,6 +172,7 @@ export const LabelSchema = Type.Object({
   id: Type.String(),
   name: Type.String(),
   pinned: Type.Boolean(),
+  description: NStr(),
 });
 // how a view presents its results — view metadata, not a query term (e.1; migration 007)
 export const DisplaySchema = Type.Union([
@@ -286,9 +287,10 @@ export const LabelCreateSchema = Type.Object({
   id: Type.Optional(Type.String()),
   name: Type.String(),
   pinned: Type.Optional(Type.Boolean()),
+  description: Type.Optional(NStr()),
 });
 export const LabelUpdateSchema = Type.Partial(
-  Type.Object({ name: Type.String(), pinned: Type.Boolean() }),
+  Type.Object({ name: Type.String(), pinned: Type.Boolean(), description: NStr() }),
 );
 export const LabelMergeSchema = Type.Object({ from: Type.String(), to: Type.String() });
 export const SavedQueryCreateSchema = Type.Object({
@@ -423,7 +425,7 @@ export function rowToFolder(row: FoldersTable) {
   };
 }
 export function rowToLabel(row: LabelsTable) {
-  return { id: row.id, name: row.name, pinned: !!row.pinned };
+  return { id: row.id, name: row.name, pinned: !!row.pinned, description: row.description ?? null };
 }
 export function rowToSavedQuery(row: SavedQueriesTable) {
   return {

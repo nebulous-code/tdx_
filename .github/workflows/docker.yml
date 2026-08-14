@@ -29,7 +29,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22 # match the prod image (server/Dockerfile: node:22); Node 24.19 aborts better-sqlite3 at teardown (RemoveEnvironmentCleanupHook)
           cache: npm
           cache-dependency-path: server/package-lock.json
 
@@ -62,7 +62,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22 # match the prod image (server/Dockerfile: node:22); Node 24.19 aborts better-sqlite3 at teardown (RemoveEnvironmentCleanupHook)
 
       # Same script you run locally: `tools/test_coverage_frontend.sh` (use --bump to ratchet
       # the floors up). Fails if lines/branches/functions drop below tools/coverage-floor-frontend.txt.
@@ -79,7 +79,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22 # match the prod image (server/Dockerfile: node:22); Node 24.19 aborts better-sqlite3 at teardown (RemoveEnvironmentCleanupHook)
           cache: npm
           cache-dependency-path: server/package-lock.json
 

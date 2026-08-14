@@ -14,20 +14,32 @@ export async function getLabel(db: DB, id: string) {
 export async function createLabel(
   db: DB,
   owner: string,
-  input: { id?: string; name: string; pinned?: boolean },
+  input: { id?: string; name: string; pinned?: boolean; description?: string | null },
 ) {
   const id = input.id ?? newId();
   await db
     .insertInto('labels')
-    .values({ id, owner_id: owner, name: input.name, pinned: input.pinned ? 1 : 0 })
+    .values({
+      id,
+      owner_id: owner,
+      name: input.name,
+      pinned: input.pinned ? 1 : 0,
+      // empty == no description (the client, or ajv coercing an explicit null, may send '')
+      description: input.description || null,
+    })
     .execute();
   return (await getLabel(db, id))!;
 }
 
-export async function updateLabel(db: DB, id: string, patch: { name?: string; pinned?: boolean }) {
+export async function updateLabel(
+  db: DB,
+  id: string,
+  patch: { name?: string; pinned?: boolean; description?: string | null },
+) {
   const set: Updateable<LabelsTable> = {};
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.pinned !== undefined) set.pinned = patch.pinned ? 1 : 0;
+  if (patch.description !== undefined) set.description = patch.description || null; // '' == clear
   if (Object.keys(set).length)
     await db.updateTable('labels').set(set).where('id', '=', id).execute();
   return getLabel(db, id);

@@ -37,7 +37,7 @@ export default async function labelRoutes(app: FastifyInstance): Promise<void> {
       const label = await createLabel(
         app.db,
         request.user!.id,
-        request.body as { name: string; pinned?: boolean },
+        request.body as { name: string; pinned?: boolean; description?: string | null },
       );
       return reply.code(201).send(label);
     },
@@ -101,7 +101,11 @@ export default async function labelRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const { id } = request.params as { id: string };
       if (await denyAccess(app, request, reply, 'label', id, 'write')) return;
-      return updateLabel(app.db, id, request.body as { name?: string; pinned?: boolean });
+      return updateLabel(
+        app.db,
+        id,
+        request.body as { name?: string; pinned?: boolean; description?: string | null },
+      );
     },
   );
 

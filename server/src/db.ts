@@ -185,6 +185,7 @@ export interface LabelsTable {
   owner_id: string;
   name: string;
   pinned: number;
+  description: string | null;
 }
 
 export interface TaskLabelsTable {

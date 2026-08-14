@@ -209,6 +209,40 @@ test('label create honors explicit id and pinned', async () => {
   assert.equal(label.pinned, true);
 });
 
+// ---------- labels: description (t_0647) ----------
+
+test('label create defaults description to null (survives the response schema)', async () => {
+  const label = (await j('POST', '/api/labels', { name: 'nodesc' })).json();
+  assert.equal(label.description, null); // guards the Fastify response-schema strip
+});
+
+test('label create stores a description', async () => {
+  const label = (
+    await j('POST', '/api/labels', { name: 'deep', description: 'deep focused work blocks' })
+  ).json();
+  assert.equal(label.description, 'deep focused work blocks');
+});
+
+test('label update sets and clears the description, leaving name intact', async () => {
+  const label = (await j('POST', '/api/labels', { name: 'desc-rt' })).json();
+  const upd = (await j('PUT', `/api/labels/${label.id}`, { description: 'now described' })).json();
+  assert.equal(upd.description, 'now described');
+  assert.equal(upd.name, 'desc-rt');
+  const cleared = (await j('PUT', `/api/labels/${label.id}`, { description: null })).json();
+  assert.equal(cleared.description, null);
+});
+
+test('bootstrap carries label descriptions (the agent-facing path)', async () => {
+  await j('POST', '/api/labels', {
+    id: 'lbl-boot',
+    name: 'booted',
+    description: 'shows in bootstrap',
+  });
+  const boot = (await j('GET', '/api/bootstrap')).json();
+  const found = boot.labels.find((l: { id: string }) => l.id === 'lbl-boot');
+  assert.equal(found.description, 'shows in bootstrap');
+});
+
 // ---------- labels: update partial / empty / name-only / pinned-only ----------
 
 test('label update name-only leaves pinned intact', async () => {

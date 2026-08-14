@@ -166,10 +166,21 @@ test('rowToProject: collapsed true + populated health + parent', () => {
 
 // ---- schemas.ts — rowToLabel (pinned 0/1) ----------------------------------
 
-test('rowToLabel: both pinned arms', () => {
-  const off: LabelsTable = { id: 'l', owner_id: 'o', name: 'home', pinned: 0 };
-  assert.deepEqual(rowToLabel(off), { id: 'l', name: 'home', pinned: false });
-  assert.deepEqual(rowToLabel({ ...off, pinned: 1 }), { id: 'l', name: 'home', pinned: true });
+test('rowToLabel: both pinned arms + description', () => {
+  const off: LabelsTable = { id: 'l', owner_id: 'o', name: 'home', pinned: 0, description: null };
+  assert.deepEqual(rowToLabel(off), { id: 'l', name: 'home', pinned: false, description: null });
+  assert.deepEqual(rowToLabel({ ...off, pinned: 1 }), {
+    id: 'l',
+    name: 'home',
+    pinned: true,
+    description: null,
+  });
+  assert.deepEqual(rowToLabel({ ...off, description: 'the house' }), {
+    id: 'l',
+    name: 'home',
+    pinned: false,
+    description: 'the house',
+  });
 });
 
 // ---- schemas.ts — rowToSavedQuery (system/pinned 0/1, color null/set) -------

@@ -1174,7 +1174,8 @@
                         "required": [
                           "id",
                           "name",
-                          "pinned"
+                          "pinned",
+                          "description"
                         ],
                         "properties": {
                           "id": {
@@ -1185,6 +1186,16 @@
                           },
                           "pinned": {
                             "type": "boolean"
+                          },
+                          "description": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       }
@@ -8754,6 +8765,16 @@
                   },
                   "pinned": {
                     "type": "boolean"
+                  },
+                  "description": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               }
@@ -8770,7 +8791,8 @@
                   "required": [
                     "id",
                     "name",
-                    "pinned"
+                    "pinned",
+                    "description"
                   ],
                   "properties": {
                     "id": {
@@ -8781,6 +8803,16 @@
                     },
                     "pinned": {
                       "type": "boolean"
+                    },
+                    "description": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   }
                 }
@@ -8984,7 +9016,8 @@
                   "required": [
                     "id",
                     "name",
-                    "pinned"
+                    "pinned",
+                    "description"
                   ],
                   "properties": {
                     "id": {
@@ -8995,6 +9028,16 @@
                     },
                     "pinned": {
                       "type": "boolean"
+                    },
+                    "description": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   }
                 }
@@ -9077,6 +9120,16 @@
                   },
                   "pinned": {
                     "type": "boolean"
+                  },
+                  "description": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               }
@@ -9104,7 +9157,8 @@
                   "required": [
                     "id",
                     "name",
-                    "pinned"
+                    "pinned",
+                    "description"
                   ],
                   "properties": {
                     "id": {
@@ -9115,6 +9169,16 @@
                     },
                     "pinned": {
                       "type": "boolean"
+                    },
+                    "description": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   }
                 }

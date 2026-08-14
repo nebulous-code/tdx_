@@ -327,6 +327,11 @@ window.LabelModal = {
         </div>
         <div class="field"><span class="mut" style="font-size:11px;">renaming updates this label on every task that uses it</span></div>
 
+        <div class="field" :class="kbCls('description')">
+          <label>description</label>
+          <textarea ref="desc" class="input" rows="2" v-model="description" placeholder="what this tag is for" spellcheck="false" @focus="kbFocusRow('description')"></textarea>
+        </div>
+
         <div class="field" :class="kbCls('pin')" @click="pinned=!pinned" style="cursor:pointer;display:flex;align-items:center;gap:8px;">
           <label style="margin:0;">pin to header</label>
           <span class="pin-check" :class="{on:pinned}">{{ pinned ? '✓' : '' }}</span>
@@ -354,15 +359,16 @@ window.LabelModal = {
     </div>
   </div>
   `,
-  data(){ return { name: this.model.label.name, pinned: !!this.model.label.pinned, mergeInto:'', error:'' }; },
+  data(){ return { name: this.model.label.name, pinned: !!this.model.label.pinned, description: this.model.label.description||'', mergeInto:'', error:'' }; },
   computed: {
     otherLabels(){ return this.store.sortedLabels().filter(l=>l.id!==this.model.label.id); },
     hasOtherLabels(){ return this.otherLabels.length>0; }
   },
   methods: {
     kbRows(){ return [
-      { id:'name',      type:'input',  ref:'name' },
-      { id:'pin',       type:'button', activate:()=>{ this.pinned=!this.pinned; } },
+      { id:'name',        type:'input',  ref:'name' },
+      { id:'description', type:'input',  ref:'desc', multiline:true },
+      { id:'pin',         type:'button', activate:()=>{ this.pinned=!this.pinned; } },
       { id:'mergeInto', type:'input',  ref:'mergeInto', when:()=>this.hasOtherLabels },
       { id:'merge',     type:'button', activate:()=>this.merge(), when:()=>this.hasOtherLabels },
       { id:'delete',    type:'button', activate:()=>this.del() },
@@ -370,7 +376,7 @@ window.LabelModal = {
       { id:'save',      type:'button', activate:()=>this.save() },
     ]; },
     kbSubmit(){ this.save(); },
-    kbDirty(){ return this.name.trim() !== this.model.label.name || this.pinned !== !!this.model.label.pinned; },
+    kbDirty(){ return this.name.trim() !== this.model.label.name || this.pinned !== !!this.model.label.pinned || this.description.trim() !== (this.model.label.description||''); },
     save(){
       const nm = this.name.replace(/^#/,'').trim().toLowerCase();
       if(!nm){ this.error='enter a name'; return; }
@@ -378,6 +384,7 @@ window.LabelModal = {
       if(clash){ this.error='a label "'+clash.name+'" already exists'; return; }
       this.model.label.name = nm;       // referenced by id, so this updates every task
       this.model.label.pinned = this.pinned;
+      this.model.label.description = this.description.trim() || null;   // '' == no description
       this.store.toast('✓ label saved');
       this.$emit('close');
     },

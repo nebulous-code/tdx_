@@ -21,7 +21,7 @@
     projects: ['name','parentId','color','glyph','collapsed','health','position'],
     calendars: ['name','color','glyph','position'],
     folders: ['name','parentId','color','glyph','collapsed','position'],
-    labels: ['name','pinned'],
+    labels: ['name','pinned','description'],
     savedQueries: ['name','glyph','query','color','pinned','position','display'],   // display = grid/list/auto (e.1)
   };
   const ARRAY_FIELDS = new Set(['labels','health']);
