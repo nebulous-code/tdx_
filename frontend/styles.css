@@ -615,7 +615,12 @@ html, body { overflow-x: hidden; }   /* never let the page scroll wider than the
 .row2 { display: flex; gap: 8px; }
 .row2 > * { flex: 1; }
 
-.labelpick { display: flex; flex-wrap: wrap; gap: 4px; }
+.labelpick { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+/* expanded, the full label pool can be long — keep it bounded and scroll inside the field */
+.labelpick.expanded { max-height: 30vh; overflow-y: auto; }
+/* the expand/collapse control: a dashed, muted chip so it reads as an affordance, not a label */
+.labelpick-toggle { border-style: dashed; color: var(--amber-mut); }
+.labelpick-toggle:hover { color: var(--amber); border-color: var(--amber-mut); }
 
 .d-actions { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
 .btn {

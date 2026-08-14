@@ -243,6 +243,7 @@
 <script src="js/sync.js"></script>
 <script src="js/data.js"></script>
 <script src="js/kbform.js"></script>
+<script src="js/label-picker.js"></script>
 <script src="js/sidebar.js"></script>
 <script src="js/tasklist.js"></script>
 <script src="js/mixed-list.js"></script>
@@ -1584,6 +1585,7 @@ app.component('recurrence-builder', window.RecurrenceBuilder);
 app.component('task-detail', window.TaskDetail);
 app.component('deep-nav', window.DeepNav);
 app.component('linked-items', window.LinkedItems);
+app.component('label-picker', window.LabelPicker);
 // the calendar grid + notes module lazy-load the first time you open their app
 // (the event editor stays eager — it opens from task links too)
 app.component('calendar-view', defineAsyncComponent(() => loadScript('js/calendar.js').then(() => window.CalendarView)));

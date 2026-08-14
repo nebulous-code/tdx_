@@ -9,7 +9,7 @@
    is editable here without putting it in the note body. Saves via store.saveNote. */
 window.NoteDetail = {
   props: ['store'],
-  mixins: [window.KbForm],
+  mixins: [window.KbForm, window.LabelPickable],
   data() {
     return {
       f: { id: null, title: '', body: '', folderId: null, reviewAt: '', labels: [], readableId: null },
@@ -31,6 +31,7 @@ window.NoteDetail = {
     'store.selectedNoteId'(id) {
       if (!id) return;
       this.loaded = false;
+      this.labelsExpanded = false;   // labels collapse by default when the drawer swaps notes (J/K, wikilink)
       this.linkList = [];
       this.load().then(() => this.$nextTick(() => this.kbInit()));
     },
@@ -57,15 +58,12 @@ window.NoteDetail = {
     snap() { const f = this.f; return { title: f.title, body: f.body, folderId: f.folderId, reviewAt: f.reviewAt, labels: [...f.labels].sort() }; },
     // ---- KbForm wiring ----
     kbRows() {
-      const labels = this.store.sortedLabels();
       return [
         { id: 'title', type: 'input', ref: 'title' },
         // must track the row's v-if exactly, or the ladder points at a row that isn't there
         { id: 'folder', type: 'input', ref: 'folder', when: () => this.store.folders.length > 0 || !!this.store.rootFolder() },
         { id: 'review', type: 'input', ref: 'review' },
-        { id: 'labels', type: 'grid', items: labels, cols: 99,
-          isOn: l => this.f.labels.includes(l.id), select: l => this.toggleLabel(l.id), when: () => labels.length > 0 },
-        { id: 'addlabel', type: 'button', activate: () => this.addLabel() },
+        ...this.labelRows(),
         { id: 'notes', type: 'input', ref: 'notes' },   // ref → md-field.focus() (i edits)
         // links = a grid row, like labels: j/k skip it, h/l cross the chips, space opens (n.13)
         { id: 'links', type: 'grid', items: this.linkList, cols: 99,
@@ -92,11 +90,7 @@ window.NoteDetail = {
       return true;
     },
     blurField() { const a = document.activeElement; if (a && a.blur) a.blur(); },
-    toggleLabel(id) { const i = this.f.labels.indexOf(id); if (i >= 0) this.f.labels.splice(i, 1); else this.f.labels.push(id); },
-    async addLabel() {
-      const name = await this.store.askPrompt('new label');
-      if (name) { const l = this.store.addLabel(name); if (!this.f.labels.includes(l.id)) this.f.labels.push(l.id); }
-    },
+    labelIds() { return this.f.labels; },   // LabelPickable binds the picker to this array
     async save() {
       const t = this.f.title.trim(); if (!t) return;
       const ok = await this.store.saveNote({
@@ -135,10 +129,9 @@ window.NoteDetail = {
 
       <div class="field">
         <label>labels</label>
-        <div class="labelpick">
-          <span v-for="(l,i) in store.sortedLabels()" :key="l.id" class="chip" :class="[{on: f.labels.includes(l.id)}, kbCls('labels', i)]" @click="kbPick('labels', i)">#{{ l.name }}</span>
-          <span class="chip" :class="kbCls('addlabel')" @click="addLabel">+ new</span>
-        </div>
+        <label-picker :store="store" :selected="f.labels" :expanded="labelsExpanded"
+          :kb-focus="kbCellOf('labels')" :add-focus="addLabelFocus()" :toggle-focus="labelToggleFocus()"
+          @pick="kbPick('labels', $event)" @add="addLabel" @toggle="toggleLabels" @remove="toggleLabel"></label-picker>
       </div>
 
       <div class="field">

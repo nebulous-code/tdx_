@@ -12,7 +12,7 @@ const labelKey = (ls) => [...(ls || [])].sort().join(',');   // order-insensitiv
 
 window.NotesView = {
   props: ['store'],
-  mixins: [window.KbForm],
+  mixins: [window.KbForm, window.LabelPickable],
   emits: ['enter-nav'],
   data() {
     // NOTE `draft` is the note EDITOR's object (bodyLines/dirty/payload all read it). The
@@ -163,6 +163,7 @@ window.NotesView = {
       const n = await this.store.getNote(id);
       if (!n) return;
       this.sel = n;
+      this.labelsExpanded = false;   // labels collapse by default on each note
       this.mode = 'normal';        // open into the rendered view
       this.draft = this.seed(n);
       this.saved = this.seed(n);
@@ -239,14 +240,7 @@ window.NotesView = {
     // mode the keyboard belongs to the textarea, so a highlight left on whatever row you came
     // from (the edit button, a field) is stale paint — hide it until Esc hands the ladder back.
     navCls(id, cell) { return this.mode === 'insert' ? null : this.kbCls(id, cell); },
-    toggleLabel(id) {
-      const i = this.draft.labels.indexOf(id);
-      if (i >= 0) this.draft.labels.splice(i, 1); else this.draft.labels.push(id);
-    },
-    async addLabel() {
-      const name = await this.store.askPrompt('new label');
-      if (name) { const l = this.store.addLabel(name); if (!this.draft.labels.includes(l.id)) this.draft.labels.push(l.id); }
-    },
+    labelIds() { return this.draft.labels; },   // LabelPickable binds the picker to this array
     // ---- vim modes ----
     toInsert() {
       this.mode = 'insert';
@@ -269,15 +263,11 @@ window.NotesView = {
     // stepping off the last body line lands on links — no boundary special-casing.
     kbRows() {
       if (!this.editing) return [];
-      const labels = this.store.sortedLabels();
       return [
         { id: 'title',  type: 'input', ref: 'titleInput' },
         // must track the row's v-if exactly, or the ladder points at a row that isn't there
         { id: 'folder', type: 'input', ref: 'folderSel', when: () => this.store.folders.length > 0 || !!this.store.rootFolder() },
-        { id: 'labels', type: 'grid', items: labels, cols: 99,
-          isOn: (l) => this.draft.labels.includes(l.id), select: (l) => this.toggleLabel(l.id),
-          when: () => labels.length > 0 },
-        { id: 'addlabel', type: 'button', activate: () => this.addLabel() },
+        ...this.labelRows(),
         { id: 'review', type: 'input', ref: 'reviewInput' },
         // the body: one row per source line — this is what makes the ladder continuous
         ...this.bodyLines.map((_, i) => ({ id: 'body_' + i, type: 'static' })),
@@ -791,11 +781,10 @@ window.NotesView = {
       </div>
       <div v-if="store.sortedLabels().length" class="note-meta-row">
         <span class="ev-rl">labels</span>
-        <div class="labelpick">
-          <span v-for="(l,i) in store.sortedLabels()" :key="l.id" class="chip"
-                :class="[{ on: draft.labels.includes(l.id) }, navCls('labels', i)]" @click="kbPick('labels', i)">#{{ l.name }}</span>
-          <span class="chip" :class="navCls('addlabel')" @click="addLabel">+ new</span>
-        </div>
+        <label-picker :store="store" :selected="draft.labels" :expanded="labelsExpanded"
+          :kb-focus="mode === 'insert' ? -1 : kbCellOf('labels')" :add-focus="mode !== 'insert' && addLabelFocus()"
+          :toggle-focus="mode !== 'insert' && labelToggleFocus()"
+          @pick="kbPick('labels', $event)" @add="addLabel" @toggle="toggleLabels" @remove="toggleLabel"></label-picker>
       </div>
       <div class="note-meta-row" :class="navCls('review')">
         <span class="ev-rl">review date</span>

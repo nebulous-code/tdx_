@@ -6,7 +6,7 @@
    task. Recurrence + existing subtasks stay mouse-driven for now. */
 window.TaskDetail = {
   props: ['store'],
-  mixins: [window.KbForm],
+  mixins: [window.KbForm, window.LabelPickable],
   template: `
   <div class="detail" :class="{ hidden: !store.detailOpen || !task }">
     <div v-if="task" class="detail-head">
@@ -80,10 +80,9 @@ window.TaskDetail = {
       <!-- labels -->
       <div class="field">
         <label>labels</label>
-        <div class="labelpick">
-          <span v-for="(l,i) in store.sortedLabels()" :key="l.id" class="chip" :class="[{on: task.labels.includes(l.id)}, kbCls('labels', i)]" @click="kbPick('labels', i)">#{{ l.name }}</span>
-          <span class="chip" :class="kbCls('addlabel')" @click="addLabel">+ new</span>
-        </div>
+        <label-picker :store="store" :selected="task.labels" :expanded="labelsExpanded"
+          :kb-focus="kbCellOf('labels')" :add-focus="addLabelFocus()" :toggle-focus="labelToggleFocus()"
+          @pick="kbPick('labels', $event)" @add="addLabel" @toggle="toggleLabels" @remove="toggleLabel"></label-picker>
       </div>
 
       <!-- recurrence -->
@@ -159,6 +158,7 @@ window.TaskDetail = {
   watch: {
     'store.selectedTaskId'(_now, was){
       this.subDraft='';   // a pending subtask belongs to the task it was typed on — never carry it to the next (t_0278)
+      this.labelsExpanded=false;   // labels collapse by default on each task (J/K swap included)
       this.$nextTick(this.autosize);
       // J/K-swapping to another task while the drawer is open ends this task's edit
       // session — infer for the task we're leaving if its recurrence was changed.
@@ -166,7 +166,7 @@ window.TaskDetail = {
       this.recurTouched = false;   // new task = fresh session
     },
     'store.detailOpen'(v){
-      if(v){ this.recurTouched = false; this.$nextTick(()=>{
+      if(v){ this.recurTouched = false; this.labelsExpanded=false; this.$nextTick(()=>{
         this.kbInit();
         // a DRAFT task (i on the calendar) has no name yet — land in the title so you just type (e.6)
         if(this.store.draftTask && this.task && this.store.draftTask.id===this.task.id){
@@ -189,7 +189,6 @@ window.TaskDetail = {
   methods: {
     // ---- KbForm config (the app routes keys here via onKey; see header) ----
     kbRows(){
-      const labels = this.store.sortedLabels();
       return [
         { id:'title',     type:'input',  ref:'title' },
         { id:'project',   type:'input',  ref:'project' },
@@ -198,9 +197,7 @@ window.TaskDetail = {
         { id:'size',      type:'input',  ref:'size', when:()=>this.store.currentUser && this.store.currentUser.fib_sizing },
         { id:'due',       type:'input',  ref:'due' },
         { id:'reminder',  type:'input',  ref:'reminder' },
-        { id:'labels',    type:'grid',   items:labels, cols:99,
-          isOn:l=>this.task.labels.includes(l.id), select:l=>this.toggleLabel(l.id), when:()=>labels.length>0 },
-        { id:'addlabel',  type:'button', activate:()=>this.addLabel() },
+        ...this.labelRows(),
         { id:'recur',     type:'static' },   // l/space/enter descends into the recurrence builder
         { id:'notes',     type:'input',  ref:'notes' },
         // one navigable row per existing subtask (j/k highlight · i rename · m reorder)
@@ -309,14 +306,7 @@ window.TaskDetail = {
       this.store.detailOpen=false;
     },
     indent(p){ return p.parentId ? '  ↳ ' : ''; },
-    toggleLabel(id){
-      const i=this.task.labels.indexOf(id);
-      if(i>=0) this.task.labels.splice(i,1); else this.task.labels.push(id);
-    },
-    async addLabel(){
-      const name = await this.store.askPrompt('new label');
-      if(name){ const l=this.store.addLabel(name); if(!this.task.labels.includes(l.id)) this.task.labels.push(l.id); }
-    },
+    labelIds(){ return this.task.labels; },   // LabelPickable binds the picker to this array
     addSub(){
       const t=this.subDraft.trim(); if(!t) return;
       this.store.addTask({ title:t, projectId:this.task.projectId, parentId:this.task.id });

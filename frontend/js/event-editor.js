@@ -10,12 +10,12 @@
 const evSnapshot = (f) => ({
   title: f.title, allDay: f.allDay, date: f.date, time: f.time,
   endDate: f.endDate, endTime: f.endTime, location: f.location, recurrence: f.recurrence, notes: f.notes,
-  calendarId: f.calendarId,
+  calendarId: f.calendarId, labels: [...(f.labels || [])].sort(),
 });
 
 window.EventDetail = {
   props: ['store'],
-  mixins: [window.KbForm],
+  mixins: [window.KbForm, window.LabelPickable],
   data() {
     const f = this.seedForm();
     return {
@@ -33,6 +33,7 @@ window.EventDetail = {
   watch: {
     'store.editingEvent'(ev) {
       if (!ev) return;
+      this.labelsExpanded = false;   // labels collapse by default on each event
       const f = this.seedForm();
       this.f = f;
       this._orig = JSON.stringify(evSnapshot(f));
@@ -70,8 +71,10 @@ window.EventDetail = {
         notes: e.notes || '',
         // default a new event to the first calendar (or the one being viewed)
         calendarId: e.calendarId ?? (this.store.calendars[0] ? this.store.calendars[0].id : null),
+        labels: [...(e.labels || [])],   // event labels are backend-persisted; load them so a save doesn't wipe them
       };
     },
+    labelIds() { return this.f.labels; },   // LabelPickable binds the picker to this array
     // ---- KbForm wiring ----
     kbRows() {
       return [
@@ -83,6 +86,7 @@ window.EventDetail = {
         { id: 'endDate', type: 'input', ref: 'endDate' },
         { id: 'endTime', type: 'input', ref: 'endTime', when: () => !this.f.allDay },
         { id: 'location', type: 'input', ref: 'location' },
+        ...this.labelRows(),
         // a cursor-only stop: `i` descends into the recurrence-builder sub-pane, it has no input
         // to focus (e.12 — same as task-detail's recur row). h/l/space/enter also enter it.
         { id: 'recurrence', type: 'static' },
@@ -165,6 +169,7 @@ window.EventDetail = {
         recurrence: this.f.recurrence.trim() || null,
         notes: this.f.notes,
         calendarId: this.f.calendarId || null,
+        labels: [...this.f.labels],
       });
       if (ok) this.$emit('close');
     },
@@ -225,6 +230,13 @@ window.EventDetail = {
       <div class="field" :class="kbCls('location')">
         <label>location</label>
         <input ref="location" class="input" v-model="f.location" placeholder="location" @focus="kbFocusRow('location')" @keydown.enter.stop.prevent="save" @keydown.esc.stop.prevent="blurField">
+      </div>
+
+      <div class="field">
+        <label>labels</label>
+        <label-picker :store="store" :selected="f.labels" :expanded="labelsExpanded"
+          :kb-focus="kbCellOf('labels')" :add-focus="addLabelFocus()" :toggle-focus="labelToggleFocus()"
+          @pick="kbPick('labels', $event)" @add="addLabel" @toggle="toggleLabels" @remove="toggleLabel"></label-picker>
       </div>
       <!-- the guided recurrence builder (e.12) — the same component the task drawer uses, driven
            by f.recurrence. The host highlight shows only when NOT inside the sub-pane; the builder
