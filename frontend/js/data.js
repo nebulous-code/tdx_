@@ -973,6 +973,7 @@
   store.toggleDone = (t) => {
     t.done = !t.done;
     t.completedAt = t.done ? T(new Date()) : null;
+    cascadeDone(t.id, t.done);   // t_0687: closing/reopening a parent cascades to its whole subtree
     // recurring: spawn next occurrence when completed
     if(t.done && t.recurrence){
       const nxt = Rec.next(t.recurrence, t.due || Rec.ymd(new Date()), t.due);
@@ -988,6 +989,21 @@
       }
     }
   };
+  // t_0687: cascade a parent's done state to its whole subtask subtree (any depth), so
+  // completing a parent auto-closes its children and reopening it reopens them. Mirrors the
+  // completedAt convention in toggleDone; the diff-sync then persists each descendant's done.
+  function cascadeDone(tid, done){
+    for(const s of store.subtasks(tid)){
+      if(done){
+        // only close still-open children, so an already-done child keeps its completedAt
+        // (faithful to the backend's `WHERE done=0` cascade in completeTask)
+        if(!s.done){ s.done = true; s.completedAt = T(new Date()); }
+      } else {
+        s.done = false; s.completedAt = null;   // reopening a parent reopens the whole subtree
+      }
+      cascadeDone(s.id, done);   // walk the full subtree either way (open grandchildren too)
+    }
+  }
   // Recreate every descendant of `origParentId` under `newParentId`, reset to
   // unchecked (mk() defaults done:false / completedAt:null). Recurses to any depth,
   // so a recurring parent's checklist comes back fresh each occurrence.

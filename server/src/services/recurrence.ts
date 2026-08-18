@@ -8,7 +8,7 @@ import type { DB, Database_, TasksTable } from '../db.js';
 import { allocateReadableId, newId } from '../ids.js';
 import { Rec } from '../rec.js';
 import type { TaskJson } from '../schemas.js';
-import { loadTask } from './tasks.js';
+import { collectSubtree, loadTask } from './tasks.js';
 
 type Trx = Kysely<Database_>;
 
@@ -115,6 +115,25 @@ export async function completeTask(db: DB, id: string): Promise<SpawnResult | nu
       .set({ done: 1, completed_at: now, updated_at: now })
       .where('id', '=', id)
       .execute();
+
+    // Cascade completion to the whole subtree (t_0687): a completed parent must never leave
+    // orphaned open children. Only flip open rows, so an already-done child keeps its original
+    // completed_at. Done before the recurrence spawn — cloneSubtree clones the children fresh
+    // (done=0) regardless, so the new occurrence is unaffected.
+    const rows = await trx
+      .selectFrom('tasks')
+      .select(['id', 'parent_id'])
+      .where('owner_id', '=', t.owner_id)
+      .execute();
+    const descendants = collectSubtree(id, rows).filter((x) => x !== id);
+    if (descendants.length) {
+      await trx
+        .updateTable('tasks')
+        .set({ done: 1, completed_at: now, updated_at: now })
+        .where('id', 'in', descendants)
+        .where('done', '=', 0)
+        .execute();
+    }
 
     const created: string[] = [];
     if (t.recurrence) {

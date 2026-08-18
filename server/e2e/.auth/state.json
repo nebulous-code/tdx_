@@ -1,11 +1,11 @@
 {
   "cookies": [
     {
-      "name": "tdx_session",
-      "value": "qO9mNdBR6u__uKSaw6JTcrPPuPZ-6pRk59s0WUmcmsM.w07kFB8T09o%2BkYnkoCJFnC7bbf8nLNwpDVzfBtZHQdM",
+      "name": "tdx_session_dev",
+      "value": "2qrxF0zayKxufb77ta9CpA3XkgeMAKrXDr3JNlivfq0.ZkPJOAOlr8%2FNS%2B4kfVVuKuDfQYBOwrSwqyhofYcd86o",
       "domain": "127.0.0.1",
       "path": "/",
-      "expires": 1786823602.452444,
+      "expires": 1789667419.452354,
       "httpOnly": true,
       "secure": false,
       "sameSite": "Strict"

@@ -67,13 +67,24 @@ after(async () => {
 
 test('weekly task with a subtree → next occurrence + fresh unchecked subtree', async () => {
   const t1 = await ins({ title: 't1', recurrence: 'weekly on mon,wed,fri', due: '2026-06-18' });
-  await ins({ title: 's1', parent: t1, position: 0 });
-  await ins({ title: 's2', parent: t1, position: 1, done: 1 }); // a completed subtask
-  await ins({ title: 's3', parent: t1, position: 2 });
+  const s1 = await ins({ title: 's1', parent: t1, position: 0 });
+  const s2 = await ins({ title: 's2', parent: t1, position: 1, done: 1 }); // a completed subtask
+  const s3 = await ins({ title: 's3', parent: t1, position: 2 });
 
   const res = (await completeTask(db, t1))!;
   assert.equal(res.task.done, true);
   assert.equal(res.created.length, 4); // root + 3 subtasks
+
+  // t_0687: the completed occurrence's OWN children are all closed (no orphans left behind)
+  const orig = await db
+    .selectFrom('tasks')
+    .select(['id', 'done'])
+    .where('id', 'in', [s1, s2, s3])
+    .execute();
+  assert.ok(
+    orig.every((r) => r.done === 1),
+    'the completed occurrence keeps no open children',
+  );
 
   const root = res.created.find((c) => c.parentId === null)!;
   assert.equal(root.title, 't1');
@@ -105,6 +116,39 @@ test('monthly task preserves the reminder day-gap', async () => {
   assert.equal(res.created.length, 1);
   assert.equal(res.created[0].due, '2026-07-01');
   assert.equal(res.created[0].reminder, '2026-06-29'); // gap of -2 days preserved
+});
+
+test('completing a parent cascades done through the whole subtree, preserving already-done children (t_0687)', async () => {
+  const p = await ins({ title: 'parent' }); // non-recurring → no spawn to muddy it
+  const cOpen = await ins({ title: 'c-open', parent: p });
+  const cDone = await ins({ title: 'c-done', parent: p, done: 1 });
+  const g = await ins({ title: 'grandchild', parent: cOpen }); // open, depth 2
+  const unrelated = await ins({ title: 'unrelated' }); // must stay open
+  await db
+    .updateTable('tasks')
+    .set({ completed_at: '2020-01-01T00:00:00.000Z' })
+    .where('id', '=', cDone)
+    .execute();
+
+  const res = (await completeTask(db, p))!;
+  assert.equal(res.created.length, 0);
+
+  const rows = await db
+    .selectFrom('tasks')
+    .select(['id', 'done', 'completed_at'])
+    .where('id', 'in', [cOpen, cDone, g, unrelated])
+    .execute();
+  const by = Object.fromEntries(rows.map((r) => [r.id, r]));
+  assert.equal(by[cOpen].done, 1, 'open child is closed');
+  assert.equal(by[g].done, 1, 'open grandchild is closed (cascade reaches the whole depth)');
+  assert.equal(by[cDone].done, 1, 'already-done child stays done');
+  assert.equal(
+    by[cDone].completed_at,
+    '2020-01-01T00:00:00.000Z',
+    'already-done child keeps its completed_at',
+  );
+  assert.ok(by[cOpen].completed_at, 'a newly-closed child gets a completed_at');
+  assert.equal(by[unrelated].done, 0, 'a task outside the subtree is untouched');
 });
 
 test('a non-recurring task spawns nothing', async () => {

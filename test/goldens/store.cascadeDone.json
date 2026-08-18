@@ -1,0 +1,53 @@
+{
+  "initial": [
+    {
+      "id": "t1a",
+      "done": true,
+      "hasCompletedAt": true
+    },
+    {
+      "id": "t1b",
+      "done": false,
+      "hasCompletedAt": false
+    },
+    {
+      "id": "t1c",
+      "done": false,
+      "hasCompletedAt": false
+    }
+  ],
+  "afterComplete": [
+    {
+      "id": "t1a",
+      "done": true,
+      "hasCompletedAt": true
+    },
+    {
+      "id": "t1b",
+      "done": true,
+      "hasCompletedAt": true
+    },
+    {
+      "id": "t1c",
+      "done": true,
+      "hasCompletedAt": true
+    }
+  ],
+  "afterReopen": [
+    {
+      "id": "t1a",
+      "done": false,
+      "hasCompletedAt": false
+    },
+    {
+      "id": "t1b",
+      "done": false,
+      "hasCompletedAt": false
+    },
+    {
+      "id": "t1c",
+      "done": false,
+      "hasCompletedAt": false
+    }
+  ]
+}

@@ -164,6 +164,23 @@ test('store: toggleDone recurrence spawn', () => {
   });
 });
 
+test('store: toggleDone cascades done state to the whole subtree (t_0687)', () => {
+  const store = freshStore();
+  store.toast = () => {};
+  const t1 = store.taskById('t1'); // recurring parent; subtree: t1a(done), t1b, t1c
+  store.taskById('t1a').completedAt = 'SEED-TS'; // distinct sentinel → prove it survives a complete
+  const kids = () => store.subtasks('t1').map((s) => ({ id: s.id, done: s.done, hasCompletedAt: !!s.completedAt }));
+  const initial = kids();
+  store.toggleDone(t1); // complete the parent → cascade-close the subtree
+  const afterComplete = kids();
+  assert.equal(store.taskById('t1a').completedAt, 'SEED-TS', 'already-done child keeps its completedAt on complete');
+  store.toggleDone(t1); // reopen the parent → cascade-reopen the subtree
+  const afterReopen = kids();
+  golden('store.cascadeDone', { initial, afterComplete, afterReopen });
+  assert.ok(afterComplete.every((k) => k.done), 'every child is done after completing the parent');
+  assert.ok(afterReopen.every((k) => !k.done && !k.hasCompletedAt), 'every child reopened (done=false, completedAt cleared)');
+});
+
 test('store: inferDueFromRecurrence (real task-detail.js method, headless)', () => {
   execFile('task-detail.js'); // -> window.TaskDetail (plain object literal, no DOM at load)
   const infer = globalThis.TaskDetail.methods.inferDueFromRecurrence;
