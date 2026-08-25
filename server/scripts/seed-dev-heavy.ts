@@ -56,18 +56,166 @@ const sample = <T>(a: T[], k: number): T[] => {
 
 // ---- date helpers (relative to today, like seed-dev) ----
 const today = new Date();
-const ymd = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-const d = (n: number) => { const x = new Date(today); x.setDate(x.getDate() + n); return ymd(x); };
+const ymd = (dt: Date) =>
+  `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+const d = (n: number) => {
+  const x = new Date(today);
+  x.setDate(x.getDate() + n);
+  return ymd(x);
+};
 
 // ---- bogus content pools (all generic, non-personal) ----
-const VERBS = ['Review', 'Update', 'Fix', 'Write', 'Plan', 'Refactor', 'Test', 'Deploy', 'Investigate', 'Draft', 'Schedule', 'Email', 'Call', 'Order', 'Clean', 'Organize', 'Migrate', 'Design', 'Prototype', 'Document', 'Audit', 'Renew', 'Book', 'Prepare', 'Ship', 'Merge', 'Archive', 'Configure', 'Optimize', 'Follow up on', 'Estimate', 'Triage'];
-const NOUNS = ['the dashboard', 'the API', 'the invoice', 'the monthly report', 'the widget', 'module 7', 'the pipeline', 'the backlog', 'the vendor list', 'the contract', 'the schema', 'the cache layer', 'the landing page', 'the onboarding flow', 'the newsletter', 'the migration', 'the roadmap', 'the retro notes', 'the demo', 'the release notes', 'the staging env', 'the runbook', 'the sprint board', 'the changelog', 'the budget sheet', 'the survey', 'the wireframe', 'the test suite', 'the config', 'the metrics', 'the ticket queue', 'the archive'];
-const PROJECT_THEMES = ['Platform', 'Growth', 'Infra', 'Home Ops', 'Side Project', 'Finance', 'Fitness', 'Garage', 'Volunteer', 'Travel', 'Reading', 'Research', 'Marketing', 'Support', 'Design System', 'Data', 'Mobile', 'Web', 'Ops', 'Admin'];
+const VERBS = [
+  'Review',
+  'Update',
+  'Fix',
+  'Write',
+  'Plan',
+  'Refactor',
+  'Test',
+  'Deploy',
+  'Investigate',
+  'Draft',
+  'Schedule',
+  'Email',
+  'Call',
+  'Order',
+  'Clean',
+  'Organize',
+  'Migrate',
+  'Design',
+  'Prototype',
+  'Document',
+  'Audit',
+  'Renew',
+  'Book',
+  'Prepare',
+  'Ship',
+  'Merge',
+  'Archive',
+  'Configure',
+  'Optimize',
+  'Follow up on',
+  'Estimate',
+  'Triage',
+];
+const NOUNS = [
+  'the dashboard',
+  'the API',
+  'the invoice',
+  'the monthly report',
+  'the widget',
+  'module 7',
+  'the pipeline',
+  'the backlog',
+  'the vendor list',
+  'the contract',
+  'the schema',
+  'the cache layer',
+  'the landing page',
+  'the onboarding flow',
+  'the newsletter',
+  'the migration',
+  'the roadmap',
+  'the retro notes',
+  'the demo',
+  'the release notes',
+  'the staging env',
+  'the runbook',
+  'the sprint board',
+  'the changelog',
+  'the budget sheet',
+  'the survey',
+  'the wireframe',
+  'the test suite',
+  'the config',
+  'the metrics',
+  'the ticket queue',
+  'the archive',
+];
+const PROJECT_THEMES = [
+  'Platform',
+  'Growth',
+  'Infra',
+  'Home Ops',
+  'Side Project',
+  'Finance',
+  'Fitness',
+  'Garage',
+  'Volunteer',
+  'Travel',
+  'Reading',
+  'Research',
+  'Marketing',
+  'Support',
+  'Design System',
+  'Data',
+  'Mobile',
+  'Web',
+  'Ops',
+  'Admin',
+];
 const GLYPHS = ['#', 'λ', '◈', '⊞', '❯', '⚙', '§', '✦', '¶', '☰', '★', '◆', '●', '▲'];
-const COLORS = ['#ff9f43', '#46d369', '#b6c948', '#3fd7d7', '#5b8cff', '#ff6fae', '#c78bff', '#ffb000', '#888888', '#e05252'];
-const LABEL_WORDS = ['urgent', 'quick', 'waiting', 'blocked', 'review', 'idea', 'bug', 'chore', 'errand', 'deep-work', 'followup', 'someday', 'reading', 'research', 'admin', 'finance', 'home', 'work', 'health', 'low-energy', 'high-focus', 'meeting', 'call', 'email', 'writing'];
-const RECURS = ['every 3 days', 'weekly on mon,wed,fri', 'weekly on sun', 'monthly on day 1', 'every 2 weeks', 'weekly on mon', 'monthly on last fri'];
-const NOTE_TOPICS = ['Meeting notes', 'Idea', 'Reference', 'Retro', 'Checklist', 'Spec', 'Research', 'Journal', 'Summary', 'Plan'];
+const COLORS = [
+  '#ff9f43',
+  '#46d369',
+  '#b6c948',
+  '#3fd7d7',
+  '#5b8cff',
+  '#ff6fae',
+  '#c78bff',
+  '#ffb000',
+  '#888888',
+  '#e05252',
+];
+const LABEL_WORDS = [
+  'urgent',
+  'quick',
+  'waiting',
+  'blocked',
+  'review',
+  'idea',
+  'bug',
+  'chore',
+  'errand',
+  'deep-work',
+  'followup',
+  'someday',
+  'reading',
+  'research',
+  'admin',
+  'finance',
+  'home',
+  'work',
+  'health',
+  'low-energy',
+  'high-focus',
+  'meeting',
+  'call',
+  'email',
+  'writing',
+];
+const RECURS = [
+  'every 3 days',
+  'weekly on mon,wed,fri',
+  'weekly on sun',
+  'monthly on day 1',
+  'every 2 weeks',
+  'weekly on mon',
+  'monthly on last fri',
+];
+const NOTE_TOPICS = [
+  'Meeting notes',
+  'Idea',
+  'Reference',
+  'Retro',
+  'Checklist',
+  'Spec',
+  'Research',
+  'Journal',
+  'Summary',
+  'Plan',
+];
 const FIB = [0, 1, 2, 3, 5, 8, 13];
 
 const taskTitle = () => `${pick(VERBS)} ${pick(NOUNS)}`;
@@ -79,16 +227,31 @@ const noteBody = () => {
 };
 
 async function main() {
-  const user = await createUser(db, { username: 'dev', email: 'dev@local.test', password: 'Password123!' });
+  const user = await createUser(db, {
+    username: 'dev',
+    email: 'dev@local.test',
+    password: 'Password123!',
+  });
   const owner = user.id;
-  await db.updateTable('users').set({ fib_sizing: 1, theme: 'plasma' }).where('id', '=', owner).execute();
-  const inbox = (await db.selectFrom('projects').select('id').where('owner_id', '=', owner).where('name', '=', 'Inbox').executeTakeFirst())!.id;
+  await db
+    .updateTable('users')
+    .set({ fib_sizing: 1, theme: 'plasma' })
+    .where('id', '=', owner)
+    .execute();
+  const inbox = (await db
+    .selectFrom('projects')
+    .select('id')
+    .where('owner_id', '=', owner)
+    .where('name', '=', 'Inbox')
+    .executeTakeFirst())!.id;
 
   // ---- labels (~68): a realistic named set + filler, a few pinned ----
   const labelIds: string[] = [];
   const labelNames = [...LABEL_WORDS];
-  for (let i = labelNames.length; i < Math.round(68 * SCALE); i++) labelNames.push(`topic-${String(i).padStart(2, '0')}`);
-  for (let i = 0; i < labelNames.length; i++) labelIds.push((await createLabel(db, owner, { name: labelNames[i], pinned: i < 3 })).id);
+  for (let i = labelNames.length; i < Math.round(68 * SCALE); i++)
+    labelNames.push(`topic-${String(i).padStart(2, '0')}`);
+  for (let i = 0; i < labelNames.length; i++)
+    labelIds.push((await createLabel(db, owner, { name: labelNames[i], pinned: i < 3 })).id);
 
   // ---- projects (~37): a two-level tree ----
   const projectIds: string[] = [inbox];
@@ -116,19 +279,41 @@ async function main() {
   // pool below so its open count stays put. Carved out of the totals so the seed stays prod-sized.
   const BIG_OPEN = 30;
   const BIG_DONE = 8;
-  const bigProj = await createProject(db, owner, { name: 'Platform Rebuild', color: '#5b8cff', glyph: '◈' });
+  const bigProj = await createProject(db, owner, {
+    name: 'Platform Rebuild',
+    color: '#5b8cff',
+    glyph: '◈',
+  });
   {
     let n = 0;
     let parents = 0;
     while (n < BIG_OPEN) {
-      const parent = await t({ projectId: bigProj.id, title: taskTitle(), done: false, due: chance(0.6) ? d(rint(-5, 45)) : null, priority: pick([1, 2, 3, 3, 4, 5]), size: pick(FIB), labels: chance(0.6) ? sample(labelIds, rint(1, 2)) : [] });
+      const parent = await t({
+        projectId: bigProj.id,
+        title: taskTitle(),
+        done: false,
+        due: chance(0.6) ? d(rint(-5, 45)) : null,
+        priority: pick([1, 2, 3, 3, 4, 5]),
+        size: pick(FIB),
+        labels: chance(0.6) ? sample(labelIds, rint(1, 2)) : [],
+      });
       n++;
       if (parents < 6 && chance(0.5)) {
         parents++;
-        for (let k = 0; k < rint(1, 3) && n < BIG_OPEN; k++) { await t({ projectId: bigProj.id, parentId: parent.id, title: taskTitle(), done: false, labels: chance(0.4) ? sample(labelIds, 1) : [] }); n++; }
+        for (let k = 0; k < rint(1, 3) && n < BIG_OPEN; k++) {
+          await t({
+            projectId: bigProj.id,
+            parentId: parent.id,
+            title: taskTitle(),
+            done: false,
+            labels: chance(0.4) ? sample(labelIds, 1) : [],
+          });
+          n++;
+        }
       }
     }
-    for (let i = 0; i < BIG_DONE; i++) await t({ projectId: bigProj.id, title: taskTitle(), done: true });
+    for (let i = 0; i < BIG_DONE; i++)
+      await t({ projectId: bigProj.id, title: taskTitle(), done: true });
   }
 
   const nOpen = Math.round(250 * SCALE) - BIG_OPEN;
@@ -153,12 +338,17 @@ async function main() {
       size: pick(FIB),
       labels: chance(0.6) ? sample(labelIds, rint(1, 3)) : [],
       recurrence: !done && chance(0.25) ? pick(RECURS) : null,
-      notes: chance(0.2) ? `${pick(VERBS)} ${pick(NOUNS)}; ${pick(VERBS).toLowerCase()} ${pick(NOUNS)}` : undefined,
+      notes: chance(0.2)
+        ? `${pick(VERBS)} ${pick(NOUNS)}; ${pick(VERBS).toLowerCase()} ${pick(NOUNS)}`
+        : undefined,
       reminder: chance(0.1) ? `${d(rint(0, 14))}T${String(rint(6, 18)).padStart(2, '0')}:00` : null,
     };
     const task = await t(over);
     if (done) doneIds.push(task.id);
-    if (!parentId) { siblings.push(task.id); rootTaskByProject.set(projectId, siblings); }
+    if (!parentId) {
+      siblings.push(task.id);
+      rootTaskByProject.set(projectId, siblings);
+    }
     if (++made % 250 === 0) console.log(`  …${made}/${total} tasks`);
   }
 
@@ -173,7 +363,15 @@ async function main() {
   // ---- folders (~11) + notes (~124) ----
   const folderIds: string[] = [];
   for (let i = 0; i < Math.round(11 * SCALE); i++) {
-    folderIds.push((await createFolder(db, owner, { name: `${pick(PROJECT_THEMES)} ${i + 1}`, color: pick(COLORS), glyph: pick(GLYPHS) })).id);
+    folderIds.push(
+      (
+        await createFolder(db, owner, {
+          name: `${pick(PROJECT_THEMES)} ${i + 1}`,
+          color: pick(COLORS),
+          glyph: pick(GLYPHS),
+        })
+      ).id,
+    );
   }
   const nNotes = Math.round(124 * SCALE);
   for (let i = 0; i < nNotes; i++) {
@@ -189,14 +387,19 @@ async function main() {
 
   // ---- calendars (~3) + a handful of events ----
   const cals: string[] = [];
-  for (const name of ['Work', 'Home', 'Personal']) cals.push((await createCalendar(db, owner, { name, color: pick(COLORS), glyph: pick(GLYPHS) })).id);
+  for (const name of ['Work', 'Home', 'Personal'])
+    cals.push(
+      (await createCalendar(db, owner, { name, color: pick(COLORS), glyph: pick(GLYPHS) })).id,
+    );
   const e = (over: Parameters<typeof createEvent>[2]) => createEvent(db, owner, over);
   for (let i = 0; i < 10; i++) {
     const allDay = chance(0.3);
     await e({
       calendarId: pick(cals),
       title: `${pick(VERBS)} ${pick(NOUNS)}`,
-      startAt: allDay ? d(rint(-3, 20)) : `${d(rint(-3, 20))}T${String(rint(8, 17)).padStart(2, '0')}:00`,
+      startAt: allDay
+        ? d(rint(-3, 20))
+        : `${d(rint(-3, 20))}T${String(rint(8, 17)).padStart(2, '0')}:00`,
       allDay,
       recurrence: chance(0.3) ? pick(RECURS) : null,
       labels: chance(0.4) ? sample(labelIds, 1) : [],
@@ -204,15 +407,37 @@ async function main() {
   }
 
   // ---- a few pinned saved views (exercise the sidebar/topbar badge fan-out) ----
-  await createSavedQuery(db, owner, { name: 'Deep work', query: 'label:deep-work status:open', glyph: '★', pinned: true });
-  await createSavedQuery(db, owner, { name: 'Waiting', query: 'label:waiting status:open', glyph: '◔', pinned: true });
-  await createSavedQuery(db, owner, { name: 'High priority', query: 'priority:5 status:open', glyph: '!', pinned: true });
-  await createSavedQuery(db, owner, { name: 'This month done', query: 'status:done', glyph: '✓', pinned: false });
+  await createSavedQuery(db, owner, {
+    name: 'Deep work',
+    query: 'label:deep-work status:open',
+    glyph: '★',
+    pinned: true,
+  });
+  await createSavedQuery(db, owner, {
+    name: 'Waiting',
+    query: 'label:waiting status:open',
+    glyph: '◔',
+    pinned: true,
+  });
+  await createSavedQuery(db, owner, {
+    name: 'High priority',
+    query: 'priority:5 status:open',
+    glyph: '!',
+    pinned: true,
+  });
+  await createSavedQuery(db, owner, {
+    name: 'This month done',
+    query: 'status:done',
+    glyph: '✓',
+    pinned: false,
+  });
 
   const count = (q: string) => (sqlite.prepare(q).get() as { c: number }).c;
   console.log('\nheavy seed complete (dev / Password123!, theme plasma):');
   console.log(`  scale       : ${SCALE}x`);
-  console.log(`  tasks       : ${count('SELECT count(*) c FROM tasks')} (open ${count('SELECT count(*) c FROM tasks WHERE done=0')}, done ${count('SELECT count(*) c FROM tasks WHERE done=1')})`);
+  console.log(
+    `  tasks       : ${count('SELECT count(*) c FROM tasks')} (open ${count('SELECT count(*) c FROM tasks WHERE done=0')}, done ${count('SELECT count(*) c FROM tasks WHERE done=1')})`,
+  );
   console.log(`  projects    : ${count('SELECT count(*) c FROM projects')}`);
   console.log(`  labels      : ${count('SELECT count(*) c FROM labels')}`);
   console.log(`  notes       : ${count('SELECT count(*) c FROM notes')}`);
@@ -222,4 +447,7 @@ async function main() {
   sqlite.close();
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
