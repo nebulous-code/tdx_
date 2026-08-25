@@ -11,6 +11,7 @@
     "test": "node --import tsx --test \"test/**/*.test.ts\"",
     "migrate": "tsx src/db.ts --migrate",
     "seed:dev": "tsx scripts/seed-dev.ts",
+    "seed:dev:heavy": "tsx scripts/seed-dev-heavy.ts",
     "export:openapi": "tsx scripts/export-openapi.ts",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",

@@ -2,7 +2,7 @@
    data.js  —  reactive store + sample data.  window.store
    ============================================================ */
 (function () {
-  const { reactive } = Vue;
+  const { reactive, computed } = Vue;
   const T = Rec.ymd; // ymd formatter
   const todayD = Rec.startOfDay(new Date());
   const d = (off) => T(Rec.addDays(todayD, off));
@@ -330,20 +330,48 @@
     const first = store.sortOrder.find(k=>store.sortEnabled[k] && (k!=='size' || fib));
     if(first) store.sortField = first;
   };
-  store.subtasks = (tid) => store.tasks.filter(t=>t.parentId===tid);
+  // Perf (Milestone 1, docs/PERFORMANCE_PLAN.md): index tasks by id and by parent so subtask
+  // and by-id lookups are O(1) instead of an O(n) scan every call — this was the hot path behind
+  // keyboard-nav lag (one j/k press did ~300 subtask filters). The computeds invalidate precisely:
+  // _byId only when a task is added/removed (reads t.id), _children only on add/remove/reparent
+  // (reads t.parentId) — so routine done/due edits never rebuild them.
+  const _byId = computed(() => { const m = new Map(); for(const t of store.tasks) m.set(t.id, t); return m; });
+  const _children = computed(() => {
+    const m = new Map();
+    for(const t of store.tasks){ if(t.parentId){ const a = m.get(t.parentId); if(a) a.push(t); else m.set(t.parentId, [t]); } }
+    return m;
+  });
+  store.subtasks = (tid) => _children.value.get(tid) || [];
   // the uncommitted draft is findable by id too, so the detail drawer can edit it like any task
   // (it just isn't in store.tasks yet — see startDraftTask)
-  store.taskById = (id) => (store.draftTask && store.draftTask.id===id) ? store.draftTask : store.tasks.find(t=>t.id===id);
+  store.taskById = (id) => (store.draftTask && store.draftTask.id===id) ? store.draftTask : _byId.value.get(id);
 
   // count open tasks for a project incl. subprojects
   // exact: a project's count is its own open root tasks, not its subprojects'
   // (matches the project view / `project:` token, which no longer cascade)
-  store.projectCount = (pid) =>
-    store.tasks.filter(t=>!t.done && !t.parentId && t.projectId===pid).length;
+  // One pass builds open-root-count per project → O(1) lookup (was an O(n) filter per project
+  // row on every sidebar render); invalidates only on done/parentId/projectId changes.
+  const _openByProject = computed(() => {
+    const m = new Map();
+    for(const t of store.tasks){ if(!t.done && !t.parentId) m.set(t.projectId, (m.get(t.projectId)||0)+1); }
+    return m;
+  });
+  store.projectCount = (pid) => _openByProject.value.get(pid) || 0;
   // count matching root TASKS for a query (the client Q engine is task-only). Strip type:
   // first — the engine has no 'type' field, so an unstripped `type:task` would match nothing.
-  store.queryCount = (q) =>
-    Q.run(Q.build(Q.parse(q).terms.filter(t=>t.field!=='type')), store.ctx()).filter(t=>!t.parentId).length;
+  // Memoized per query (each a computed, auto-invalidated on the fields it reads) so the badge
+  // fan-out — one full scan per saved view + label + project — is O(1) on re-renders with no task
+  // change. Capped so transient search-edit query strings can't leak the map.
+  const _qc = new Map();
+  store.queryCount = (q) => {
+    let c = _qc.get(q);
+    if(!c){
+      if(_qc.size > 256) _qc.clear();
+      c = computed(() => Q.run(Q.build(Q.parse(q).terms.filter(t=>t.field!=='type')), store.ctx()).filter(t=>!t.parentId).length);
+      _qc.set(q, c);
+    }
+    return c.value;
+  };
   // whether a saved view is client-countable: only task/no-type views (events/notes need the
   // server) — drives whether the nav shows a count badge for it.
   store.viewCountable = (sv) => {
@@ -547,7 +575,11 @@
     if(seq !== store._searchSeq) return;   // a newer keystroke superseded this one
     store.searchResults = items || [];
   };
-  store.visibleRoots = () => {
+  // Cached (Milestone 1): the filtered+sorted root list is recomputed only when its inputs
+  // change (the query/view/sort/completion/health-filter or a task field it reads) — so repeated
+  // reads within a render, and every j/k press (which changes only the cursor, not tasks), are
+  // cache hits instead of a full re-query + re-sort.
+  const _visibleRoots = computed(() => {
     const ctx = store.ctx();
     const q = store.taskQuery();   // type: stripped — client Q has no 'type' field
     let matched = Q.run(q, ctx);
@@ -581,12 +613,14 @@
       if(sig) list = list.filter(sig.test);
     }
     return list;
-  };
+  });
+  store.visibleRoots = () => _visibleRoots.value;
 
   // Flattened, ordered list of every on-screen task row (each visible root then,
   // unless collapsed, its subtasks depth-first) — matches what TaskList renders,
   // so j/k keyboard nav steps through subtasks too instead of skipping them.
-  store.visibleRows = () => {
+  // Cached alongside _visibleRoots so a keypress reuses it (reads collapsed + subtasks).
+  const _visibleRows = computed(() => {
     const out = [];
     const walk = (t) => {
       out.push(t);
@@ -594,7 +628,8 @@
     };
     store.visibleRoots().forEach(walk);
     return out;
-  };
+  });
+  store.visibleRows = () => _visibleRows.value;
 
   // When a task is created from within a view, seed it with the attributes the
   // view filters on, so it stays visible. We apply Status, Due, Labels and

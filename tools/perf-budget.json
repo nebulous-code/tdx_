@@ -1,0 +1,61 @@
+{
+  "referenceN": 1000,
+  "note": "op-count ceilings; ratchet DOWN via --update. see docs/PERFORMANCE_PLAN.md",
+  "scenarios": {
+    "openView": {
+      "Q.run": 1,
+      "visibleRoots": 1,
+      "visibleRows": 0,
+      "queryCount": 0,
+      "projectCount": 0,
+      "subtasks": 0,
+      "taskById": 44,
+      "Sync.snapshot": 0,
+      "Sync.diff": 0
+    },
+    "navKey": {
+      "Q.run": 0,
+      "visibleRoots": 0,
+      "visibleRows": 1,
+      "queryCount": 0,
+      "projectCount": 0,
+      "subtasks": 0,
+      "taskById": 0,
+      "Sync.snapshot": 0,
+      "Sync.diff": 0
+    },
+    "searchKeystroke": {
+      "Q.run": 5,
+      "visibleRoots": 1,
+      "visibleRows": 0,
+      "queryCount": 4,
+      "projectCount": 0,
+      "subtasks": 0,
+      "taskById": 44,
+      "Sync.snapshot": 0,
+      "Sync.diff": 0
+    },
+    "toggleDone": {
+      "Q.run": 0,
+      "visibleRoots": 0,
+      "visibleRows": 0,
+      "queryCount": 0,
+      "projectCount": 0,
+      "subtasks": 2,
+      "taskById": 0,
+      "Sync.snapshot": 1,
+      "Sync.diff": 1
+    },
+    "sidebarRender": {
+      "Q.run": 0,
+      "visibleRoots": 0,
+      "visibleRows": 0,
+      "queryCount": 75,
+      "projectCount": 35,
+      "subtasks": 0,
+      "taskById": 0,
+      "Sync.snapshot": 0,
+      "Sync.diff": 0
+    }
+  }
+}

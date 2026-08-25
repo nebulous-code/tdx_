@@ -12,7 +12,7 @@ window.QueryBar = {
   <div class="qbar">
     <div class="qbar-row">
       <span class="prompt">?</span>
-      <input class="qinput" ref="q" data-testid="query-input" v-model="queryString" spellcheck="false"
+      <input class="qinput" ref="q" data-testid="query-input" v-model="draft" spellcheck="false"
              placeholder="query… e.g.  label:urgent due:<7d status:open"
              @keydown.enter="run" @keydown.esc="blur" />
       <!-- Clicking this does exactly what the q key does (audit a.3): one action, one path.
@@ -48,6 +48,8 @@ window.QueryBar = {
   `,
   data(){
     return {
+      draft:'',             // local mirror of the query input, so typing stays instant while the
+                            // commit to the view is debounced (perf: no re-query per keystroke)
       kbAutoListen:false,   // driven from index.html queryKey (always-mounted)
       kbAutofocus:false,    // never steal focus into the query input on load
       dueOpts:[
@@ -118,6 +120,21 @@ window.QueryBar = {
       }
     },
     terms(){ return Q.parse(this.queryString).terms; }
+  },
+  watch: {
+    // Keep the input mirror in sync when the query changes from ELSEWHERE (a saved-view click,
+    // the builder chips via setTerms, clearQuery). The _qsyncing guard stops that resync from
+    // looping back through the debounced commit — which would otherwise re-fire the setter and
+    // turn a clicked saved view into a 'custom' view.
+    queryString:{ immediate:true, handler(v){ if(v !== this.draft){ this._qsyncing = true; this.draft = v; } } },
+    // Typing is debounced: commit the draft to the view ~120ms after the user pauses, so the list
+    // isn't re-derived on every keystroke. Chip edits (setTerms) and clears commit immediately via
+    // the setter, untouched by this.
+    draft(v){
+      if(this._qsyncing){ this._qsyncing = false; return; }
+      clearTimeout(this._qdebounce);
+      this._qdebounce = setTimeout(() => { if(v !== this.queryString) this.queryString = v; }, 120);
+    },
   },
   methods: {
     // ---- KbForm config (j/k between groups, h/l within a group, space toggles) ----
@@ -239,7 +256,7 @@ window.QueryBar = {
       this.store.openQueryView(sv);
       this.store.toast('✓ updated "'+sv.name+'"');
     },
-    run(){ this.$refs.q && this.$refs.q.blur(); },
+    run(){ clearTimeout(this._qdebounce); if(this.draft !== this.queryString) this.queryString = this.draft; this.$refs.q && this.$refs.q.blur(); },
     blur(){ this.$refs.q && this.$refs.q.blur(); },
     focus(){ this.$refs.q && (this.$refs.q.focus(), this.$refs.q.select()); },
   }
