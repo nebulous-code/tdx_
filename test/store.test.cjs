@@ -164,6 +164,34 @@ test('store: toggleDone recurrence spawn', () => {
   });
 });
 
+test('store: memoized derivations invalidate synchronously on mutation (M1 perf)', () => {
+  const store = freshStore();
+  store.toast = () => {};
+  store.setView({ kind: 'query', id: 'v', title: 'V', query: 'status:open' });
+
+  // index lookups resolve
+  assert.equal(store.taskById('t1').id, 't1');
+  assert.ok(store.subtasks('t1').map((t) => t.id).includes('t1b'));
+
+  // reparent t1b under t2 → subtasks reflects it immediately (no stale child index)
+  store.taskById('t1b').parentId = 't2';
+  assert.ok(!store.subtasks('t1').map((t) => t.id).includes('t1b'), 'old parent lost the child');
+  assert.ok(store.subtasks('t2').map((t) => t.id).includes('t1b'), 'new parent gained the child');
+
+  // add a task → taskById finds it and the open count reflects it immediately
+  const openBefore = store.queryCount('status:open');
+  const nt = store.addTask({ title: 'inv-new', projectId: 'p_tdx' });
+  assert.equal(store.taskById(nt.id).title, 'inv-new');
+  assert.equal(store.queryCount('status:open'), openBefore + 1, 'open count rose by the new root');
+
+  // completing a root drops the open count by one and removes it from visibleRoots — synchronously
+  const root = store.tasks.find((t) => !t.parentId && !t.done && !t.recurrence);
+  const after = store.queryCount('status:open');
+  store.toggleDone(root);
+  assert.equal(store.queryCount('status:open'), after - 1, 'open count fell by the completed root');
+  assert.ok(!store.visibleRoots().some((r) => r.id === root.id), 'completed root left the open list');
+});
+
 test('store: toggleDone cascades done state to the whole subtree (t_0687)', () => {
   const store = freshStore();
   store.toast = () => {};
