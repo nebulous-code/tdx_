@@ -44,11 +44,11 @@ window.NotesScreen = {
         <div v-if="!ready" class="mut" style="padding:4px 0;">loading…</div>
         <div v-else-if="!archived.length" class="mut" style="padding:4px 0;">nothing archived.</div>
         <div class="notes-settings-list">
-          <div v-for="a in archived" :key="a.id" class="arch-row" :class="kbCls('arch:'+a.id)">
+          <div v-for="a in archived" :key="a.id" class="arch-row">
             <span class="arch-title">{{ a.title || '(untitled)' }}</span>
             <span v-if="a.readableId" class="arch-rid">{{ a.readableId }}</span>
-            <button class="btn" @click="restore(a)">restore</button>
-            <button class="btn danger" @click="permanentDelete(a)">delete permanently</button>
+            <button class="btn" :class="kbCls('arch:'+a.id+':restore')" @click="restore(a)">restore</button>
+            <button class="btn danger" :class="kbCls('arch:'+a.id+':del')" @click="permanentDelete(a)">delete permanently</button>
           </div>
         </div>
 
@@ -65,7 +65,7 @@ window.NotesScreen = {
           <input ref="maxBytes" type="number" min="0" class="input" style="flex:1;" v-model="maxKb"
                  placeholder="blank = no cap" @focus="kbFocusRow('maxBytes')" />
         </div>
-        <div class="acct-row" :class="kbCls('preview')">
+        <div class="acct-row">
           <span class="acct-label"></span>
           <button class="btn" :class="kbCls('preview')" :disabled="previewing" @click="doPreview">{{ previewing ? '…' : 'preview what these drop' }}</button>
         </div>
@@ -83,7 +83,13 @@ window.NotesScreen = {
   `,
   methods: {
     kbRows() {
-      const rows = this.archived.map((a) => ({ id: 'arch:' + a.id, type: 'button', activate: () => this.restore(a) }));
+      const rows = [];
+      // restore + delete-permanently are separate nav stops on the same visual line
+      // (like cancel/save in the note drawer), so j/k lands on each button individually.
+      this.archived.forEach((a) => {
+        rows.push({ id: 'arch:' + a.id + ':restore', type: 'button', activate: () => this.restore(a) });
+        rows.push({ id: 'arch:' + a.id + ':del', type: 'button', activate: () => this.permanentDelete(a) });
+      });
       rows.push({ id: 'globs', type: 'input', ref: 'globs' });
       rows.push({ id: 'maxBytes', type: 'input', ref: 'maxBytes' });
       rows.push({ id: 'preview', type: 'button', activate: () => this.doPreview() });
@@ -97,7 +103,8 @@ window.NotesScreen = {
       if (e.key !== 'x' && e.key !== 'X') return false;
       const cur = this.kbCur && this.kbCur();
       if (cur && typeof cur.id === 'string' && cur.id.indexOf('arch:') === 0) {
-        const a = this.archived.find((x) => 'arch:' + x.id === cur.id);
+        const id = cur.id.slice('arch:'.length).replace(/:(restore|del)$/, '');
+        const a = this.archived.find((x) => x.id === id);
         if (a) { e.preventDefault(); this.permanentDelete(a); return true; }
       }
       return false;
@@ -109,6 +116,9 @@ window.NotesScreen = {
       this.maxKb = r.maxBytes ? String(Math.round(r.maxBytes / 1024)) : '';
       this.init = { globsText: this.globsText, maxKb: this.maxKb };
       this.ready = true;
+      // rebuild the keyboard ladder now that the archive rows exist — kbInit ran on mount,
+      // before this async fetch resolved, so without this the rows never enter the nav order.
+      this.$nextTick(() => this.kbInit());
     },
     async reloadArchive() { this.archived = await this.store.fetchArchived(); this.$nextTick(() => this.kbInit()); },
     async restore(a) {
@@ -116,9 +126,15 @@ window.NotesScreen = {
       if (note) { this.store.toast('↩ restored "' + (a.title || 'note') + '"'); await this.reloadArchive(); }
     },
     async permanentDelete(a) {
-      if (!(await this.store.askConfirmTyped(a.title || ''))) return;
+      // include the immediate parent folder in the type-to-confirm target so same-named
+      // notes in different folders (scratch/draft vs platform/draft) can't be confused.
+      const parts = String(a.path || '').split('/').filter(Boolean);
+      const folder = parts.length >= 2 ? parts[parts.length - 2] : '';
+      const name = a.title || '';
+      const target = folder ? folder + '/' + name : name;
+      if (!(await this.store.askConfirmTyped(target))) return;
       const ok = await this.store.permanentDeleteNote(a.id);
-      if (ok) { this.store.toast('deleted "' + (a.title || 'note') + '" permanently'); await this.reloadArchive(); }
+      if (ok) { this.store.toast('deleted "' + (name || 'note') + '" permanently'); await this.reloadArchive(); }
     },
     async doPreview() {
       if (this.previewing) return;

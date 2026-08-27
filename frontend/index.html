@@ -220,8 +220,11 @@
     <div class="modal" style="max-width:380px;">
       <div class="modal-head">{{ promptState.label }}</div>
       <div class="modal-body">
+        <div v-if="promptState.detail" class="prompt-detail">{{ promptState.detail }}</div>
+        <!-- .stop so resolving the prompt never bubbles to an underlying screen's KbForm
+             listener (which would treat this Enter as its own form-submit) — see git history. -->
         <input ref="promptInput" class="input" v-model="promptState.value" spellcheck="false"
-               @keydown.enter="resolvePrompt(true)" @keydown.esc="resolvePrompt(false)" />
+               @keydown.enter.stop="resolvePrompt(true)" @keydown.esc.stop="resolvePrompt(false)" />
       </div>
       <div class="modal-foot">
         <button class="btn" @click="resolvePrompt(false)">cancel</button>
@@ -1551,12 +1554,20 @@ const app = createApp({
     // app-styled confirm / prompt (Promise-based) usable from any component
     this.store.askConfirm=(msg)=> new Promise((res)=>{ this.confirmState={ msg, resolve:res }; });
     this.store.askChoice=(msg)=> new Promise((res)=>{ this.choiceState={ msg, resolve:res }; });   // 'cancel' | 'no' | 'yes'
-    this.store.askPrompt=(label, value='')=> new Promise((res)=>{
-      this.promptState={ label, value, resolve:res };
+    // opts.detail renders a normal-case line in the body (the .modal-head is CSS-uppercased,
+    // so anything case-sensitive the user must type back belongs in the body, not the header).
+    this.store.askPrompt=(label, value='', opts={})=> new Promise((res)=>{
+      this.promptState={ label, value, detail:opts.detail||'', resolve:res };
       this.$nextTick(()=>{ const el=this.$refs.promptInput; if(el){ el.focus(); el.select(); } });
     });
-    // high-friction destructive confirm: proceed only if the user types the exact name back
-    this.store.askConfirmTyped=async (name)=>{ const t=await this.store.askPrompt('type "'+name+'" to permanently delete'); return t!=null && t===name; };
+    // high-friction destructive confirm: proceed only if the user types the note title back.
+    // Untitled notes have nothing to type, so fall back to a plain yes/no confirm.
+    this.store.askConfirmTyped=async (name)=>{
+      const title=(name||'').trim();
+      if(!title) return this.store.askConfirm('Permanently delete this untitled note? Every version is scrubbed — irreversible.');
+      const t=await this.store.askPrompt('permanently delete', '', { detail:'Type this note’s name exactly to confirm:\n“'+title+'”' });
+      return t!=null && t.trim().toLowerCase()===title.toLowerCase();
+    };
     // Mobile overlays (sidebar / scrim / full-screen detail) are offset by the bar
     // heights. Those bars now grow when their pinned chips wrap, so publish the live
     // heights as CSS vars (--topbar-h / --statusbar-h) and keep them current with a

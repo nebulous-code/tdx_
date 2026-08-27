@@ -24,6 +24,9 @@ window.NotesView = {
       curCol: 0, goalCol: 0,
       pending: null,          // multi-key operator prefix: 'g' (gg) · 'd' (dd/dw) · 'r' (replace)
       linkList: [],           // links emitted up by <linked-items> ($refs isn't reactive) — n.13
+      // version history (vault version control): the SAME panel the peek drawer (note-detail) shows,
+      // surfaced here as a right-hand drawer so history is reachable from the full editor too (H).
+      historyOpen: false, versions: [], histSel: 0, diffRows: [],
       kbAutoListen: false,    // the app routes keys here (index.html) → onKey drives kbKey
       kbAutofocus: false };   // opening a note lands on the body, not in the title
   },
@@ -278,9 +281,10 @@ window.NotesView = {
           when: () => this.linkList.length > 0 },
         // always available (the grid row disappears when there are no links)
         { id: 'addlink', type: 'input', ref: 'links' },   // i/space → linked-items.focus()
-        // the action row, in the order it renders left→right (§6.2): back · edit/render · delete · save
+        // the action row, in the order it renders left→right (§6.2): back · edit/render · history · delete · save
         { id: 'back',   type: 'button', activate: () => this.closeEditor() },
         { id: 'mode',   type: 'button', activate: () => this.toggleMode() },
+        { id: 'history', type: 'button', activate: () => this.openHistory(), when: () => !!this.sel },
         { id: 'delete', type: 'button', activate: () => this.del() },
         { id: 'save',   type: 'button', activate: () => this.save() },
       ];
@@ -294,8 +298,12 @@ window.NotesView = {
     // on a field row (mirrors tasks, where d fires while nav-ing the detail).
     kbDelegate(e) {
       if (!this.editing || this.mode === 'insert') return false;
+      // the history drawer owns the keyboard while it's open: j/k walk versions, r/Enter restore, esc closes
+      if (this.historyOpen) return this.historyKey(e);
       const el = document.activeElement, tag = (el && el.tagName || '').toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return false;  // typing in a field
+      // H (shift+h) opens version history from anywhere in the note (fields or body)
+      if (e.key === 'H') { e.preventDefault(); this.openHistory(); return true; }
       if (!this.onBody) {
         if (e.key === 'd') { e.preventDefault(); this.del(); return true; }
         return false;                                   // fields: plain KbForm
@@ -704,11 +712,51 @@ window.NotesView = {
     },
     back() {
       this.sel = null; this.mode = 'normal';
+      this.historyOpen = false;   // don't leave the history drawer up over the list
       this.draft = newDraft(); this.saved = newDraft();   // (the old reset dropped folderId — it lied about being clean)
       this.resetCursor();
       this.kbRow = 0;
       this.load();
     },
+    // ---- version history (vault version control) — right-hand drawer, same panel as note-detail ----
+    async openHistory() {
+      if (!this.sel) return;
+      if (this.mode === 'insert') this.mode = 'normal';   // history is a normal-mode overlay; render first
+      this.versions = (await this.store.getNoteHistory(this.sel.id)) || [];
+      this.historyOpen = true;
+      this.histSel = 0;
+      if (this.versions.length) this.selectVersion(0); else this.diffRows = [];
+    },
+    closeHistory() { this.historyOpen = false; },
+    // keys while the drawer owns the keyboard (routed from kbDelegate)
+    historyKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); this.closeHistory(); return true; }
+      if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); this.selectVersion(this.histSel + 1); return true; }
+      if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); this.selectVersion(this.histSel - 1); return true; }
+      if (e.key === 'r' || e.key === 'Enter') { e.preventDefault(); this.doRestore(); return true; }
+      return true;   // swallow everything else while the drawer is up
+    },
+    async selectVersion(i) {
+      if (!this.versions.length) return;
+      this.histSel = Math.max(0, Math.min(this.versions.length - 1, i));
+      const res = await this.store.getNoteVersion(this.sel.id, this.versions[this.histSel].ref);
+      const oldBody = this.stripFrontmatter((res && res.text) || '');
+      this.diffRows = window.LineDiff ? window.LineDiff.diff(oldBody, this.draft.body) : [];
+    },
+    async doRestore() {
+      const v = this.versions[this.histSel]; if (!v) return;
+      if (!(await this.store.askConfirm('Restore this version? A new version is saved on top (reversible).'))) return;
+      const note = await this.store.restoreNoteVersion(this.sel.id, v.ref);
+      if (note) {
+        this.sel = note; this.draft = this.seed(note); this.saved = this.seed(note);
+        this.closeHistory();
+        await Promise.all([this.load(), this.refilter()]);
+        this.$nextTick(() => { this.kbRow = this.bodyStart; this.kbCell = 0; this.kbGoalCol = 0; });
+        this.store.toast('↩ restored version');
+      }
+    },
+    stripFrontmatter(raw) { const m = (raw || '').match(/^---\n[\s\S]*?\n---\n?/); return m ? raw.slice(m[0].length).replace(/^\n/, '') : (raw || ''); },
+    fmtTime(iso) { try { return new Date(iso).toLocaleString(); } catch (e) { return iso; } },
     async sync() {
       const s = await this.store.syncNotes();
       if (s) { await this.load(); this.store.toast(`synced · ${s.updated} updated · ${s.tombstoned} removed`); }
@@ -819,11 +867,33 @@ window.NotesView = {
                the first Esc commits + hands back the ladder, the second leaves the note -->
           <button class="btn" :class="navCls('back')" @click="closeEditor" title="Back to the notes list (esc)">back <span class="mut">{{ mode==='insert' ? '⎋⎋' : '⎋' }}</span></button>
           <button class="btn" :class="navCls('mode')" @click="toggleMode">{{ mode==='insert' ? 'render' : 'edit' }} <span class="mut">{{ mode==='insert' ? '⎋' : 'i' }}</span></button>
+          <button v-if="sel" class="btn" :class="navCls('history')" @click="openHistory" title="Version history (H)">history <span class="mut">H</span></button>
         </div>
         <span class="note-wordcount mut" :title="charCount + ' characters'">{{ wordCount }} word{{ wordCount === 1 ? '' : 's' }}</span>
         <button v-if="sel" class="btn danger" :class="navCls('delete')" @click="del"><span><u>d</u>elete</span></button>
         <button class="btn primary" :class="navCls('save')" @click="save">save ↵</button>
       </div>
     </div>
+
+    <!-- version history: a right-hand drawer over the editor, same panel the peek drawer shows -->
+    <transition name="drawer">
+      <div v-if="historyOpen" class="note-hist-drawer hist-panel">
+        <div class="hist-head"><span class="mut">version history</span><span class="x" @click="closeHistory" title="Close (esc)">✕</span></div>
+        <div v-if="!versions.length" class="mut" style="padding:8px 0;">no saved versions yet — history appears once the vault backup has run.</div>
+        <template v-else>
+          <div class="hist-versions">
+            <div v-for="(v,i) in versions" :key="v.ref" class="hist-row" :class="{on:i===histSel}" @click="selectVersion(i)">
+              <span class="hist-time">{{ fmtTime(v.timestamp) }}</span>
+              <span class="mut hist-msg">{{ v.message }}</span>
+            </div>
+          </div>
+          <div class="hist-diff">
+            <div v-if="!diffRows.length" class="mut">no differences from the current note.</div>
+            <div v-for="(d,i) in diffRows" :key="i" class="hd" :class="'hd-'+d.op">{{ d.op==='add' ? '+' : d.op==='del' ? '−' : ' ' }} {{ d.line }}</div>
+          </div>
+          <div class="mut hist-hint">j/k version · r restore · esc close</div>
+        </template>
+      </div>
+    </transition>
   </div>`,
 };
