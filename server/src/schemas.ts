@@ -720,7 +720,9 @@ export const IgnoreRulesSchema = Type.Object({
 });
 export const IgnorePreviewBodySchema = IgnoreRulesSchema;
 export const IgnorePreviewSchema = Type.Object({
-  paths: Type.Array(Type.String(), { description: 'Vault-relative paths the rules would exclude.' }),
+  paths: Type.Array(Type.String(), {
+    description: 'Vault-relative paths the rules would exclude.',
+  }),
   truncated: Type.Boolean({ description: 'True if the list was capped.' }),
 });
 

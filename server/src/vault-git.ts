@@ -69,7 +69,9 @@ function readIgnoreRules(sqlite: Sqlite): IgnoreRules {
       const r = JSON.parse(row.vault_ignore_rules);
       return {
         globs: Array.isArray(r.globs)
-          ? r.globs.filter((g: unknown): g is string => typeof g === 'string' && g.trim().length > 0)
+          ? r.globs.filter(
+              (g: unknown): g is string => typeof g === 'string' && g.trim().length > 0,
+            )
           : [],
         maxBytes: typeof r.maxBytes === 'number' && r.maxBytes > 0 ? r.maxBytes : null,
       };
@@ -84,7 +86,10 @@ function readIgnoreRules(sqlite: Sqlite): IgnoreRules {
 // a rules change must actively rewrite it (see VaultGit.writeExclude).
 export function writeExcludeFile(gitDir: string, rules: IgnoreRules): void {
   fs.mkdirSync(path.join(gitDir, 'info'), { recursive: true });
-  fs.writeFileSync(path.join(gitDir, 'info', 'exclude'), `${[...IGNORE, ...rules.globs].join('\n')}\n`);
+  fs.writeFileSync(
+    path.join(gitDir, 'info', 'exclude'),
+    `${[...IGNORE, ...rules.globs].join('\n')}\n`,
+  );
 }
 
 // ---- git plumbing --------------------------------------------------------
@@ -104,13 +109,21 @@ async function runGit(args: string[], gitDir: string, workTree: string): Promise
 
 // Run git against the repo alone (no work-tree) — for object/ref ops (filter, gc, reflog)
 // that must not consult or touch the live vault. GIT_WORK_TREE is deliberately absent.
-async function runGitBare(args: string[], gitDir: string, extraEnv: Record<string, string> = {}): Promise<string> {
+async function runGitBare(
+  args: string[],
+  gitDir: string,
+  extraEnv: Record<string, string> = {},
+): Promise<string> {
   const gd = path.resolve(gitDir);
-  const { stdout } = await execFileP('git', ['-c', 'core.bare=true', '-c', `safe.directory=${gd}`, ...args], {
-    cwd: gd,
-    env: { ...process.env, GIT_DIR: gd, ...extraEnv },
-    maxBuffer: 64 * 1024 * 1024,
-  });
+  const { stdout } = await execFileP(
+    'git',
+    ['-c', 'core.bare=true', '-c', `safe.directory=${gd}`, ...args],
+    {
+      cwd: gd,
+      env: { ...process.env, GIT_DIR: gd, ...extraEnv },
+      maxBuffer: 64 * 1024 * 1024,
+    },
+  );
   return stdout;
 }
 
@@ -145,7 +158,8 @@ export async function commitVault(opts: {
     for (const rel of staged) {
       try {
         const st = fs.statSync(path.join(vaultDir, rel));
-        if (st.isFile() && st.size > rules.maxBytes) await runGit(['reset', '-q', '--', rel], gitDir, vaultDir);
+        if (st.isFile() && st.size > rules.maxBytes)
+          await runGit(['reset', '-q', '--', rel], gitDir, vaultDir);
       } catch {
         /* file vanished between add and stat — nothing to unstage */
       }
@@ -160,7 +174,16 @@ export async function commitVault(opts: {
   // 5. commit with an explicit identity (no persistent git config needed)
   const msg = `vault snapshot ${now} — ${changed} changed (${reason})`;
   await runGit(
-    ['-c', `user.name=${committer.name}`, '-c', `user.email=${committer.email}`, 'commit', '--quiet', '-m', msg],
+    [
+      '-c',
+      `user.name=${committer.name}`,
+      '-c',
+      `user.email=${committer.email}`,
+      'commit',
+      '--quiet',
+      '-m',
+      msg,
+    ],
     gitDir,
     vaultDir,
   );
@@ -247,7 +270,16 @@ async function purgeInRepo(gitDir: string, vaultDir: string, gitPath: string): P
   await runGit(['add', '-A'], gd, wt);
   if ((await runGit(['status', '--porcelain'], gd, wt)).trim().length > 0) {
     await runGit(
-      ['-c', 'user.name=tdx', '-c', 'user.email=tdx@localhost', 'commit', '--quiet', '-m', 'pre-purge flush'],
+      [
+        '-c',
+        'user.name=tdx',
+        '-c',
+        'user.email=tdx@localhost',
+        'commit',
+        '--quiet',
+        '-m',
+        'pre-purge flush',
+      ],
       gd,
       wt,
     );
@@ -256,7 +288,15 @@ async function purgeInRepo(gitDir: string, vaultDir: string, gitPath: string): P
     // filter-repo works on the object DB — GIT_DIR only, no work-tree; --force (not a fresh clone).
     await execFileP(
       'git',
-      ['filter-repo', '--path', gitPath, '--invert-paths', '--force', '--replace-refs', 'delete-no-add'],
+      [
+        'filter-repo',
+        '--path',
+        gitPath,
+        '--invert-paths',
+        '--force',
+        '--replace-refs',
+        'delete-no-add',
+      ],
       { cwd: gd, env: { ...process.env, GIT_DIR: gd }, maxBuffer: 64 * 1024 * 1024 },
     );
   } else {
@@ -281,7 +321,12 @@ async function purgeInRepo(gitDir: string, vaultDir: string, gitPath: string): P
         ],
         {
           cwd: wt,
-          env: { ...process.env, GIT_DIR: gd, GIT_WORK_TREE: wt, FILTER_BRANCH_SQUELCH_WARNING: '1' },
+          env: {
+            ...process.env,
+            GIT_DIR: gd,
+            GIT_WORK_TREE: wt,
+            FILTER_BRANCH_SQUELCH_WARNING: '1',
+          },
           maxBuffer: 64 * 1024 * 1024,
         },
       );
@@ -322,7 +367,9 @@ export function createVaultGit(sqlite: Sqlite): VaultGit {
   let suspended = false;
 
   const repo = (): { gitDir: string; vaultDir: string } | null => {
-    const cfg = sqlite.prepare('SELECT * FROM backup_config WHERE id = 1').get() as BackupConfigTable | undefined;
+    const cfg = sqlite.prepare('SELECT * FROM backup_config WHERE id = 1').get() as
+      | BackupConfigTable
+      | undefined;
     if (!cfg || !cfg.enabled) return null;
     return { gitDir: path.join(cfg.dir, 'vault.git'), vaultDir: vaultBase() };
   };

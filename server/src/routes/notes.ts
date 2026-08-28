@@ -38,7 +38,11 @@ import {
   unarchiveNote,
   updateNote,
 } from '../services/notes.js';
-import { previewIgnore, readIgnoreRulesForOwner, writeIgnoreRules } from '../services/vault-settings.js';
+import {
+  previewIgnore,
+  readIgnoreRulesForOwner,
+  writeIgnoreRules,
+} from '../services/vault-settings.js';
 import { denyAccess } from './_access.js';
 
 export default async function noteRoutes(app: FastifyInstance): Promise<void> {
@@ -146,7 +150,8 @@ export default async function noteRoutes(app: FastifyInstance): Promise<void> {
       preHandler: app.authenticate,
       schema: {
         summary: 'Get vault ignore rules',
-        description: 'The user-configured backup ignore globs + size threshold (on top of the fixed cruft list).',
+        description:
+          'The user-configured backup ignore globs + size threshold (on top of the fixed cruft list).',
         tags: ['Notes'],
         response: { 200: IgnoreRulesSchema },
       },
@@ -167,7 +172,8 @@ export default async function noteRoutes(app: FastifyInstance): Promise<void> {
         response: { 200: IgnoreRulesSchema, 400: ErrorSchema },
       },
     },
-    async (request) => writeIgnoreRules(app, request.body as { globs: string[]; maxBytes: number | null }),
+    async (request) =>
+      writeIgnoreRules(app, request.body as { globs: string[]; maxBytes: number | null }),
   );
 
   app.post(
@@ -176,7 +182,8 @@ export default async function noteRoutes(app: FastifyInstance): Promise<void> {
       preHandler: app.authenticate,
       schema: {
         summary: 'Preview vault ignore rules',
-        description: 'Dry run — the vault paths the proposed rules would exclude from the backup. No writes.',
+        description:
+          'Dry run — the vault paths the proposed rules would exclude from the backup. No writes.',
         tags: ['Notes'],
         body: IgnorePreviewBodySchema,
         response: { 200: IgnorePreviewSchema },
@@ -264,7 +271,8 @@ export default async function noteRoutes(app: FastifyInstance): Promise<void> {
       preHandler: app.authenticate,
       schema: {
         summary: 'Note version history',
-        description: "The note's past versions (snapshot commits that touched its file), newest first.",
+        description:
+          "The note's past versions (snapshot commits that touched its file), newest first.",
         tags: ['Notes'],
         params: IdParamSchema,
         response: { 200: NoteHistorySchema, 403: ErrorSchema, 404: ErrorSchema },
@@ -285,7 +293,8 @@ export default async function noteRoutes(app: FastifyInstance): Promise<void> {
       preHandler: app.authenticate,
       schema: {
         summary: 'Get a past version',
-        description: 'The note markdown as of a given version ref (the client renders the diff vs current).',
+        description:
+          'The note markdown as of a given version ref (the client renders the diff vs current).',
         tags: ['Notes'],
         params: IdRefParamSchema,
         response: { 200: NoteVersionSchema, 403: ErrorSchema, 404: ErrorSchema },
@@ -310,7 +319,8 @@ export default async function noteRoutes(app: FastifyInstance): Promise<void> {
       preHandler: app.requireWrite,
       schema: {
         summary: 'Restore a past version',
-        description: 'Roll the note back to a version — lands as a new commit on top (reversible). Requires **write** scope.',
+        description:
+          'Roll the note back to a version — lands as a new commit on top (reversible). Requires **write** scope.',
         tags: ['Notes'],
         params: IdParamSchema,
         body: NoteRestoreBodySchema,
@@ -320,7 +330,8 @@ export default async function noteRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const { id } = request.params as { id: string };
       if (await denyAccess(app, request, reply, 'note', id, 'write')) return;
-      if (!app.vaultGit.enabled()) return reply.code(409).send({ error: 'vault backups are disabled' });
+      if (!app.vaultGit.enabled())
+        return reply.code(409).send({ error: 'vault backups are disabled' });
       try {
         const note = await restoreNoteVersion(
           app.db,
@@ -346,7 +357,8 @@ export default async function noteRoutes(app: FastifyInstance): Promise<void> {
       preHandler: app.requireWrite,
       schema: {
         summary: 'Restore an archived note',
-        description: 'Bring a soft-deleted note back (restores its most recent version). Requires **write** scope.',
+        description:
+          'Bring a soft-deleted note back (restores its most recent version). Requires **write** scope.',
         tags: ['Notes'],
         params: IdParamSchema,
         response: { 200: NoteSchema, 404: ErrorSchema, 409: ErrorSchema },
@@ -354,7 +366,8 @@ export default async function noteRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      if (!app.vaultGit.enabled()) return reply.code(409).send({ error: 'vault backups are disabled' });
+      if (!app.vaultGit.enabled())
+        return reply.code(409).send({ error: 'vault backups are disabled' });
       const note = await unarchiveNote(app.db, app.vaultGit, request.user!.id, id);
       if (!note) return reply.code(404).send({ error: 'not found' });
       return reply.send(note);
@@ -380,7 +393,8 @@ export default async function noteRoutes(app: FastifyInstance): Promise<void> {
       if (!relPath) return reply.code(404).send({ error: 'not found' });
       // permanent-delete follows archive: refuse a live note so the two-step is structural
       const live = await getNote(app.db, request.user!.id, id);
-      if (live) return reply.code(409).send({ error: 'archive the note before deleting it permanently' });
+      if (live)
+        return reply.code(409).send({ error: 'archive the note before deleting it permanently' });
       await purgeNote(app.db, app.vaultGit, request.user!.id, id);
       return reply.code(204).send();
     },

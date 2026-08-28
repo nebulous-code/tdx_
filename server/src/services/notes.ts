@@ -11,6 +11,7 @@ import { sql } from 'kysely';
 import type { DB } from '../db.js';
 import { allocateReadableId, newId } from '../ids.js';
 import { type NoteJson, rowToNote } from '../schemas.js';
+import type { VaultGit } from '../vault-git.js';
 import { abs, vaultBase, vaultRoot } from '../vault.js';
 import { reconcileFolders } from './folders.js';
 import {
@@ -22,7 +23,6 @@ import {
   setFrontmatterId,
 } from './markdown.js';
 import { resolveReadable } from './readableIds.js';
-import type { VaultGit } from '../vault-git.js';
 
 // ---- FTS keyword index (derived, one row per note) -------------------------
 async function refreshFts(
@@ -577,7 +577,10 @@ export async function purgeNote(
     .deleteFrom('note_links')
     .where('owner_id', '=', owner)
     .where((eb) =>
-      eb.or([eb('origin_note_id', '=', id), eb.and([eb('target_type', '=', 'note'), eb('target_id', '=', id)])]),
+      eb.or([
+        eb('origin_note_id', '=', id),
+        eb.and([eb('target_type', '=', 'note'), eb('target_id', '=', id)]),
+      ]),
     )
     .execute();
   await db.deleteFrom('note_labels').where('note_id', '=', id).execute();

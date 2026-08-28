@@ -10,8 +10,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 import { openDatabase } from '../src/db.js';
-import { commitVault, createVaultGit, snapshotVault } from '../src/vault-git.js';
 import type { Sqlite } from '../src/db.js';
+import { commitVault, createVaultGit, snapshotVault } from '../src/vault-git.js';
 
 const committer = { name: 'alice', email: 'alice@tdx.local' };
 const tmpDirs: string[] = [];
@@ -97,7 +97,12 @@ test('commitVault: size threshold unstages an over-size file (Feature C)', async
   fs.writeFileSync(path.join(vaultDir, 'owner1', 'small.md'), 'hi\n'); // 3 bytes
   fs.writeFileSync(path.join(vaultDir, 'owner1', 'big.md'), 'x'.repeat(100)); // 100 bytes
   const res = await commitVault({
-    vaultDir, gitDir, committer, reason: 'test', now: 't', ignoreRules: { globs: [], maxBytes: 10 },
+    vaultDir,
+    gitDir,
+    committer,
+    reason: 'test',
+    now: 't',
+    ignoreRules: { globs: [], maxBytes: 10 },
   });
   assert.equal(res.committed, true);
   const tracked = git(gitDir, ['ls-files']);
@@ -112,7 +117,12 @@ test('commitVault: user ignore globs exclude matching files (Feature C)', async 
   fs.writeFileSync(path.join(vaultDir, 'owner1', 'keep.md'), 'k\n');
   fs.writeFileSync(path.join(vaultDir, 'owner1', 'skip.pdf'), 'pdf');
   const res = await commitVault({
-    vaultDir, gitDir, committer, reason: 'test', now: 't', ignoreRules: { globs: ['*.pdf'], maxBytes: null },
+    vaultDir,
+    gitDir,
+    committer,
+    reason: 'test',
+    now: 't',
+    ignoreRules: { globs: ['*.pdf'], maxBytes: null },
   });
   assert.equal(res.committed, true);
   const tracked = git(gitDir, ['ls-files']);

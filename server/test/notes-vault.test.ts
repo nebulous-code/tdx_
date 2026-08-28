@@ -19,7 +19,12 @@ let vault: string;
 let ownerId: string;
 
 const j = (method: string, url: string, payload?: object) =>
-  app.inject({ method: method as 'GET', url, headers: { cookie }, ...(payload ? { payload } : {}) });
+  app.inject({
+    method: method as 'GET',
+    url,
+    headers: { cookie },
+    ...(payload ? { payload } : {}),
+  });
 const snapshot = () => snapshotVault(ctx.sqlite, { reason: 'test' });
 
 before(async () => {
@@ -76,14 +81,19 @@ test('archive → list → unarchive', async () => {
   await snapshot(); // commit the deletion
 
   const arch = (await j('GET', '/api/notes/archived')).json();
-  assert.ok(arch.some((a: { id: string }) => a.id === n.id), 'shows in archive');
+  assert.ok(
+    arch.some((a: { id: string }) => a.id === n.id),
+    'shows in archive',
+  );
   assert.equal((await j('GET', `/api/notes/${n.id}`)).statusCode, 404, 'hidden from live get');
 
   const back = await j('POST', `/api/notes/${n.id}/unarchive`);
   assert.equal(back.statusCode, 200);
   assert.equal(back.json().body, 'hello', 'restored content');
   assert.equal((await j('GET', `/api/notes/${n.id}`)).statusCode, 200, 'live again');
-  assert.ok(!(await j('GET', '/api/notes/archived')).json().some((a: { id: string }) => a.id === n.id));
+  assert.ok(
+    !(await j('GET', '/api/notes/archived')).json().some((a: { id: string }) => a.id === n.id),
+  );
 });
 
 test('permanent delete: archive-first required, then purges history + record', async () => {
@@ -98,7 +108,9 @@ test('permanent delete: archive-first required, then purges history + record', a
   const res = await j('DELETE', `/api/notes/${n.id}/permanent`);
   assert.equal(res.statusCode, 204);
 
-  assert.ok(!(await j('GET', '/api/notes/archived')).json().some((a: { id: string }) => a.id === n.id));
+  assert.ok(
+    !(await j('GET', '/api/notes/archived')).json().some((a: { id: string }) => a.id === n.id),
+  );
   assert.equal((await j('GET', `/api/notes/${n.id}/history`)).statusCode, 404, 'record gone');
 });
 
@@ -122,7 +134,10 @@ test('ignore rules: get default, set, persist, preview', async () => {
   assert.deepEqual(def.globs, []);
   assert.equal(def.maxBytes, null);
 
-  const put = await j('PUT', '/api/notes/vault/ignore-rules', { globs: ['*.pdf', 'scratch/'], maxBytes: 1000 });
+  const put = await j('PUT', '/api/notes/vault/ignore-rules', {
+    globs: ['*.pdf', 'scratch/'],
+    maxBytes: 1000,
+  });
   assert.equal(put.statusCode, 200);
   assert.deepEqual(put.json().globs, ['*.pdf', 'scratch/']);
   assert.equal(put.json().maxBytes, 1000);
@@ -131,7 +146,9 @@ test('ignore rules: get default, set, persist, preview', async () => {
   assert.deepEqual(got.globs, ['*.pdf', 'scratch/']);
 
   fs.writeFileSync(path.join(vault, ownerId, 'big.pdf'), 'x');
-  const prev = (await j('POST', '/api/notes/vault/ignore-preview', { globs: ['*.pdf'], maxBytes: null })).json();
+  const prev = (
+    await j('POST', '/api/notes/vault/ignore-preview', { globs: ['*.pdf'], maxBytes: null })
+  ).json();
   assert.ok(prev.paths.includes('big.pdf'), 'preview lists the matching file');
   assert.equal(prev.truncated, false);
 });
