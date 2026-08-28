@@ -7085,6 +7085,287 @@
         }
       }
     },
+    "/api/notes/archived": {
+      "get": {
+        "summary": "List archived notes",
+        "tags": [
+          "Notes"
+        ],
+        "description": "Soft-deleted (tombstoned) notes — recoverable from git history. Backs the archive review screen.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "title",
+                      "path",
+                      "readableId",
+                      "updatedAt"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "path": {
+                        "type": "string"
+                      },
+                      "readableId": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "updatedAt": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notes/vault/ignore-rules": {
+      "get": {
+        "summary": "Get vault ignore rules",
+        "tags": [
+          "Notes"
+        ],
+        "description": "The user-configured backup ignore globs + size threshold (on top of the fixed cruft list).",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "globs",
+                    "maxBytes"
+                  ],
+                  "properties": {
+                    "globs": {
+                      "description": "Extra ignore globs, appended to the fixed OS/editor-cruft list.",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "maxBytes": {
+                      "description": "Skip files larger than this many bytes from the backup; null = no cap.",
+                      "anyOf": [
+                        {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Set vault ignore rules",
+        "tags": [
+          "Notes"
+        ],
+        "description": "Persist extra ignore globs + a max file size and rewrite the repo exclude so it applies on the next snapshot. Requires **write** scope.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "globs",
+                  "maxBytes"
+                ],
+                "properties": {
+                  "globs": {
+                    "description": "Extra ignore globs, appended to the fixed OS/editor-cruft list.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "maxBytes": {
+                    "description": "Skip files larger than this many bytes from the backup; null = no cap.",
+                    "anyOf": [
+                      {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "globs",
+                    "maxBytes"
+                  ],
+                  "properties": {
+                    "globs": {
+                      "description": "Extra ignore globs, appended to the fixed OS/editor-cruft list.",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "maxBytes": {
+                      "description": "Skip files larger than this many bytes from the backup; null = no cap.",
+                      "anyOf": [
+                        {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error response body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "description": "Error response body.",
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "field": {
+                      "description": "The offending input field, on validation errors.",
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "error": "not found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notes/vault/ignore-preview": {
+      "post": {
+        "summary": "Preview vault ignore rules",
+        "tags": [
+          "Notes"
+        ],
+        "description": "Dry run — the vault paths the proposed rules would exclude from the backup. No writes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "globs",
+                  "maxBytes"
+                ],
+                "properties": {
+                  "globs": {
+                    "description": "Extra ignore globs, appended to the fixed OS/editor-cruft list.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "maxBytes": {
+                    "description": "Skip files larger than this many bytes from the backup; null = no cap.",
+                    "anyOf": [
+                      {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "paths",
+                    "truncated"
+                  ],
+                  "properties": {
+                    "paths": {
+                      "description": "Vault-relative paths the rules would exclude.",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "truncated": {
+                      "description": "True if the list was capped.",
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/notes/{id}": {
       "get": {
         "summary": "Get a note",
@@ -7528,6 +7809,700 @@
             }
           },
           "404": {
+            "description": "Error response body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "description": "Error response body.",
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "field": {
+                      "description": "The offending input field, on validation errors.",
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "error": "not found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notes/{id}/history": {
+      "get": {
+        "summary": "Note version history",
+        "tags": [
+          "Notes"
+        ],
+        "description": "The note's past versions (snapshot commits that touched its file), newest first.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "The entity id (a client-generated UUID)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "ref",
+                      "timestamp",
+                      "message"
+                    ],
+                    "properties": {
+                      "ref": {
+                        "type": "string"
+                      },
+                      "timestamp": {
+                        "description": "ISO author date of the snapshot commit.",
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error response body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "description": "Error response body.",
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "field": {
+                      "description": "The offending input field, on validation errors.",
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "error": "not found"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error response body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "description": "Error response body.",
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "field": {
+                      "description": "The offending input field, on validation errors.",
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "error": "not found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notes/{id}/history/{ref}": {
+      "get": {
+        "summary": "Get a past version",
+        "tags": [
+          "Notes"
+        ],
+        "description": "The note markdown as of a given version ref (the client renders the diff vs current).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "The note id."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "description": "A git commit ref (hex sha) from the note history."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "text"
+                  ],
+                  "properties": {
+                    "text": {
+                      "description": "The note markdown as of this version.",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error response body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "description": "Error response body.",
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "field": {
+                      "description": "The offending input field, on validation errors.",
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "error": "not found"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error response body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "description": "Error response body.",
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "field": {
+                      "description": "The offending input field, on validation errors.",
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "error": "not found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notes/{id}/restore": {
+      "post": {
+        "summary": "Restore a past version",
+        "tags": [
+          "Notes"
+        ],
+        "description": "Roll the note back to a version — lands as a new commit on top (reversible). Requires **write** scope.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ref"
+                ],
+                "properties": {
+                  "ref": {
+                    "description": "The version ref to restore (a new commit lands on top).",
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "The entity id (a client-generated UUID)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A markdown note. `body` is read live from the vault file (not stored in the DB); `path` is relative to the vault root and `folderId` is derived from its directory.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "A markdown note. `body` is read live from the vault file (not stored in the DB); `path` is relative to the vault root and `folderId` is derived from its directory.",
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "ownerId",
+                    "path",
+                    "folderId",
+                    "title",
+                    "body",
+                    "reviewAt",
+                    "labels",
+                    "createdAt",
+                    "updatedAt",
+                    "readableId"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "ownerId": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "folderId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "reviewAt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "labels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "readableId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "example": {
+                  "id": "45957642-4ace-4243-8c9e-b89f420e1c76",
+                  "ownerId": "u_1",
+                  "path": "Garden/Tomato care log.md",
+                  "folderId": "0ea5…",
+                  "title": "Tomato care log",
+                  "body": "# Tomatoes\n\nWater deeply twice a week.\n",
+                  "reviewAt": null,
+                  "labels": [
+                    "garden"
+                  ],
+                  "createdAt": "2026-07-15T09:00:00.000Z",
+                  "updatedAt": "2026-07-15T09:00:00.000Z",
+                  "readableId": "n_0011"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error response body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "description": "Error response body.",
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "field": {
+                      "description": "The offending input field, on validation errors.",
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "error": "not found"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error response body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "description": "Error response body.",
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "field": {
+                      "description": "The offending input field, on validation errors.",
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "error": "not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error response body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "description": "Error response body.",
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "field": {
+                      "description": "The offending input field, on validation errors.",
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "error": "not found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notes/{id}/unarchive": {
+      "post": {
+        "summary": "Restore an archived note",
+        "tags": [
+          "Notes"
+        ],
+        "description": "Bring a soft-deleted note back (restores its most recent version). Requires **write** scope.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "The entity id (a client-generated UUID)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A markdown note. `body` is read live from the vault file (not stored in the DB); `path` is relative to the vault root and `folderId` is derived from its directory.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "A markdown note. `body` is read live from the vault file (not stored in the DB); `path` is relative to the vault root and `folderId` is derived from its directory.",
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "ownerId",
+                    "path",
+                    "folderId",
+                    "title",
+                    "body",
+                    "reviewAt",
+                    "labels",
+                    "createdAt",
+                    "updatedAt",
+                    "readableId"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "ownerId": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "folderId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "reviewAt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "labels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "readableId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "example": {
+                  "id": "45957642-4ace-4243-8c9e-b89f420e1c76",
+                  "ownerId": "u_1",
+                  "path": "Garden/Tomato care log.md",
+                  "folderId": "0ea5…",
+                  "title": "Tomato care log",
+                  "body": "# Tomatoes\n\nWater deeply twice a week.\n",
+                  "reviewAt": null,
+                  "labels": [
+                    "garden"
+                  ],
+                  "createdAt": "2026-07-15T09:00:00.000Z",
+                  "updatedAt": "2026-07-15T09:00:00.000Z",
+                  "readableId": "n_0011"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error response body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "description": "Error response body.",
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "field": {
+                      "description": "The offending input field, on validation errors.",
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "error": "not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error response body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "description": "Error response body.",
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "field": {
+                      "description": "The offending input field, on validation errors.",
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "error": "not found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notes/{id}/permanent": {
+      "delete": {
+        "summary": "Permanently delete a note",
+        "tags": [
+          "Notes"
+        ],
+        "description": "Obliterate every version of the note from git history + hard-delete the record. Irreversible; the note must be archived first. Requires **write** scope.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "The entity id (a client-generated UUID)."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Default Response"
+          },
+          "404": {
+            "description": "Error response body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "description": "Error response body.",
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "field": {
+                      "description": "The offending input field, on validation errors.",
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "error": "not found"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "Error response body.",
             "content": {
               "application/json": {

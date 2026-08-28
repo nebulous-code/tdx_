@@ -24,6 +24,7 @@ export interface ConfigPatch {
   dir?: string;
   time_of_day?: string;
   retention?: number;
+  vault_ignore_rules?: string | null; // 015: JSON ignore rules (Feature C); null clears
 }
 export interface Backups {
   getConfig(): BackupConfigTable;
@@ -225,12 +226,14 @@ export function createBackups(sqlite: Sqlite): Backups {
       dir: patch.dir != null ? String(patch.dir) : cur.dir,
       time_of_day: patch.time_of_day != null ? String(patch.time_of_day) : cur.time_of_day,
       retention: patch.retention != null ? Number(patch.retention) : cur.retention,
+      vault_ignore_rules:
+        patch.vault_ignore_rules !== undefined ? patch.vault_ignore_rules : cur.vault_ignore_rules,
     };
     sqlite
       .prepare(
-        'UPDATE backup_config SET enabled = ?, dir = ?, time_of_day = ?, retention = ? WHERE id = 1',
+        'UPDATE backup_config SET enabled = ?, dir = ?, time_of_day = ?, retention = ?, vault_ignore_rules = ? WHERE id = 1',
       )
-      .run(next.enabled, next.dir, next.time_of_day, next.retention);
+      .run(next.enabled, next.dir, next.time_of_day, next.retention, next.vault_ignore_rules);
     arm();
     return getConfig();
   }

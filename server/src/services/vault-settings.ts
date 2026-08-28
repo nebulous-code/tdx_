@@ -1,0 +1,138 @@
+// services/vault-settings.ts — Feature C: user-configurable vault-backup ignore rules
+// (docs/VAULT_VERSION_CONTROL.md). Extra globs + a size threshold, persisted in
+// backup_config.vault_ignore_rules (JSON) and mirrored into <gitDir>/info/exclude via
+// vaultGit.writeExclude(); the size threshold is enforced at staging time (vault-git.ts).
+//
+// The preview is a dry-run matcher over the owner's vault. It's advisory — git's own
+// info/exclude does the real exclusion — so a pragmatic gitignore-ish matcher is enough.
+
+import fs from 'node:fs';
+import path from 'node:path';
+import type { FastifyInstance } from 'fastify';
+import type { IgnoreRules } from '../vault-git.js';
+import { vaultRoot } from '../vault.js';
+
+const PREVIEW_CAP = 500;
+
+export function parseIgnoreRules(raw: string | null): IgnoreRules {
+  if (raw) {
+    try {
+      const r = JSON.parse(raw);
+      return {
+        globs: Array.isArray(r.globs)
+          ? r.globs.filter(
+              (g: unknown): g is string => typeof g === 'string' && g.trim().length > 0,
+            )
+          : [],
+        maxBytes: typeof r.maxBytes === 'number' && r.maxBytes > 0 ? Math.floor(r.maxBytes) : null,
+      };
+    } catch {
+      /* malformed → defaults */
+    }
+  }
+  return { globs: [], maxBytes: null };
+}
+
+// Normalize client input: dedupe non-empty globs (drop comments), floor a positive maxBytes.
+function cleanRules(input: { globs?: unknown; maxBytes?: unknown }): IgnoreRules {
+  const globs = Array.isArray(input.globs)
+    ? [
+        ...new Set(
+          input.globs
+            .map((g) => String(g).trim())
+            .filter((g) => g.length > 0 && !g.startsWith('#')),
+        ),
+      ]
+    : [];
+  const maxBytes =
+    typeof input.maxBytes === 'number' && input.maxBytes > 0 ? Math.floor(input.maxBytes) : null;
+  return { globs, maxBytes };
+}
+
+export function readIgnoreRulesForOwner(app: FastifyInstance): IgnoreRules {
+  return parseIgnoreRules(app.backups.getConfig().vault_ignore_rules ?? null);
+}
+
+export function writeIgnoreRules(
+  app: FastifyInstance,
+  input: { globs: string[]; maxBytes: number | null },
+): IgnoreRules {
+  const rules = cleanRules(input);
+  app.backups.updateConfig({ vault_ignore_rules: JSON.stringify(rules) });
+  app.vaultGit.writeExclude(); // rewrite info/exclude so it applies on the next snapshot
+  return rules;
+}
+
+// ---- preview (advisory) ----------------------------------------------------
+function globToRe(glob: string): RegExp {
+  const re = glob
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*\*|\*|\?/g, (m) => (m === '**' ? '.*' : m === '*' ? '[^/]*' : '[^/]'));
+  return new RegExp(`^${re}$`);
+}
+
+export function globMatches(pattern: string, relPath: string): boolean {
+  let p = pattern.trim();
+  if (!p || p.startsWith('#')) return false;
+  const dirOnly = p.endsWith('/');
+  if (dirOnly) p = p.replace(/\/+$/, '');
+  if (p.startsWith('/')) p = p.slice(1);
+  const hasSlash = p.includes('/');
+  if (dirOnly) {
+    if (hasSlash) return relPath === p || relPath.startsWith(`${p}/`);
+    const re = globToRe(p);
+    return relPath
+      .split('/')
+      .slice(0, -1)
+      .some((seg) => re.test(seg)); // any ancestor dir segment
+  }
+  if (hasSlash) return globToRe(p).test(relPath);
+  return globToRe(p).test(relPath.split('/').pop() ?? ''); // bare pattern → basename
+}
+
+export function previewIgnore(
+  owner: string,
+  input: { globs: string[]; maxBytes: number | null },
+): { paths: string[]; truncated: boolean } {
+  const rules = cleanRules(input);
+  const root = vaultRoot(owner);
+  const out: string[] = [];
+  let truncated = false;
+
+  const walk = (dir: string): void => {
+    if (truncated) return;
+    let ents: fs.Dirent[];
+    try {
+      ents = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const ent of ents) {
+      if (out.length >= PREVIEW_CAP) {
+        truncated = true;
+        return;
+      }
+      const full = path.join(dir, ent.name);
+      const rel = path.relative(root, full);
+      if (ent.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!ent.isFile()) continue;
+      let size = 0;
+      try {
+        size = fs.statSync(full).size;
+      } catch {
+        /* vanished */
+      }
+      if (
+        (rules.maxBytes != null && size > rules.maxBytes) ||
+        rules.globs.some((g) => globMatches(g, rel))
+      ) {
+        out.push(rel);
+      }
+    }
+  };
+  walk(root);
+  return { paths: out, truncated };
+}

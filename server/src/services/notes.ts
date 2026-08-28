@@ -11,6 +11,7 @@ import { sql } from 'kysely';
 import type { DB } from '../db.js';
 import { allocateReadableId, newId } from '../ids.js';
 import { type NoteJson, rowToNote } from '../schemas.js';
+import type { VaultGit } from '../vault-git.js';
 import { abs, vaultBase, vaultRoot } from '../vault.js';
 import { reconcileFolders } from './folders.js';
 import {
@@ -19,6 +20,7 @@ import {
   injectFrontmatterId,
   parseNote,
   serializeNote,
+  setFrontmatterId,
 } from './markdown.js';
 import { resolveReadable } from './readableIds.js';
 
@@ -471,6 +473,118 @@ export async function deleteNote(db: DB, owner: string, id: string): Promise<boo
     .where('owner_id', '=', owner)
     .where('origin_note_id', '=', id)
     .execute();
+  return true;
+}
+
+// ---- version control (docs/VAULT_VERSION_CONTROL.md) -----------------------
+
+// Raw note row incl. tombstoned — for resolving a note's path where getNote's tombstone
+// filter would hide it (history / restore / unarchive / purge all need the file path).
+async function noteRow(db: DB, owner: string, id: string) {
+  return db
+    .selectFrom('notes')
+    .selectAll()
+    .where('id', '=', id)
+    .where('owner_id', '=', owner)
+    .executeTakeFirst();
+}
+
+// The note's vault-relative path regardless of tombstone (getNote hides archived notes),
+// owner-scoped — for the history endpoints. null = no such note for this owner.
+export async function noteRelPath(db: DB, owner: string, id: string): Promise<string | null> {
+  const row = await noteRow(db, owner, id);
+  return row ? row.path : null;
+}
+
+// Feature A — roll a note back to a past version. Fetch the version's text, stamp it with
+// the note's CURRENT id (setFrontmatterId: a pre-id version can't fork a new note, and no
+// duplicate id line), write the file, reconcile the DB shadow. scanFile clears tombstoned,
+// so this doubles as the un-archive path. The write lands as a new commit on the next
+// debounced snapshot — non-destructive and itself reversible.
+export async function restoreNoteVersion(
+  db: DB,
+  vaultGit: VaultGit,
+  owner: string,
+  id: string,
+  ref: string,
+): Promise<NoteJson | null> {
+  const row = await noteRow(db, owner, id);
+  if (!row) return null;
+  const text = await vaultGit.versionText(owner, row.path, ref);
+  const absPath = abs(owner, row.path);
+  fs.mkdirSync(path.dirname(absPath), { recursive: true }); // folder may be gone if the note was archived
+  fs.writeFileSync(absPath, setFrontmatterId(text, id));
+  await scanFile(db, owner, row.path);
+  vaultGit.scheduleSnapshot();
+  return getNote(db, owner, id);
+}
+
+export interface ArchivedNote {
+  id: string;
+  title: string;
+  path: string;
+  readableId: string | null;
+  updatedAt: string;
+}
+
+// Feature B — the archive: soft-deleted (tombstoned) notes, recoverable from git history.
+export async function listArchived(db: DB, owner: string): Promise<ArchivedNote[]> {
+  const rows = await db
+    .selectFrom('notes')
+    .select(['id', 'title', 'path', 'readable_id', 'updated_at'])
+    .where('owner_id', '=', owner)
+    .where('tombstoned', '=', 1)
+    .orderBy('updated_at', 'desc')
+    .execute();
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    path: r.path,
+    readableId: r.readable_id,
+    updatedAt: r.updated_at,
+  }));
+}
+
+// Feature B — bring a soft-deleted note back: restore its most-recent LIVE version (the
+// newest commit where the file still existed — not HEAD, which is the deletion itself).
+export async function unarchiveNote(
+  db: DB,
+  vaultGit: VaultGit,
+  owner: string,
+  id: string,
+): Promise<NoteJson | null> {
+  const row = await noteRow(db, owner, id);
+  if (!row || !row.tombstoned) return null;
+  const ref = await vaultGit.lastLiveRef(owner, row.path);
+  if (!ref) return null; // no committed version to recover
+  return restoreNoteVersion(db, vaultGit, owner, id, ref);
+}
+
+// Feature B — permanent delete: obliterate every version of the note's file from git
+// history (space / secret scrubbing), then hard-delete the DB row + FTS + links + labels.
+// The only place a note row is truly removed. The route requires the note be archived first.
+export async function purgeNote(
+  db: DB,
+  vaultGit: VaultGit,
+  owner: string,
+  id: string,
+): Promise<boolean> {
+  const row = await noteRow(db, owner, id);
+  if (!row) return false;
+  await vaultGit.purgePath(owner, row.path); // history rewrite + gc (commit loop paused)
+  await sql`DELETE FROM notes_fts WHERE note_id = ${id}`.execute(db);
+  await db
+    .deleteFrom('note_links')
+    .where('owner_id', '=', owner)
+    .where((eb) =>
+      eb.or([
+        eb('origin_note_id', '=', id),
+        eb.and([eb('target_type', '=', 'note'), eb('target_id', '=', id)]),
+      ]),
+    )
+    .execute();
+  await db.deleteFrom('note_labels').where('note_id', '=', id).execute();
+  await db.deleteFrom('notes').where('id', '=', id).where('owner_id', '=', owner).execute();
   return true;
 }
 

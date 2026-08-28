@@ -15,6 +15,11 @@ services:
       # See docs/DEPLOY.md for the ordered cutover (migrate first, then push).
       dockerfile: server/Dockerfile
     restart: unless-stopped
+    # Run as the host owner of the bind mounts (set to YOUR uid:gid) so files the app writes —
+    # notes, the SQLite DB, the git backup — are owned by you, not root, and stay directly
+    # editable (vim, etc.) on the host. Without this the container runs as root and its files
+    # are root-owned. Match this to the owner of the volume paths below.
+    user: "1000:1000"
     labels:
       # let the Watchtower instance auto-update this container
       - "com.centurylinklabs.watchtower.enable=true"

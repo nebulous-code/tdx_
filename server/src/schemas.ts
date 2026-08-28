@@ -685,6 +685,47 @@ export const NoteSyncResponseSchema = Type.Object({
   tombstoned: Type.Integer(),
 });
 
+// ---- vault version control (docs/VAULT_VERSION_CONTROL.md) ------------------
+export const IdRefParamSchema = Type.Object({
+  id: Type.String({ description: 'The note id.' }),
+  ref: Type.String({ description: 'A git commit ref (hex sha) from the note history.' }),
+});
+export const VaultVersionSchema = Type.Object({
+  ref: Type.String(),
+  timestamp: Type.String({ description: 'ISO author date of the snapshot commit.' }),
+  message: Type.String(),
+});
+export const NoteHistorySchema = Type.Array(VaultVersionSchema);
+export const NoteVersionSchema = Type.Object({
+  text: Type.String({ description: 'The note markdown as of this version.' }),
+});
+export const NoteRestoreBodySchema = Type.Object({
+  ref: Type.String({ description: 'The version ref to restore (a new commit lands on top).' }),
+});
+export const ArchivedNoteSchema = Type.Object({
+  id: Type.String(),
+  title: Type.String(),
+  path: Type.String(),
+  readableId: Type.Union([Type.String(), Type.Null()]),
+  updatedAt: Type.String(),
+});
+export const ArchivedListSchema = Type.Array(ArchivedNoteSchema);
+export const IgnoreRulesSchema = Type.Object({
+  globs: Type.Array(Type.String(), {
+    description: 'Extra ignore globs, appended to the fixed OS/editor-cruft list.',
+  }),
+  maxBytes: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()], {
+    description: 'Skip files larger than this many bytes from the backup; null = no cap.',
+  }),
+});
+export const IgnorePreviewBodySchema = IgnoreRulesSchema;
+export const IgnorePreviewSchema = Type.Object({
+  paths: Type.Array(Type.String(), {
+    description: 'Vault-relative paths the rules would exclude.',
+  }),
+  truncated: Type.Boolean({ description: 'True if the list was capped.' }),
+});
+
 export interface NoteJson {
   id: string;
   ownerId: string;
